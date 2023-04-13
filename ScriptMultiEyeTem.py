@@ -9,12 +9,30 @@
 
 print("Hello World!")
 #%%
-# table_test = [1,2,3,4,5,6,7; 8,9,10,11]
 
-# print(table_test)
-
-path_data = /Users/antoniabielefeldt1/MaxPlanck/MultiEyeTem/Analysis
 import numpy as np
-resultfile_test = np.loadtxt(resultfile_pil05.txt)
+path_data = "/Users/antoniabielefeldt1/Documents/MaxPlanck/MultiEyeTem/Analysis/resultfile_pil05.txt"
 
-# %%
+# When you use names=True in numpy.genfromtxt(), the first row of the file is assumed to be the header row containing column names, 
+# and these names are used to create fields in a structured numpy array. Each field corresponds to a column in the data, 
+# and you can access the fields using their names.
+behav_data = np.genfromtxt(path_data, delimiter='\t', names=True, dtype=None, encoding=None)
+
+print(behav_data)
+
+# %% Indexing Individual Information
+print(behav_data['subID'])
+
+
+#%%
+# Calculate means for individual conditions
+
+
+
+#%%
+# Write a loop to import all behavioural data files and save them as individual variables?
+
+
+
+
+# Concatenate all behavioural data files into one big table?
