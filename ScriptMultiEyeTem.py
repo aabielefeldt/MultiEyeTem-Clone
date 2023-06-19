@@ -73,3 +73,28 @@ for file_name in file_list:
 
 
 # Concatenate all behavioural data files into one big table?
+
+
+
+
+
+
+
+#%% Behavioural Analyses
+
+
+
+# Means of different conditions
+
+
+# Are participants better for upright positions than upside down positions of objects?
+
+
+# Cardinal Bias??
+
+
+
+
+
+#%% Plot data
+#Plot Means
