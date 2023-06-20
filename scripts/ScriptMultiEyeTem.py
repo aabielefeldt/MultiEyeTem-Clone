@@ -2,6 +2,7 @@
 
 #%%
 # Import Data of all participants into one big table
+# do I even need to do that when all my data is in the folder that I am working in anyway? (i.e. my repo?)
 
 #import()
 
