@@ -34,7 +34,7 @@ file_list = os.listdir("/Users/antoniabielefeldt1/Documents/MaxPlanck/MultiEyeTe
 
 print(file_list)
 
-# git check
+# git check, edit: what was I trying to do here??
 hgit
 
 # %% Print out the variable names
@@ -99,3 +99,7 @@ for file_name in file_list:
 
 #%% Plot data
 #Plot Means
+
+# table of accuracies for 1. every condition, 2. every position, 3. upside down vs. right side up, 4. mnemonic distance, 5. condition plus mnemonic distance
+
+# same table but with reaction times instead of accuracy 
