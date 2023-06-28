@@ -98,19 +98,30 @@ for file_name in file_list:
 
 #%% Behavioural Analyses
 
-
-
-# Means of different conditions
 import pandas as pd
 
 import os
-current_directory = os.getcwd()
-print("Current Directory:", current_directory)
 
-files = os.listdir()
-print(files)
+# to make it more easily readable and changeable
 
-data = pd.read_csv(current_directory)
+data_dir = "/Users/antoniabielefeldt1/Documents/MaxPlanck/MultiEyeTem/Analysis/MultiEyeTem_Repo/data"
+behavdata_dir = "/Users/antoniabielefeldt1/Documents/MaxPlanck/MultiEyeTem/Analysis/MultiEyeTem_Repo/data/behavdata"
+behavdata_files = os.listdir(behavdata_dir)
+
+print("BehavData Directory:", behavdata_dir)
+print(behavdata_files)
+
+#for file_name in behavdata_files:
+#    print(file_name)
+#    pd.read_csv(behavdata_dir + "/" + file_name)
+
+#print(data.head())
+
+# cell works until here, line below is unclear to me what the following does, check the delimiters
+data = pd.read_csv(behavdata_dir + "/" + 'resultfile_pil05.txt')
+
+# from aleks -better use:
+os.path.join 
 #%%
 for file_name in data #no idea if these are already used and therefore work but should be somthing looking like this
     acc_cond1 = data['acc_trial_concrete_cued'].mean()
