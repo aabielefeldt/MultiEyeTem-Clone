@@ -1,4 +1,19 @@
 
+#%%
+
+# at the moment, this is just to try out how to use the directory and show my files
+# this however at the moment shows only the directory to the script file I am writing at the moment
+# I want to transform this, so I have access to the data files within the MultiEyeTem_Repo folder
+# Ideally there is probably a way to use the project package I created to do that, or maybe even that is the point of the project package and I do not even have to do anything
+# maybe I need to make clear at the beginning of the code that I am using that package (something like add_path or something)
+import os
+current_directory = os.getcwd()
+print("Current Directory:", current_directory)
+
+files = os.listdir()
+print(files)
+
+
 
 #%%
 # Import Data of all participants into one big table
@@ -30,12 +45,12 @@ print(single_behav_data)
 #%%
 import os
 
-file_list = os.listdir("/Users/antoniabielefeldt1/Documents/MaxPlanck/MultiEyeTem/Analysis")
+file_list = os.listdir("/Users/antoniabielefeldt1/Documents/MaxPlanck/MultiEyeTem/Analysis/MultiEyeTem_Repo")
 
 print(file_list)
 
 # git check, edit: what was I trying to do here??
-hgit
+#hgit
 
 # %% Print out the variable names
 
@@ -86,15 +101,33 @@ for file_name in file_list:
 
 
 # Means of different conditions
+import pandas as pd
 
+import os
+current_directory = os.getcwd()
+print("Current Directory:", current_directory)
+
+files = os.listdir()
+print(files)
+
+data = pd.read_csv(current_directory)
+#%%
+for file_name in data #no idea if these are already used and therefore work but should be somthing looking like this
+    acc_cond1 = data['acc_trial_concrete_cued'].mean()
+    #acc_cond2 = mean()
+    #acc_cond3 = mean()
 
 # Are participants better for upright positions than upside down positions of objects?
 
 
 # Cardinal Bias??
 
+#%%
 
+numbers = [1, 2, 3, 4, 5]
 
+for whatever in numbers:
+    print(whatever)
 
 
 #%% Plot data
@@ -103,3 +136,5 @@ for file_name in file_list:
 # table of accuracies for 1. every condition, 2. every position, 3. upside down vs. right side up, 4. mnemonic distance, 5. condition plus mnemonic distance
 
 # same table but with reaction times instead of accuracy 
+# *hello*
+## heading
