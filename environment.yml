@@ -6,3 +6,10 @@ dependencies:
 - pip
 - pandas
 - matplotlib
+- os
+- numpy
+- scipy.stats
+- sys
+- statsmodels.stats.multicomp
+- seaborn
+- mne
