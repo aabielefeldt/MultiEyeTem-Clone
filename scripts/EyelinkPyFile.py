@@ -1,7 +1,11 @@
 # %%
-# Imports
+# Importsconda 
 import mne
 import numpy as np
+
+#  %% 
+# Plotting only works if backend is set to matplotlib instead of qt
+mne.viz.set_browser_backend('matplotlib')
 
 # %%
 # Print platform info
@@ -12,7 +16,7 @@ mne.sys_info()
 # eyelink_file = "REUNMA_copy_changed.asc"  # this is the file you provided for me, I just renamed it
 folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
 
-eyelink_file = folder_path + "/REUNMA_copy.asc"
+eyelink_file = folder_path + "/REUNMA.asc"
 raw = mne.io.read_raw_eyelink(eyelink_file)
 raw.load_data()
 
@@ -26,7 +30,7 @@ for annot in raw.annotations:
 
 # %%
 # Plot
-raw.set_annotations(None)  # without this, it's really slow
+# raw.set_annotations(None)  # without this, it's really slow
 raw.plot()
 
 # %%
