@@ -20,30 +20,302 @@ eyelink_file = folder_path + "/REUNMA.asc"
 raw = mne.io.read_raw_eyelink(eyelink_file)
 raw.load_data()
 
+#%%
+# what is this for?
 np.unique(raw.annotations.description)
-
 # %%
 # Print all annotations for inspection
 for annot in raw.annotations:
     print(annot["onset"], annot["duration"], annot["description"])
 
-
+# __annotations__ this is a type hint, not sure what they do - apparently tell python what the type of input to the function where this is attached to will be
 # %%
 # Plot
+# with the top line it plots the data without annotations - might be able to also use this to only plot the data with triggers but without the other annotations (fix, sacc, and blinks)
+# however the following line makes events_from_annotation not work ?!
 # raw.set_annotations(None)  # without this, it's really slow
 raw.plot()
 
 # %%
-# Get MNE-Python test data
-eyelink_test_data = mne.datasets.eyelink.data_path()
-eyelink_test_file = eyelink_test_data / "sub-01_task-plr_eyetrack.asc"
 
-raw2 = mne.io.read_raw_eyelink(eyelink_test_file)
-raw2.load_data()
-
-np.unique(raw2.annotations.description)
+info = raw.info
+print(info)
+info_keys = info.keys()
+print("These are the info keys:", info_keys)
+ch_names = info["ch_names"]
+print(ch_names)
 
 # %%
-# Plot the MNE-Python test data
-raw2.plot()
+
+print(raw.info['meas_date'])
+
+# %% 
+# events from annotations without any custom mapping dictionaries
+events_from_annot, event_dict = mne.events_from_annotations(raw, event_id='auto')
+print(event_dict)
+print(events_from_annot[:5])
+# %%
+# # mapping the triggers (in quotations marks) to the same numbers as event ids to make it more useful
+
+custom_mapping = {
+    '1': 1, '10': 10, '100': 100, '101': 101, '102': 102, '103': 103, '104': 104, '105': 105, '106': 106, '107': 107, 
+    '108': 108, '109': 109, '11': 11, '110': 110, '111': 111, '112': 112, '113': 113, '114': 114, '115': 115, 
+    '116': 116, '117': 117, '118': 118, '119': 119, '12': 12, '120': 120, '121': 121, '122': 122, '123': 123, 
+    '124': 124, '125': 125, '126': 126, '127': 127, '128': 128, '129': 129, '13': 13, '130': 130, '131': 131, 
+    '132': 132, '133': 133, '134': 134, '135': 135, '136': 136, '137': 137, '138': 138, '139': 139, '14': 14, 
+    '140': 140, '141': 141, '142': 142, '143': 143, '144': 144, '15': 15, '16': 16, '17': 17, '18': 18, '19': 19, 
+    '2': 2, '20': 20, '21': 21, '22': 22, '220': 220, '221': 221, '23': 23, '24': 24, '241': 241, '242': 242, 
+    '244': 244, '245': 245, '246': 246, '25': 25, '26': 26, '27': 27, '28': 28, '29': 29, '3': 3, '30': 30, 
+    '31': 31, '32': 32, '33': 33, '34': 34, '35': 35, '36': 36, '37': 37, '38': 38, '39': 39, '4': 4, '40': 40, 
+    '41': 41, '42': 42, '43': 43, '44': 44, '45': 45, '46': 46, '47': 47, '48': 48, '49': 49, '5': 5, '50': 50, 
+    '51': 51, '52': 52, '53': 53, '54': 54, '55': 55, '56': 56, '57': 57, '58': 58, '59': 59, '6': 6, '60': 60, 
+    '61': 61, '62': 62, '63': 63, '64': 64, '65': 65, '66': 66, '67': 67, '68': 68, '69': 69, '7': 7, '70': 70, 
+    '71': 71, '72': 72, '73': 73, '74': 74, '75': 75, '76': 76, '77': 77, '78': 78, '79': 79, '8': 8, '80': 80, 
+    '81': 81, '82': 82, '83': 83, '84': 84, '85': 85, '86': 86, '87': 87, '88': 88, '89': 89, '9': 9, '90': 90, 
+    '91': 91, '92': 92, '93': 93, '94': 94, '95': 95, '96': 96, '97': 97, '98': 98, '99': 99, 'fixation': 152, 
+    'saccade': 153
+}
+
+(events_from_annot, event_dict) = mne.events_from_annotations(
+    raw, event_id=custom_mapping
+)
+print(event_dict)
+print(events_from_annot[:5])
+
+# %%
+# using the same strategy again to now map the events where the event ids are the same as the trigger numbers to the strings
+# I dont think I can pass the events to the events_from_annotations because for that I need to pass the raw directly to the function
+
+
+# %% 
+# I can then transform the events back to an annotations object and there I can pass the actual descriptive strings to the now correct trigger numbers (event ids). 
+# Am I correct in believing that the event ID's are not the triggers but are what I called them before in the dictionary above?. Not sure is that is useful
+custom_event_mapping = {
+    1: "obj1/pos1/ori1", 2: "obj1/pos1/ori2", 3: "obj1/pos1/ori3", 4: "obj1/pos1/ori4",
+    5: "obj1/pos1/ori5", 6: "obj1/pos1/ori6", 7: "obj1/pos1/ori7", 8: "obj1/pos1/ori8",
+    9: "obj1/pos1/ori9", 10: "obj1/pos1/ori10", 11: "obj1/pos1/ori11", 12: "obj1/pos1/ori12",
+    13: "obj1/pos1/ori13", 14: "obj1/pos1/ori14", 15: "obj1/pos1/ori15", 16: "obj1/pos1/ori16",
+    17: "obj2/pos1/ori1", 18: "obj2/pos1/ori2", 19: "obj2/pos1/ori3", 20: "obj2/pos1/ori4",
+    21: "obj2/pos1/ori5", 22: "obj2/pos1/ori6", 23: "obj2/pos1/ori7", 24: "obj2/pos1/ori8",
+    25: "obj2/pos1/ori9", 26: "obj2/pos1/ori10", 27: "obj2/pos1/ori11", 28: "obj2/pos1/ori12",
+    29: "obj2/pos1/ori13", 30: "obj2/pos1/ori14", 31: "obj2/pos1/ori15", 32: "obj2/pos1/ori16",
+    33: "obj3/pos1/ori1", 34: "obj3/pos1/ori2", 35: "obj3/pos1/ori3", 36: "obj3/pos1/ori4",
+    37: "obj3/pos1/ori5", 38: "obj3/pos1/ori6", 39: "obj3/pos1/ori7", 40: "obj3/pos1/ori8",
+    41: "obj3/pos1/ori9", 42: "obj3/pos1/ori10", 43: "obj3/pos1/ori11", 44: "obj3/pos1/ori12",
+    45: "obj3/pos1/ori13", 46: "obj3/pos1/ori14", 47: "obj3/pos1/ori15", 48: "obj3/pos1/ori16",
+    49: "obj1/pos2/ori1", 50: "obj1/pos2/ori2", 51: "obj1/pos2/ori3", 52: "obj1/pos2/ori4",
+    53: "obj1/pos2/ori5", 54: "obj1/pos2/ori6", 55: "obj1/pos2/ori7", 56: "obj1/pos2/ori8",
+    57: "obj1/pos2/ori9", 58: "obj1/pos2/ori10", 59: "obj1/pos2/ori11", 60: "obj1/pos2/ori12",
+    61: "obj1/pos2/ori13", 62: "obj1/pos2/ori14", 63: "obj1/pos2/ori15", 64: "obj1/pos2/ori16",
+    65: "obj2/pos2/ori1", 66: "obj2/pos2/ori2", 67: "obj2/pos2/ori3", 68: "obj2/pos2/ori4",
+    69: "obj2/pos2/ori5", 70: "obj2/pos2/ori6", 71: "obj2/pos2/ori7", 72: "obj2/pos2/ori8",
+    73: "obj2/pos2/ori9", 74: "obj2/pos2/ori10", 75: "obj2/pos2/ori11", 76: "obj2/pos2/ori12",
+    77: "obj2/pos2/ori13", 78: "obj2/pos2/ori14", 79: "obj2/pos2/ori15", 80: "obj2/pos2/ori16",
+    81: "obj3/pos2/ori1", 82: "obj3/pos2/ori2", 83: "obj3/pos2/ori3", 84: "obj3/pos2/ori4",
+    85: "obj3/pos2/ori5", 86: "obj3/pos2/ori6", 87: "obj3/pos2/ori7", 88: "obj3/pos2/ori8",
+    89: "obj3/pos2/ori9", 90: "obj3/pos2/ori10", 91: "obj3/pos2/ori11", 92: "obj3/pos2/ori12",
+    93: "obj3/pos2/ori13", 94: "obj3/pos2/ori14", 95: "obj3/pos2/ori15", 96: "obj3/pos2/ori16",
+    97: "obj1/pos3/ori1", 98: "obj1/pos3/ori2", 99: "obj1/pos3/ori3", 100: "obj1/pos3/ori4",
+    101: "obj1/pos3/ori5", 102: "obj1/pos3/ori6", 103: "obj1/pos3/ori7", 104: "obj1/pos3/ori8",
+    105: "obj1/pos3/ori9", 106: "obj1/pos3/ori10", 107: "obj1/pos3/ori11", 108: "obj1/pos3/ori12",
+    109: "obj1/pos3/ori13", 110: "obj1/pos3/ori14", 111: "obj1/pos3/ori15", 112: "obj1/pos3/ori16",
+    113: "obj2/pos3/ori1", 114: "obj2/pos3/ori2", 115: "obj2/pos3/ori3", 116: "obj2/pos3/ori4",
+    117: "obj2/pos3/ori5", 118: "obj2/pos3/ori6", 119: "obj2/pos3/ori7", 120: "obj2/pos3/ori8",
+    121: "obj2/pos3/ori9", 122: "obj2/pos3/ori10", 123: "obj2/pos3/ori11", 124: "obj2/pos3/ori12",
+    125: "obj2/pos3/ori13", 126: "obj2/pos3/ori14", 127: "obj2/pos3/ori15", 128: "obj2/pos3/ori16",
+    129: "obj3/pos3/ori1", 130: "obj3/pos3/ori2", 131: "obj3/pos3/ori3", 132: "obj3/pos3/ori4",
+    133: "obj3/pos3/ori5", 134: "obj3/pos3/ori6", 135: "obj3/pos3/ori7", 136: "obj3/pos3/ori8",
+    137: "obj3/pos3/ori9", 138: "obj3/pos3/ori10", 139: "obj3/pos3/ori11", 140: "obj3/pos3/ori12",
+    141: "obj3/pos3/ori13", 142: "obj3/pos3/ori14", 143: "obj3/pos3/ori15", 144: "obj3/pos3/ori16",
+
+    220: "onset_concrete_cued_left", 221: "onset_concrete_cued_right", 241: "left_button_press", 
+    242: "right_button_press", 244: "feedback_cued_item", 245: "mask", 246: "beginning/end_of_task"
+}
+
+annot_from_events = mne.annotations_from_events(events_from_annot, 500, event_desc=custom_event_mapping)
+
+for annot in annot_from_events:
+    print(annot["onset"], annot["duration"], annot["description"])
+
+
+# %%
+custom_scalings = dict(eyegaze=1e3)
+raw.pick(picks="eyetrack").plot(scalings=custom_scalings)
+
+# %%
+
+# maybe I can create a new raw object based on the new annotations and the new events?
+
+
+# %%
+# Epoching the data
+
+# epochs = mne.Epochs(
+#     raw,
+#     events,
+#     event_id=event_dict,
+#     tmin=-0.2,
+#     tmax=0.5,
+#     reject=reject_criteria,
+#     preload=True,
+# )
+# but here we’ll force loading into memory using the preload=True parameter so that we can see the results of the rejection criteria being applied:
+
+
+# how can I epoch the data according to a specific trigger? This looks like it would just epoch around every single trigger which 
+# would then even include the fixations??
+# I can then plot only the data for epochs I am interested in (meaning according to the triggers)
+# still seems unnnecessary to epoch everything at once since the length of the epoch is only fitting for the epoch from stim 1 to test 1 
+epochs = mne.Epochs(
+    raw,
+    events_from_annot,
+    event_id=event_dict,
+    tmin=-0.5,
+    tmax=0.5,
+    picks=['pupil_left', 'pupil_right'],
+    event_repeated='merge',
+    preload=True,
+) 
+#RuntimeError: Event time samples were not unique. Consider setting the `event_repeated` parameter."
+# event_repeatedstr
+# How to handle duplicates in events[:, 0]. Can be 'error' (default), to raise an error, ‘drop’ to only retain the row occurring first in the events, or 'merge' to combine the coinciding events (=duplicates) into a new event (see Notes for details).
+
+
+# %%
+for event in events_from_annot:
+    print(event)
+
+#'fixation': 152
+
+# %%
+# this plots the triggers only, meg=False is weird since this is not MEG data to begin with
+# however this finds the triggers as the stim channel straight away, no need to get them from the annotations
+# what does raw.copy do?
+# also: NOTE: pick_types() is a legacy function. New code should use inst.pick(...).
+# however the raw.copy example by MNE returns a plot with the individual magnitudes of the stims, not as is done here as coloured lines
+
+# raw.copy().pick_types(meg=False, stim=True).plot(start=3, duration=6)
+
+# this still gives me an empty array even though the line above (raw.copy...) gives me the DIN channel with the triggers
+# apparently it is normal for some systems to store the triggers as annotations so I won't need the following but will need events_from_annotations instead
+# events = mne.find_events(raw, stim_channel="DIN")
+# print(events[:5])  # show the first 5
+
+# %% 
+print(events_from_annot[:, 0])
+
+
+
+
+# %%
+# dictionary to be used when epoching data?
+ttl_dict = {
+    "obj1/pos1/ori1": 1, "obj1/pos1/ori2": 2, "obj1/pos1/ori3": 3, "obj1/pos1/ori4": 4,
+    "obj1/pos1/ori5": 5, "obj1/pos1/ori6": 6, "obj1/pos1/ori7": 7, "obj1/pos1/ori8": 8,
+    "obj1/pos1/ori9": 9, "obj1/pos1/ori10": 10, "obj1/pos1/ori11": 11, "obj1/pos1/ori12": 12,
+    "obj1/pos1/ori13": 13, "obj1/pos1/ori14": 14, "obj1/pos1/ori15": 15, "obj1/pos1/ori16": 16,
+    "obj2/pos1/ori1": 17, "obj2/pos1/ori2": 18, "obj2/pos1/ori3": 19, "obj2/pos1/ori4": 20,
+    "obj2/pos1/ori5": 21, "obj2/pos1/ori6": 22, "obj2/pos1/ori7": 23, "obj2/pos1/ori8": 24,
+    "obj2/pos1/ori9": 25, "obj2/pos1/ori10": 26, "obj2/pos1/ori11": 27, "obj2/pos1/ori12": 28,
+    "obj2/pos1/ori13": 29, "obj2/pos1/ori14": 30, "obj2/pos1/ori15": 31, "obj2/pos1/ori16": 32,
+    "obj3/pos1/ori1": 33, "obj3/pos1/ori2": 34, "obj3/pos1/ori3": 35, "obj3/pos1/ori4": 36,
+    "obj3/pos1/ori5": 37, "obj3/pos1/ori6": 38, "obj3/pos1/ori7": 39, "obj3/pos1/ori8": 40,
+    "obj3/pos1/ori9": 41, "obj3/pos1/ori10": 42, "obj3/pos1/ori11": 43, "obj3/pos1/ori12": 44,
+    "obj3/pos1/ori13": 45, "obj3/pos1/ori14": 46, "obj3/pos1/ori15": 47, "obj3/pos1/ori16": 48,
+    "obj1/pos2/ori1": 49, "obj1/pos2/ori2": 50, "obj1/pos2/ori3": 51, "obj1/pos2/ori4": 52,
+    "obj1/pos2/ori5": 53, "obj1/pos2/ori6": 54, "obj1/pos2/ori7": 55, "obj1/pos2/ori8": 56,
+    "obj1/pos2/ori9": 57, "obj1/pos2/ori10": 58, "obj1/pos2/ori11": 59, "obj1/pos2/ori12": 60,
+    "obj1/pos2/ori13": 61, "obj1/pos2/ori14": 62, "obj1/pos2/ori15": 63, "obj1/pos2/ori16": 64,
+    "obj2/pos2/ori1": 65, "obj2/pos2/ori2": 66, "obj2/pos2/ori3": 67, "obj2/pos2/ori4": 68,
+    "obj2/pos2/ori5": 69, "obj2/pos2/ori6": 70, "obj2/pos2/ori7": 71, "obj2/pos2/ori8": 72,
+    "obj2/pos2/ori9": 73, "obj2/pos2/ori10": 74, "obj2/pos2/ori11": 75, "obj2/pos2/ori12": 76,
+    "obj2/pos2/ori13": 77, "obj2/pos2/ori14": 78, "obj2/pos2/ori15": 79, "obj2/pos2/ori16": 80,
+    "obj3/pos2/ori1": 81, "obj3/pos2/ori2": 82, "obj3/pos2/ori3": 83, "obj3/pos2/ori4": 84,
+    "obj3/pos2/ori5": 85, "obj3/pos2/ori6": 86, "obj3/pos2/ori7": 87, "obj3/pos2/ori8": 88,
+    "obj3/pos2/ori9": 89, "obj3/pos2/ori10": 90, "obj3/pos2/ori11": 91, "obj3/pos2/ori12": 92,
+    "obj3/pos2/ori13": 93, "obj3/pos2/ori14": 94, "obj3/pos2/ori15": 95, "obj3/pos2/ori16": 96,
+    "obj1/pos3/ori1": 97, "obj1/pos3/ori2": 98, "obj1/pos3/ori3": 99, "obj1/pos3/ori4": 100,
+    "obj1/pos3/ori5": 101, "obj1/pos3/ori6": 102, "obj1/pos3/ori7": 103, "obj1/pos3/ori8": 104,
+    "obj1/pos3/ori9": 105, "obj1/pos3/ori10": 106, "obj1/pos3/ori11": 107, "obj1/pos3/ori12": 108,
+    "obj1/pos3/ori13": 109, "obj1/pos3/ori14": 110, "obj1/pos3/ori15": 111, "obj1/pos3/ori16": 112,
+    "obj2/pos3/ori1": 113, "obj2/pos3/ori2": 114, "obj2/pos3/ori3": 115, "obj2/pos3/ori4": 116,
+    "obj2/pos3/ori5": 117, "obj2/pos3/ori6": 118, "obj2/pos3/ori7": 119, "obj2/pos3/ori8": 120,
+    "obj2/pos3/ori9": 121, "obj2/pos3/ori10": 122, "obj2/pos3/ori11": 123, "obj2/pos3/ori12": 124,
+    "obj2/pos3/ori13": 125, "obj2/pos3/ori14": 126, "obj2/pos3/ori15": 127, "obj2/pos3/ori16": 128,
+    "obj3/pos3/ori1": 129, "obj3/pos3/ori2": 130, "obj3/pos3/ori3": 131, "obj3/pos3/ori4": 132,
+    "obj3/pos3/ori5": 133, "obj3/pos3/ori6": 134, "obj3/pos3/ori7": 135, "obj3/pos3/ori8": 136,
+    "obj3/pos3/ori9": 137, "obj3/pos3/ori10": 138, "obj3/pos3/ori11": 139, "obj3/pos3/ori12": 140,
+    "obj3/pos3/ori13": 141, "obj3/pos3/ori14": 142, "obj3/pos3/ori15": 143, "obj3/pos3/ori16": 144,
+    "onset_concrete_cued_left": 220,
+    "onset_concrete_cued_right": 221, "left_button_press": 241, "right_button_press": 242, "feedback_cued_item": 244,
+    "mask": 245, "beginning/end_of_task": 246
+}
+
+# %%
+
+# %% trying to make event specific epochs (i think?)
+
+
+# somehow I now wanna use the ttl_dict to epoch my data?
+
+# what about the settings to the epochs (time -0.5 ...)
+
+test_onset = mne.pick_events(events_from_annot, include=[220, 221])
+
+test_onset_id = {"onset_concrete_cued_left": 220, "onset_concrete_cued_right": 221}
+# need to find out what my equivalent for the face is
+epochs["fixation"].plot(
+    # events=test_onset_id,
+    events=test_onset,
+    #event_id=event_dict,
+    event_id=event_dict
+    # event_color=dict("99"="red", "92"="blue"),
+)
+# KeyError: 'Event name "152" could not be found. The following events are present in the data: 1, 10, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 11, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 12, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 13, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 14, 140, 141, 142, 143, 144, 15, 16, 17, 18, 19, 2, 20, 21, 22, 220, 221, 23, 24, 241, 242, 244, 245, 246, 25, 26, 27, 28, 29, 3, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 4, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 5, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 6, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 7, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 8, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 9, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, fixation, saccade, fixation/saccade, 51/fixation, 221/saccade, 60/fixation, 244/saccade, 241/saccade, 221/fixation'
+
+# why are there two plots? one for pupil_left and one for pupil_right maybe because I specified those in the epochs above? But they are both in both plots
+# plots look identical
+
+
+# %% 
+
+print(event_dict)
+
+# %%
+
+
+#interesting events to consider for pupillopetry
+# this is stolen from above
+test_onset = mne.pick_events(events_from_annot, include=[220, 221])
+
+# could also be a dict however:
+test_onset_dict = {"onset_concrete_cued_left": 220,
+    "onset_concrete_cued_right": 221,}
+
+#
+pupil_epochs = mne.Epochs(
+    raw,
+    events_from_annot,
+    tmin=-0.5,
+    tmax=0.5,
+    event_id=test_onset_dict,
+    picks=['pupil_left', 'pupil_right'],
+    event_repeated='merge',
+    preload=True,
+) 
+
+# With the code above:
+# pupil_epochs["onset_concrete_cued_left"].plot returns
+# KeyError: 'Event name "onset_concreete_cued_left" could not be found. (because typo)
+# The following events are present in the data: onset_concrete_cued_left, onset_concrete_cued_right'
+# %%
+pupil_epochs["onset_concrete_cued_left"].plot()
+
+# three plots??
+# 
+
+# %%
+pupil_epochs["onset_concrete_cued_left", "onset_concrete_cued_right"].plot()
+# %%
+pupil_epochs["onset_concrete_cued_left", "onset_concrete_cued_right"].plot()
 # %%
