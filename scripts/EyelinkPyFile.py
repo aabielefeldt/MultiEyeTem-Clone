@@ -3,6 +3,12 @@
 import mne
 import numpy as np
 
+
+
+# %%
+
+# load pandas df as csv file after saving in 
+# wird dann als metadata genutzt
 #  %% 
 # Plotting only works if backend is set to matplotlib instead of qt
 mne.viz.set_browser_backend('matplotlib')
@@ -73,7 +79,8 @@ custom_mapping = {
     '71': 71, '72': 72, '73': 73, '74': 74, '75': 75, '76': 76, '77': 77, '78': 78, '79': 79, '8': 8, '80': 80, 
     '81': 81, '82': 82, '83': 83, '84': 84, '85': 85, '86': 86, '87': 87, '88': 88, '89': 89, '9': 9, '90': 90, 
     '91': 91, '92': 92, '93': 93, '94': 94, '95': 95, '96': 96, '97': 97, '98': 98, '99': 99, 'fixation': 152, 
-    'saccade': 153
+    'saccade': 153,
+    '220': 220, "221": 221, '241': 241, '242': 242, '244': 244, '245': 245, '246': 246
 }
 
 (events_from_annot, event_dict) = mne.events_from_annotations(
@@ -169,18 +176,21 @@ raw.pick(picks="eyetrack").plot(scalings=custom_scalings)
 epochs = mne.Epochs(
     raw,
     events_from_annot,
-    event_id=event_dict,
-    tmin=-0.5,
-    tmax=0.5,
+    event_id={'test_onset_1': 221, 'test_onset_2': 220},
+    tmin=-5.5,
+    tmax=1.5,
     picks=['pupil_left', 'pupil_right'],
     event_repeated='merge',
     preload=True,
+    reject_by_annotation=False
 ) 
 #RuntimeError: Event time samples were not unique. Consider setting the `event_repeated` parameter."
 # event_repeatedstr
 # How to handle duplicates in events[:, 0]. Can be 'error' (default), to raise an error, ‘drop’ to only retain the row occurring first in the events, or 'merge' to combine the coinciding events (=duplicates) into a new event (see Notes for details).
 
+# %%
 
+events_from_annot
 # %%
 for event in events_from_annot:
     print(event)
