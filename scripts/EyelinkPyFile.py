@@ -2,13 +2,14 @@
 # Importsconda 
 import mne
 import numpy as np
+import pandas as pd
 
 
+# %% Load Metadata
 
-# %%
+df = pd.read_csv('data.csv')
 
-# load pandas df as csv file after saving in 
-# wird dann als metadata genutzt
+
 #  %% 
 # Plotting only works if backend is set to matplotlib instead of qt
 mne.viz.set_browser_backend('matplotlib')
@@ -27,7 +28,7 @@ raw = mne.io.read_raw_eyelink(eyelink_file)
 raw.load_data()
 
 #%%
-# what is this for?
+# Unique annotation descriptions
 np.unique(raw.annotations.description)
 # %%
 # Print all annotations for inspection
@@ -39,6 +40,7 @@ for annot in raw.annotations:
 # Plot
 # with the top line it plots the data without annotations - might be able to also use this to only plot the data with triggers but without the other annotations (fix, sacc, and blinks)
 # however the following line makes events_from_annotation not work ?!
+
 # raw.set_annotations(None)  # without this, it's really slow
 raw.plot()
 
@@ -181,9 +183,13 @@ epochs = mne.Epochs(
     tmax=1.5,
     picks=['pupil_left', 'pupil_right'],
     event_repeated='merge',
+    metadata=df,
     preload=True,
     reject_by_annotation=False
 ) 
+
+#check what merge does exactly 
+
 #RuntimeError: Event time samples were not unique. Consider setting the `event_repeated` parameter."
 # event_repeatedstr
 # How to handle duplicates in events[:, 0]. Can be 'error' (default), to raise an error, ‘drop’ to only retain the row occurring first in the events, or 'merge' to combine the coinciding events (=duplicates) into a new event (see Notes for details).
@@ -306,13 +312,17 @@ test_onset_dict = {"onset_concrete_cued_left": 220,
 pupil_epochs = mne.Epochs(
     raw,
     events_from_annot,
+    event_id=test_onset_dict,
     tmin=-0.5,
     tmax=0.5,
-    event_id=test_onset_dict,
+    
     picks=['pupil_left', 'pupil_right'],
     event_repeated='merge',
     preload=True,
 ) 
+
+
+
 
 # With the code above:
 # pupil_epochs["onset_concrete_cued_left"].plot returns
