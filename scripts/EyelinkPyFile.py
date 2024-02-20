@@ -7,19 +7,33 @@ import pandas as pd
 
 # %% Load Metadata
 
-df = pd.read_csv('data.csv')
+df = pd.read_csv('df.csv')
+good_partis = df['subID'].unique()
 
+# %% 
+# Looping over all subIDs
+# use once I have my epochs correct
+freqs = []
+for i in good_partis:
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
 
-#  %% 
-# Plotting only works if backend is set to matplotlib instead of qt
-mne.viz.set_browser_backend('matplotlib')
+    eyelink_file = folder_path + "/" + i + ".asc"
+    print(eyelink_file)
+    raw = mne.io.read_raw_eyelink(eyelink_file)
+
+    metadata_pp = df.loc[(df['subID'] == i)]
+    freq_pp = [i, (raw.info['sfreq'])]
+    freqs.append(freq_pp)
+
+freqs_df = pd.DataFrame(freqs, columns=['subID', 'frequency'])
+display(freqs_df)
 
 # %%
-# Print platform info
-mne.sys_info()
 
+
+    
 # %%
-# Read eyelink data
+# Read a single eyelink datafile for trying out stuff
 # eyelink_file = "REUNMA_copy_changed.asc"  # this is the file you provided for me, I just renamed it
 folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
 
@@ -35,7 +49,6 @@ np.unique(raw.annotations.description)
 for annot in raw.annotations:
     print(annot["onset"], annot["duration"], annot["description"])
 
-# __annotations__ this is a type hint, not sure what they do - apparently tell python what the type of input to the function where this is attached to will be
 # %%
 # Plot
 # with the top line it plots the data without annotations - might be able to also use this to only plot the data with triggers but without the other annotations (fix, sacc, and blinks)
@@ -55,7 +68,9 @@ print(ch_names)
 
 # %%
 
-print(raw.info['meas_date'])
+for i in good_partis:
+    # within the whole loop where raw is the eyelink file for only one of the participants
+    
 
 # %% 
 # events from annotations without any custom mapping dictionaries
@@ -321,7 +336,7 @@ pupil_epochs = mne.Epochs(
     preload=True,
 ) 
 
-
+# reject by annotation
 
 
 # With the code above:
