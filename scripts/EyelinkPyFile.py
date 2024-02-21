@@ -10,76 +10,11 @@ import pandas as pd
 df = pd.read_csv('df.csv')
 good_partis = df['subID'].unique()
 
-# %% 
-# Looping over all subIDs
-# use once I have my epochs correct
-freqs = []
-for i in good_partis:
-    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
-
-    eyelink_file = folder_path + "/" + i + ".asc"
-    print(eyelink_file)
-    raw = mne.io.read_raw_eyelink(eyelink_file)
-
-    metadata_pp = df.loc[(df['subID'] == i)]
-    freq_pp = [i, (raw.info['sfreq'])]
-    freqs.append(freq_pp)
-
-freqs_df = pd.DataFrame(freqs, columns=['subID', 'frequency'])
-display(freqs_df)
-
-# %%
 
 
-    
-# %%
-# Read a single eyelink datafile for trying out stuff
-# eyelink_file = "REUNMA_copy_changed.asc"  # this is the file you provided for me, I just renamed it
-folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
+# %% Custom Mappings
 
-eyelink_file = folder_path + "/REUNMA.asc"
-raw = mne.io.read_raw_eyelink(eyelink_file)
-raw.load_data()
-
-#%%
-# Unique annotation descriptions
-np.unique(raw.annotations.description)
-# %%
-# Print all annotations for inspection
-for annot in raw.annotations:
-    print(annot["onset"], annot["duration"], annot["description"])
-
-# %%
-# Plot
-# with the top line it plots the data without annotations - might be able to also use this to only plot the data with triggers but without the other annotations (fix, sacc, and blinks)
-# however the following line makes events_from_annotation not work ?!
-
-# raw.set_annotations(None)  # without this, it's really slow
-raw.plot()
-
-# %%
-
-info = raw.info
-print(info)
-info_keys = info.keys()
-print("These are the info keys:", info_keys)
-ch_names = info["ch_names"]
-print(ch_names)
-
-# %%
-
-for i in good_partis:
-    # within the whole loop where raw is the eyelink file for only one of the participants
-    
-
-# %% 
-# events from annotations without any custom mapping dictionaries
-events_from_annot, event_dict = mne.events_from_annotations(raw, event_id='auto')
-print(event_dict)
-print(events_from_annot[:5])
-# %%
-# # mapping the triggers (in quotations marks) to the same numbers as event ids to make it more useful
-
+# this might not be all of the triggers
 custom_mapping = {
     '1': 1, '10': 10, '100': 100, '101': 101, '102': 102, '103': 103, '104': 104, '105': 105, '106': 106, '107': 107, 
     '108': 108, '109': 109, '11': 11, '110': 110, '111': 111, '112': 112, '113': 113, '114': 114, '115': 115, 
@@ -100,11 +35,112 @@ custom_mapping = {
     '220': 220, "221": 221, '241': 241, '242': 242, '244': 244, '245': 245, '246': 246
 }
 
-(events_from_annot, event_dict) = mne.events_from_annotations(
+
+# %% Dictionary for triggers used for onset of epoch?
+ # could also be a dict however:
+test_onset_dict = {"onset_concrete_cued_left": 220,
+    "onset_concrete_cued_right": 221}
+
+# %% 
+# Looping over all subIDs
+# use once I have my epochs correct
+freqs = []
+# for i in good_partis:
+one_subID = ['REUNMA']
+for i in one_subID:
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
+
+    eyelink_file = folder_path + "/" + i + ".asc"
+    print(eyelink_file)
+    raw = mne.io.read_raw_eyelink(eyelink_file)
+
+    metadata_pp = df.loc[(df['subID'] == i)]
+    freq_pp = [i, (raw.info['sfreq'])]
+    freqs.append(freq_pp)
+    events_from_annot, event_dict = mne.events_from_annotations(
+    raw, event_id=custom_mapping)
+
+    # need to somehow save this with reference to the subID
+    pupil_epochs = mne.Epochs(
+        raw,
+        events_from_annot[np.isin(events_from_annot, [220, 221])[:,-1]],
+        event_id=test_onset_dict,
+        tmin=-5.5,
+        tmax=1.5,
+
+        metadata=metadata_pp,
+        picks=['pupil_left', 'pupil_right'],
+        event_repeated='merge',
+        preload=True,
+        reject_by_annotation=False
+    ) 
+    # save epoch in fif format to a specified folder
+
+    # mne.pupil_epochs.plot()
+    # pupil_epochs.plot(n_epochs=1)
+freqs_df = pd.DataFrame(freqs, columns=['subID', 'frequency'])
+display(freqs_df)
+# only one has a different sampling freuqency and that one is 1000hz so higher than the rest (500hz)´
+
+# %%
+# needed this in the old version of mne to make plots work
+mne.viz.set_browser_backend('qt')
+
+# %%
+# Plot
+# with the top line it plots the data without annotations - might be able to also use this to only plot the data with triggers but without the other annotations (fix, sacc, and blinks)
+# however the following line makes events_from_annotation not work ?!
+
+# raw.set_annotations(None)  # without this, it's really slow
+# raw.plot()
+
+picks_idx = mne.pick_channels(
+    raw.ch_names, ['pupil_left', 'pupil_right'], ordered=True
+)
+
+raw.plot(events= events_from_annot, event_id=event_dict, order=picks_idx)
+# %% 
+# events from annotations without any custom mapping dictionaries
+# mne.events reads both the events and the events_dict in at the same time as a tuple ([events_from_annot], {event_dict}) 
+# -> I am simply unpacking them already into two seperate variables
+events_from_annot, event_dict = mne.events_from_annotations(raw, event_id='auto')
+print(event_dict)
+print(events_from_annot[:5])
+
+# 
+# %%
+# # mapping the triggers (in quotations marks) to the same numbers as event ids to make it more useful
+# this might not be all of the triggers
+custom_mapping = {
+    '1': 1, '10': 10, '100': 100, '101': 101, '102': 102, '103': 103, '104': 104, '105': 105, '106': 106, '107': 107, 
+    '108': 108, '109': 109, '11': 11, '110': 110, '111': 111, '112': 112, '113': 113, '114': 114, '115': 115, 
+    '116': 116, '117': 117, '118': 118, '119': 119, '12': 12, '120': 120, '121': 121, '122': 122, '123': 123, 
+    '124': 124, '125': 125, '126': 126, '127': 127, '128': 128, '129': 129, '13': 13, '130': 130, '131': 131, 
+    '132': 132, '133': 133, '134': 134, '135': 135, '136': 136, '137': 137, '138': 138, '139': 139, '14': 14, 
+    '140': 140, '141': 141, '142': 142, '143': 143, '144': 144, '15': 15, '16': 16, '17': 17, '18': 18, '19': 19, 
+    '2': 2, '20': 20, '21': 21, '22': 22, '220': 220, '221': 221, '23': 23, '24': 24, '241': 241, '242': 242, 
+    '244': 244, '245': 245, '246': 246, '25': 25, '26': 26, '27': 27, '28': 28, '29': 29, '3': 3, '30': 30, 
+    '31': 31, '32': 32, '33': 33, '34': 34, '35': 35, '36': 36, '37': 37, '38': 38, '39': 39, '4': 4, '40': 40, 
+    '41': 41, '42': 42, '43': 43, '44': 44, '45': 45, '46': 46, '47': 47, '48': 48, '49': 49, '5': 5, '50': 50, 
+    '51': 51, '52': 52, '53': 53, '54': 54, '55': 55, '56': 56, '57': 57, '58': 58, '59': 59, '6': 6, '60': 60, 
+    '61': 61, '62': 62, '63': 63, '64': 64, '65': 65, '66': 66, '67': 67, '68': 68, '69': 69, '7': 7, '70': 70, 
+    '71': 71, '72': 72, '73': 73, '74': 74, '75': 75, '76': 76, '77': 77, '78': 78, '79': 79, '8': 8, '80': 80, 
+    '81': 81, '82': 82, '83': 83, '84': 84, '85': 85, '86': 86, '87': 87, '88': 88, '89': 89, '9': 9, '90': 90, 
+    '91': 91, '92': 92, '93': 93, '94': 94, '95': 95, '96': 96, '97': 97, '98': 98, '99': 99, 'fixation': 152, 
+    'saccade': 153,
+    '220': 220, "221": 221, '241': 241, '242': 242, '244': 244, '245': 245, '246': 246
+}
+
+# %%
+
+events_from_annot, event_dict = mne.events_from_annotations(
     raw, event_id=custom_mapping
 )
 print(event_dict)
 print(events_from_annot[:5])
+
+for annot in raw.annotations:
+    print(annot["onset"], annot["duration"], annot["description"])
 
 # %%
 # using the same strategy again to now map the events where the event ids are the same as the trigger numbers to the strings
@@ -114,6 +150,8 @@ print(events_from_annot[:5])
 # %% 
 # I can then transform the events back to an annotations object and there I can pass the actual descriptive strings to the now correct trigger numbers (event ids). 
 # Am I correct in believing that the event ID's are not the triggers but are what I called them before in the dictionary above?. Not sure is that is useful
+# These return annotations
+# Am I using them afterwards at all?
 custom_event_mapping = {
     1: "obj1/pos1/ori1", 2: "obj1/pos1/ori2", 3: "obj1/pos1/ori3", 4: "obj1/pos1/ori4",
     5: "obj1/pos1/ori5", 6: "obj1/pos1/ori6", 7: "obj1/pos1/ori7", 8: "obj1/pos1/ori8",
