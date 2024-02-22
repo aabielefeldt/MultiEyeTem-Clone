@@ -63,6 +63,7 @@ for i in one_subID:
     # need to somehow save this with reference to the subID
     pupil_epochs = mne.Epochs(
         raw,
+        # had to collapse the events from annot to the length of the events of interest (test_onset_dict), seems to be a bug in mne (report?)
         events_from_annot[np.isin(events_from_annot, [220, 221])[:,-1]],
         event_id=test_onset_dict,
         tmin=-5.5,
@@ -76,8 +77,7 @@ for i in one_subID:
     ) 
     # save epoch in fif format to a specified folder
 
-    # mne.pupil_epochs.plot()
-    # pupil_epochs.plot(n_epochs=1)
+    pupil_epochs.plot(n_epochs=1)
 freqs_df = pd.DataFrame(freqs, columns=['subID', 'frequency'])
 display(freqs_df)
 # only one has a different sampling freuqency and that one is 1000hz so higher than the rest (500hz)´
