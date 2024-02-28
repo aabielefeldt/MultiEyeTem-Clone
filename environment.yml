@@ -2,14 +2,13 @@ name: MultiEyeTemAnalysis
 channels:
   - conda-forge
 dependencies:
-- python>=3.10
-- pip
-- pandas
-- matplotlib
-- os
-- numpy
-- scipy.stats
-- sys
-- statsmodels.stats.multicomp
-- seaborn
-- mne 
+  - python>=3.10
+  - pip
+  - pandas
+  - matplotlib
+  - numpy
+  - scipy
+  - statsmodels
+  - seaborn
+  - mne
+  - pingouin
