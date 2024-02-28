@@ -1,5 +1,5 @@
 # %%
-# Importsconda 
+# Importsconda
 import mne
 import numpy as np
 import pandas as pd
@@ -7,7 +7,7 @@ import pandas as pd
 
 # %% Load Metadata
 
-df = pd.read_csv('df.csv')
+df = pd.read_csv('../data/df.csv')
 good_partis = df['subID'].unique()
 
 
@@ -16,21 +16,21 @@ good_partis = df['subID'].unique()
 
 # this might not be all of the triggers
 custom_mapping = {
-    '1': 1, '10': 10, '100': 100, '101': 101, '102': 102, '103': 103, '104': 104, '105': 105, '106': 106, '107': 107, 
-    '108': 108, '109': 109, '11': 11, '110': 110, '111': 111, '112': 112, '113': 113, '114': 114, '115': 115, 
-    '116': 116, '117': 117, '118': 118, '119': 119, '12': 12, '120': 120, '121': 121, '122': 122, '123': 123, 
-    '124': 124, '125': 125, '126': 126, '127': 127, '128': 128, '129': 129, '13': 13, '130': 130, '131': 131, 
-    '132': 132, '133': 133, '134': 134, '135': 135, '136': 136, '137': 137, '138': 138, '139': 139, '14': 14, 
-    '140': 140, '141': 141, '142': 142, '143': 143, '144': 144, '15': 15, '16': 16, '17': 17, '18': 18, '19': 19, 
-    '2': 2, '20': 20, '21': 21, '22': 22, '220': 220, '221': 221, '23': 23, '24': 24, '241': 241, '242': 242, 
-    '244': 244, '245': 245, '246': 246, '25': 25, '26': 26, '27': 27, '28': 28, '29': 29, '3': 3, '30': 30, 
-    '31': 31, '32': 32, '33': 33, '34': 34, '35': 35, '36': 36, '37': 37, '38': 38, '39': 39, '4': 4, '40': 40, 
-    '41': 41, '42': 42, '43': 43, '44': 44, '45': 45, '46': 46, '47': 47, '48': 48, '49': 49, '5': 5, '50': 50, 
-    '51': 51, '52': 52, '53': 53, '54': 54, '55': 55, '56': 56, '57': 57, '58': 58, '59': 59, '6': 6, '60': 60, 
-    '61': 61, '62': 62, '63': 63, '64': 64, '65': 65, '66': 66, '67': 67, '68': 68, '69': 69, '7': 7, '70': 70, 
-    '71': 71, '72': 72, '73': 73, '74': 74, '75': 75, '76': 76, '77': 77, '78': 78, '79': 79, '8': 8, '80': 80, 
-    '81': 81, '82': 82, '83': 83, '84': 84, '85': 85, '86': 86, '87': 87, '88': 88, '89': 89, '9': 9, '90': 90, 
-    '91': 91, '92': 92, '93': 93, '94': 94, '95': 95, '96': 96, '97': 97, '98': 98, '99': 99, 'fixation': 152, 
+    '1': 1, '10': 10, '100': 100, '101': 101, '102': 102, '103': 103, '104': 104, '105': 105, '106': 106, '107': 107,
+    '108': 108, '109': 109, '11': 11, '110': 110, '111': 111, '112': 112, '113': 113, '114': 114, '115': 115,
+    '116': 116, '117': 117, '118': 118, '119': 119, '12': 12, '120': 120, '121': 121, '122': 122, '123': 123,
+    '124': 124, '125': 125, '126': 126, '127': 127, '128': 128, '129': 129, '13': 13, '130': 130, '131': 131,
+    '132': 132, '133': 133, '134': 134, '135': 135, '136': 136, '137': 137, '138': 138, '139': 139, '14': 14,
+    '140': 140, '141': 141, '142': 142, '143': 143, '144': 144, '15': 15, '16': 16, '17': 17, '18': 18, '19': 19,
+    '2': 2, '20': 20, '21': 21, '22': 22, '220': 220, '221': 221, '23': 23, '24': 24, '241': 241, '242': 242,
+    '244': 244, '245': 245, '246': 246, '25': 25, '26': 26, '27': 27, '28': 28, '29': 29, '3': 3, '30': 30,
+    '31': 31, '32': 32, '33': 33, '34': 34, '35': 35, '36': 36, '37': 37, '38': 38, '39': 39, '4': 4, '40': 40,
+    '41': 41, '42': 42, '43': 43, '44': 44, '45': 45, '46': 46, '47': 47, '48': 48, '49': 49, '5': 5, '50': 50,
+    '51': 51, '52': 52, '53': 53, '54': 54, '55': 55, '56': 56, '57': 57, '58': 58, '59': 59, '6': 6, '60': 60,
+    '61': 61, '62': 62, '63': 63, '64': 64, '65': 65, '66': 66, '67': 67, '68': 68, '69': 69, '7': 7, '70': 70,
+    '71': 71, '72': 72, '73': 73, '74': 74, '75': 75, '76': 76, '77': 77, '78': 78, '79': 79, '8': 8, '80': 80,
+    '81': 81, '82': 82, '83': 83, '84': 84, '85': 85, '86': 86, '87': 87, '88': 88, '89': 89, '9': 9, '90': 90,
+    '91': 91, '92': 92, '93': 93, '94': 94, '95': 95, '96': 96, '97': 97, '98': 98, '99': 99, 'fixation': 152,
     'saccade': 153,
     '220': 220, "221": 221, '241': 241, '242': 242, '244': 244, '245': 245, '246': 246
 }
@@ -41,7 +41,7 @@ custom_mapping = {
 test_onset_dict = {"onset_concrete_cued_left": 220,
     "onset_concrete_cued_right": 221}
 
-# %% 
+# %%
 # Looping over all subIDs
 # use once I have my epochs correct
 freqs = []
@@ -74,7 +74,7 @@ for i in one_subID:
         event_repeated='merge',
         preload=True,
         reject_by_annotation=False
-    ) 
+    )
     # save epoch in fif format to a specified folder
 
     pupil_epochs.plot(n_epochs=1)
@@ -99,34 +99,34 @@ picks_idx = mne.pick_channels(
 )
 
 raw.plot(events= events_from_annot, event_id=event_dict, order=picks_idx)
-# %% 
+# %%
 # events from annotations without any custom mapping dictionaries
-# mne.events reads both the events and the events_dict in at the same time as a tuple ([events_from_annot], {event_dict}) 
+# mne.events reads both the events and the events_dict in at the same time as a tuple ([events_from_annot], {event_dict})
 # -> I am simply unpacking them already into two seperate variables
 events_from_annot, event_dict = mne.events_from_annotations(raw, event_id='auto')
 print(event_dict)
 print(events_from_annot[:5])
 
-# 
+#
 # %%
 # # mapping the triggers (in quotations marks) to the same numbers as event ids to make it more useful
 # this might not be all of the triggers
 custom_mapping = {
-    '1': 1, '10': 10, '100': 100, '101': 101, '102': 102, '103': 103, '104': 104, '105': 105, '106': 106, '107': 107, 
-    '108': 108, '109': 109, '11': 11, '110': 110, '111': 111, '112': 112, '113': 113, '114': 114, '115': 115, 
-    '116': 116, '117': 117, '118': 118, '119': 119, '12': 12, '120': 120, '121': 121, '122': 122, '123': 123, 
-    '124': 124, '125': 125, '126': 126, '127': 127, '128': 128, '129': 129, '13': 13, '130': 130, '131': 131, 
-    '132': 132, '133': 133, '134': 134, '135': 135, '136': 136, '137': 137, '138': 138, '139': 139, '14': 14, 
-    '140': 140, '141': 141, '142': 142, '143': 143, '144': 144, '15': 15, '16': 16, '17': 17, '18': 18, '19': 19, 
-    '2': 2, '20': 20, '21': 21, '22': 22, '220': 220, '221': 221, '23': 23, '24': 24, '241': 241, '242': 242, 
-    '244': 244, '245': 245, '246': 246, '25': 25, '26': 26, '27': 27, '28': 28, '29': 29, '3': 3, '30': 30, 
-    '31': 31, '32': 32, '33': 33, '34': 34, '35': 35, '36': 36, '37': 37, '38': 38, '39': 39, '4': 4, '40': 40, 
-    '41': 41, '42': 42, '43': 43, '44': 44, '45': 45, '46': 46, '47': 47, '48': 48, '49': 49, '5': 5, '50': 50, 
-    '51': 51, '52': 52, '53': 53, '54': 54, '55': 55, '56': 56, '57': 57, '58': 58, '59': 59, '6': 6, '60': 60, 
-    '61': 61, '62': 62, '63': 63, '64': 64, '65': 65, '66': 66, '67': 67, '68': 68, '69': 69, '7': 7, '70': 70, 
-    '71': 71, '72': 72, '73': 73, '74': 74, '75': 75, '76': 76, '77': 77, '78': 78, '79': 79, '8': 8, '80': 80, 
-    '81': 81, '82': 82, '83': 83, '84': 84, '85': 85, '86': 86, '87': 87, '88': 88, '89': 89, '9': 9, '90': 90, 
-    '91': 91, '92': 92, '93': 93, '94': 94, '95': 95, '96': 96, '97': 97, '98': 98, '99': 99, 'fixation': 152, 
+    '1': 1, '10': 10, '100': 100, '101': 101, '102': 102, '103': 103, '104': 104, '105': 105, '106': 106, '107': 107,
+    '108': 108, '109': 109, '11': 11, '110': 110, '111': 111, '112': 112, '113': 113, '114': 114, '115': 115,
+    '116': 116, '117': 117, '118': 118, '119': 119, '12': 12, '120': 120, '121': 121, '122': 122, '123': 123,
+    '124': 124, '125': 125, '126': 126, '127': 127, '128': 128, '129': 129, '13': 13, '130': 130, '131': 131,
+    '132': 132, '133': 133, '134': 134, '135': 135, '136': 136, '137': 137, '138': 138, '139': 139, '14': 14,
+    '140': 140, '141': 141, '142': 142, '143': 143, '144': 144, '15': 15, '16': 16, '17': 17, '18': 18, '19': 19,
+    '2': 2, '20': 20, '21': 21, '22': 22, '220': 220, '221': 221, '23': 23, '24': 24, '241': 241, '242': 242,
+    '244': 244, '245': 245, '246': 246, '25': 25, '26': 26, '27': 27, '28': 28, '29': 29, '3': 3, '30': 30,
+    '31': 31, '32': 32, '33': 33, '34': 34, '35': 35, '36': 36, '37': 37, '38': 38, '39': 39, '4': 4, '40': 40,
+    '41': 41, '42': 42, '43': 43, '44': 44, '45': 45, '46': 46, '47': 47, '48': 48, '49': 49, '5': 5, '50': 50,
+    '51': 51, '52': 52, '53': 53, '54': 54, '55': 55, '56': 56, '57': 57, '58': 58, '59': 59, '6': 6, '60': 60,
+    '61': 61, '62': 62, '63': 63, '64': 64, '65': 65, '66': 66, '67': 67, '68': 68, '69': 69, '7': 7, '70': 70,
+    '71': 71, '72': 72, '73': 73, '74': 74, '75': 75, '76': 76, '77': 77, '78': 78, '79': 79, '8': 8, '80': 80,
+    '81': 81, '82': 82, '83': 83, '84': 84, '85': 85, '86': 86, '87': 87, '88': 88, '89': 89, '9': 9, '90': 90,
+    '91': 91, '92': 92, '93': 93, '94': 94, '95': 95, '96': 96, '97': 97, '98': 98, '99': 99, 'fixation': 152,
     'saccade': 153,
     '220': 220, "221": 221, '241': 241, '242': 242, '244': 244, '245': 245, '246': 246
 }
@@ -147,8 +147,8 @@ for annot in raw.annotations:
 # I dont think I can pass the events to the events_from_annotations because for that I need to pass the raw directly to the function
 
 
-# %% 
-# I can then transform the events back to an annotations object and there I can pass the actual descriptive strings to the now correct trigger numbers (event ids). 
+# %%
+# I can then transform the events back to an annotations object and there I can pass the actual descriptive strings to the now correct trigger numbers (event ids).
 # Am I correct in believing that the event ID's are not the triggers but are what I called them before in the dictionary above?. Not sure is that is useful
 # These return annotations
 # Am I using them afterwards at all?
@@ -190,7 +190,7 @@ custom_event_mapping = {
     137: "obj3/pos3/ori9", 138: "obj3/pos3/ori10", 139: "obj3/pos3/ori11", 140: "obj3/pos3/ori12",
     141: "obj3/pos3/ori13", 142: "obj3/pos3/ori14", 143: "obj3/pos3/ori15", 144: "obj3/pos3/ori16",
 
-    220: "onset_concrete_cued_left", 221: "onset_concrete_cued_right", 241: "left_button_press", 
+    220: "onset_concrete_cued_left", 221: "onset_concrete_cued_right", 241: "left_button_press",
     242: "right_button_press", 244: "feedback_cued_item", 245: "mask", 246: "beginning/end_of_task"
 }
 
@@ -224,10 +224,10 @@ raw.pick(picks="eyetrack").plot(scalings=custom_scalings)
 # but here we’ll force loading into memory using the preload=True parameter so that we can see the results of the rejection criteria being applied:
 
 
-# how can I epoch the data according to a specific trigger? This looks like it would just epoch around every single trigger which 
+# how can I epoch the data according to a specific trigger? This looks like it would just epoch around every single trigger which
 # would then even include the fixations??
 # I can then plot only the data for epochs I am interested in (meaning according to the triggers)
-# still seems unnnecessary to epoch everything at once since the length of the epoch is only fitting for the epoch from stim 1 to test 1 
+# still seems unnnecessary to epoch everything at once since the length of the epoch is only fitting for the epoch from stim 1 to test 1
 epochs = mne.Epochs(
     raw,
     events_from_annot,
@@ -239,9 +239,9 @@ epochs = mne.Epochs(
     metadata=df,
     preload=True,
     reject_by_annotation=False
-) 
+)
 
-#check what merge does exactly 
+#check what merge does exactly
 
 #RuntimeError: Event time samples were not unique. Consider setting the `event_repeated` parameter."
 # event_repeatedstr
@@ -270,7 +270,7 @@ for event in events_from_annot:
 # events = mne.find_events(raw, stim_channel="DIN")
 # print(events[:5])  # show the first 5
 
-# %% 
+# %%
 print(events_from_annot[:, 0])
 
 
@@ -346,7 +346,7 @@ epochs["fixation"].plot(
 # plots look identical
 
 
-# %% 
+# %%
 
 print(event_dict)
 
@@ -368,11 +368,11 @@ pupil_epochs = mne.Epochs(
     event_id=test_onset_dict,
     tmin=-0.5,
     tmax=0.5,
-    
+
     picks=['pupil_left', 'pupil_right'],
     event_repeated='merge',
     preload=True,
-) 
+)
 
 # reject by annotation
 
@@ -385,7 +385,7 @@ pupil_epochs = mne.Epochs(
 pupil_epochs["onset_concrete_cued_left"].plot()
 
 # three plots??
-# 
+#
 
 # %%
 pupil_epochs["onset_concrete_cued_left", "onset_concrete_cued_right"].plot()
