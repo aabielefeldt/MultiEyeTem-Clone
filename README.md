@@ -29,10 +29,10 @@ You can now run conda activate MultiEyeTemAnalysis and should have all required 
 
 ## General Files
 
-- <.gitignore> --> which files to ignore during version control
-- <.environment.yml> --> software dependencies, see "Installation"
-- <README.md> --> general information about this repository
+- `.gitignore>`--> which files to ignore during version control
+- `.environment.yml>`--> software dependencies, see "Installation"
+- `README.md` --> general information about this repository
 
 ## Figure creation scripts
 
-- <plots_fig1...>
+- `plots_fig1...`
