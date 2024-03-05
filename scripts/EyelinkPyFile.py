@@ -194,9 +194,7 @@ ave = roi_evoked.average()
 ave.plot()
 
 # %%
-ave_df = ave.to_data_frame()
-
-# %%
+ave_df = ave.to_data_frame()# %%
 # This transforms the epoch data to a dataframe to then potentially use for a seaborn function
 # this however is at the moment all 576 epochs one after the other and still both eyes
 # this could probably be used as is though if I would just calculate the mean for both eyes and put it into a new column
