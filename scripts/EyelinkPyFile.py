@@ -3,12 +3,17 @@
 import mne
 import numpy as np
 import pandas as pd
-
+from datetime import datetime
 
 # %% Load Metadata
 
 df = pd.read_csv('../data/df.csv')
 good_partis = df['subID'].unique()
+
+# %%
+# if qt is used as backend the kernel crashes
+# this can probably be deleted once run, but might just keep in in to be safe
+mne.viz.set_browser_backend('matplotlib')
 
 
 
@@ -36,12 +41,193 @@ custom_mapping = {
 }
 
 
-# %% Dictionary for triggers used for onset of epoch?
- # could also be a dict however:
+# %% 
+# Dictionary for triggers used for onset of epoch?
+# could also be a dict however:
 test_onset_dict = {"onset_concrete_cued_left": 220,
     "onset_concrete_cued_right": 221}
 
 # %%
+
+# Get current date
+current_date = datetime.now().strftime("%Y-%m-%d_%H:%M")
+
+# Create folder name using current date
+folder_name = f"Epochs_data_{current_date}"
+
+# Create the folder
+os.makedirs(folder_name)
+
+# Looping over all subIDs
+# use once I have my epochs correct
+freqs = []
+# for i in good_partis:
+one_subID = ['REUNMA']
+for i in good_partis:
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
+
+    eyelink_file = folder_path + "/" + i + ".asc"
+    print(eyelink_file)
+    raw = mne.io.read_raw_eyelink(eyelink_file)
+
+    metadata_pp = df.loc[(df['subID'] == i)]
+    freq_pp = [i, (raw.info['sfreq'])]
+    freqs.append(freq_pp)
+    events_from_annot, event_dict = mne.events_from_annotations(
+    raw, event_id=custom_mapping)
+
+    # need to somehow save this with reference to the subID
+    pupil_epochs = mne.Epochs(
+        raw,
+        # had to collapse the events from annot to the length of the events of interest (test_onset_dict), seems to be a bug in mne (report?)
+        events_from_annot[np.isin(events_from_annot, [220, 221])[:,-1]],
+        event_id=test_onset_dict,
+        tmin=-6.5,
+        tmax=2.5,
+
+        metadata=metadata_pp,
+        picks=['pupil_left', 'pupil_right'],
+        event_repeated='merge',
+        preload=True,
+        reject_by_annotation=False
+    )
+    # save epoch in fif format to a specified folder
+    
+    pupil_epochs.plot(n_epochs=4)
+
+    # save 
+    filename = f"{i}-epo.fif"
+    filepath = os.path.join(folder_name, filename)
+    pupil_epochs.save(filepath, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
+freqs_df = pd.DataFrame(freqs, columns=['subID', 'frequency'])
+display(freqs_df)
+# only one has a different sampling freuqency and that one is 1000hz so higher than the rest (500hz)´
+
+#%%
+
+def count_files_in_folder(folder_path):
+    # Initialize count
+    file_count = 0
+    
+    # Iterate through the files in the folder
+    for _, _, files in os.walk(folder_path):
+        file_count += len(files)
+    
+    return file_count
+
+# Example usage:
+# folder_path = 'path/to/your/folder'
+num_files = count_files_in_folder(folder_name)
+print(f"Number of files in the folder: {num_files}")
+
+# %%
+# trying to average the data per participant into one epoch?
+# is that baselining? Or is that something else
+
+# trying baselining
+## "To reduce the effect of such drifts, it is custom to perform a so-called baseline correction. 
+# Essentially, this consists of using EEG activity over a baseline period, i.e. before an external 
+# event occurs, to correct activity over a post-stimulus interval, i.e. the time after an external 
+# event occurs."
+
+folder_name = 'Epochs_data_2024-02-29_13:54'
+file_name = 'REUNMA-epo.fif'
+
+filepath = os.path.join(folder_name, file_name)
+
+# %%
+
+filepath = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_data_2024-02-29_13:54/REUNMA-epo.fif"
+
+pupil_epochs = mne.read_epochs(filepath, proj=True, preload=True, verbose=None)
+
+baseline_tmin, baseline_tmax = None, 0  # None takes the first timepoint
+
+baseline = (baseline_tmin, baseline_tmax)
+
+trad_aud = pupil_epochs.average().apply_baseline(baseline)
+
+# %%
+# this did some sort of average over all 576 trials - but seperately for the two pupils and for all conditions together
+# need to figure out what the baseline means and also seperate by condition first
+
+trad_aud.plot()
+
+# %%
+evoked = pupil_epochs.average() # original line of code: epochs["auditory/left"].average() - ["auditory/left"] --> whats that in the square brackets, 
+# how can I use that in my code
+# why is this plotted twice? The two lines should probably already be the two individual eyes
+evoked.plot()
+
+# this works:
+# evoked = pupil_epochs['onset_concrete_cued_right'].average()
+# evoked
+
+
+# lookd exactly like the baseline???
+
+# %%
+# trying to combine the two eyes into one - plotting should show only one line
+# the following does not work
+pupil_epochs.combine_event_ids(pupil_epochs, ['220', '221'], {'onset': 12})
+
+
+# %%
+
+# why does this not work
+groups=dict(Pupils=['pupil_left', 'pupil_right'])
+
+mne.channels.combine_channels(pupil_epochs, groups, method='mean') #, keep_stim=False, drop_bad=False, verbose=None)
+
+
+
+# %% 
+# this works for combining the two channels into one
+# This works... why though?
+
+pupil_ix = mne.pick_channels(pupil_epochs.info["ch_names"], include=['pupil_left', 'pupil_right'])
+
+roi_dict = dict(left_ROI=pupil_ix)
+roi_evoked = mne.channels.combine_channels(pupil_epochs, roi_dict, method="mean")
+roi_evoked.plot()
+ave = roi_evoked.average()
+ave.plot()
+
+# %%
+ave_df = ave.to_data_frame()
+
+# %%
+# This transforms the epoch data to a dataframe to then potentially use for a seaborn function
+# this however is at the moment all 576 epochs one after the other and still both eyes
+# this could probably be used as is though if I would just calculate the mean for both eyes and put it into a new column
+# and also calculate the mean over all epochs
+# this might lose some of the usability of mne though and the epochs_df at the moment is very large
+epochs_df = pupil_epochs.to_data_frame()
+
+# %% 
+# looks exactly the same
+# I first tried to do this with pupil_left and pupil_right
+
+l_pup = pupil_epochs['onset_concrete_cued_left', 'onset_concrete_cued_right'].average()
+l_pup.plot()
+
+
+
+
+
+#%%
+
+# %%
+
+# Get current date
+current_date = datetime.now().strftime("%Y-%m-%d_%H:%M")
+
+# Create folder name using current date
+folder_name = f"Epochs_data_{current_date}"
+
+# Create the folder
+os.makedirs(folder_name)
+
 # Looping over all subIDs
 # use once I have my epochs correct
 freqs = []
@@ -61,30 +247,40 @@ for i in one_subID:
     raw, event_id=custom_mapping)
 
     # need to somehow save this with reference to the subID
-    pupil_epochs = mne.Epochs(
+    pupil_epochs_all_ids = mne.Epochs(
         raw,
         # had to collapse the events from annot to the length of the events of interest (test_onset_dict), seems to be a bug in mne (report?)
-        events_from_annot[np.isin(events_from_annot, [220, 221])[:,-1]],
-        event_id=test_onset_dict,
-        tmin=-5.5,
-        tmax=1.5,
-
-        metadata=metadata_pp,
-        picks=['pupil_left', 'pupil_right'],
+        events_from_annot,
+        tmin=-6.5,
+        tmax=2.5,
+        picks=['pupil_left', 'pupil_right', 'DIN'],
         event_repeated='merge',
         preload=True,
         reject_by_annotation=False
     )
-    # save epoch in fif format to a specified folder
 
-    pupil_epochs.plot(n_epochs=1)
+    # 
+
+    # save epoch in fif format to a specified folder
+    
+    pupil_epochs.plot(n_epochs=4)
+
+    # save 
+    filename = f"{i}-epo.fif"
+    filepath = os.path.join(folder_name, filename)
+    pupil_epochs.save(filepath, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
 freqs_df = pd.DataFrame(freqs, columns=['subID', 'frequency'])
 display(freqs_df)
-# only one has a different sampling freuqency and that one is 1000hz so higher than the rest (500hz)´
 
-# %%
-# needed this in the old version of mne to make plots work
-mne.viz.set_browser_backend('qt')
+
+
+
+
+
+
+
+
+
 
 # %%
 # Plot
