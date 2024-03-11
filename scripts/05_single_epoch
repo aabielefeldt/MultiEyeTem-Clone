@@ -1,0 +1,156 @@
+# %%
+# Importsconda
+import mne
+import numpy as np
+import pandas as pd
+from datetime import datetime
+
+# %% Load Metadata
+
+df = pd.read_csv('../data/df.csv')
+good_partis = df['subID'].unique()
+
+# %%
+# if qt is used as backend the kernel crashes
+# this can probably be deleted once run, but might just keep in in to be safe
+mne.viz.set_browser_backend('matplotlib')
+
+
+
+# %% Custom Mappings
+
+# this might not be all of the triggers
+custom_mapping = {
+    '1': 1, '10': 10, '100': 100, '101': 101, '102': 102, '103': 103, '104': 104, '105': 105, '106': 106, '107': 107,
+    '108': 108, '109': 109, '11': 11, '110': 110, '111': 111, '112': 112, '113': 113, '114': 114, '115': 115,
+    '116': 116, '117': 117, '118': 118, '119': 119, '12': 12, '120': 120, '121': 121, '122': 122, '123': 123,
+    '124': 124, '125': 125, '126': 126, '127': 127, '128': 128, '129': 129, '13': 13, '130': 130, '131': 131,
+    '132': 132, '133': 133, '134': 134, '135': 135, '136': 136, '137': 137, '138': 138, '139': 139, '14': 14,
+    '140': 140, '141': 141, '142': 142, '143': 143, '144': 144, '15': 15, '16': 16, '17': 17, '18': 18, '19': 19,
+    '2': 2, '20': 20, '21': 21, '22': 22, '220': 220, '221': 221, '23': 23, '24': 24, '241': 241, '242': 242,
+    '244': 244, '245': 245, '246': 246, '25': 25, '26': 26, '27': 27, '28': 28, '29': 29, '3': 3, '30': 30,
+    '31': 31, '32': 32, '33': 33, '34': 34, '35': 35, '36': 36, '37': 37, '38': 38, '39': 39, '4': 4, '40': 40,
+    '41': 41, '42': 42, '43': 43, '44': 44, '45': 45, '46': 46, '47': 47, '48': 48, '49': 49, '5': 5, '50': 50,
+    '51': 51, '52': 52, '53': 53, '54': 54, '55': 55, '56': 56, '57': 57, '58': 58, '59': 59, '6': 6, '60': 60,
+    '61': 61, '62': 62, '63': 63, '64': 64, '65': 65, '66': 66, '67': 67, '68': 68, '69': 69, '7': 7, '70': 70,
+    '71': 71, '72': 72, '73': 73, '74': 74, '75': 75, '76': 76, '77': 77, '78': 78, '79': 79, '8': 8, '80': 80,
+    '81': 81, '82': 82, '83': 83, '84': 84, '85': 85, '86': 86, '87': 87, '88': 88, '89': 89, '9': 9, '90': 90,
+    '91': 91, '92': 92, '93': 93, '94': 94, '95': 95, '96': 96, '97': 97, '98': 98, '99': 99, 'fixation': 152,
+    'saccade': 153,
+    '220': 220, "221": 221, '241': 241, '242': 242, '244': 244, '245': 245, '246': 246
+}
+
+
+# %% 
+# Dictionary for triggers used for onset of epoch?
+# could also be a dict however:
+test_onset_dict = {"onset_concrete_cued_left": 220,
+    "onset_concrete_cued_right": 221}
+
+# %%
+
+
+# in this script I am trying to epoch the raw file again - but this time keep more of the triggers in the data
+# either through the metadata or the event_ids or custom mapping?
+
+# at the moment I the epoch has 22322 events found, which also makes it really small and the averaging nonesense,
+# because the average is the average over all events
+
+# Get current date
+current_date = datetime.now().strftime("%Y-%m-%d_%H:%M")
+
+# Create folder name using current date
+folder_name = f"Epochs_data_{current_date}"
+
+# Create the folder
+os.makedirs(folder_name)
+
+# Looping over all subIDs
+# use once I have my epochs correct
+freqs = []
+# for i in good_partis:
+one_subID = ['REUNMA']
+for i in one_subID:
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
+
+    eyelink_file = folder_path + "/" + i + ".asc"
+    print(eyelink_file)
+    raw = mne.io.read_raw_eyelink(eyelink_file)
+
+    metadata_pp = df.loc[(df['subID'] == i)]
+    freq_pp = [i, (raw.info['sfreq'])]
+    freqs.append(freq_pp)
+    events_from_annot, event_dict = mne.events_from_annotations(
+    raw, event_id=custom_mapping)
+
+    # need to somehow save this with reference to the subID
+    pupil_epochs = mne.Epochs(
+        raw,
+        # had to collapse the events from annot to the length of the events of interest (test_onset_dict), seems to be a bug in mne (report?)
+        events_from_annot[np.isin(events_from_annot, [220, 221])[:,-1]],
+        
+        metadata=metadata_pp,
+        tmin=-6.5,
+        tmax=2.5,
+        
+        
+        picks=['pupil_left', 'pupil_right'],
+        event_repeated='merge',
+        preload=True,
+        reject_by_annotation=False
+    )
+
+# now it correctly shows 576 events and all works, only part removed now is event_id
+# what is that for then?
+
+
+
+
+
+    # for now removing the metadata to be able to play around with the events_from_annot
+    # 
+    # changed events_from_annot[np.isin(events_from_annot, [220, 221])[:,-1]], to just events_from annot
+    # changed event_id=test_onset_dict, to event_id=,
+
+# event_id=custom_mapping -> does not work, returns "ValueError: No matching events found for 1 (event id 1)"
+
+    # event_id=events_from_annot,
+    # save epoch in fif format to a specified folder
+    
+    pupil_epochs.plot(n_epochs=4)
+
+    # save 
+    filename = f"{i}-epo.fif"
+    filepath = os.path.join(folder_name, filename)
+    pupil_epochs.save(filepath, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
+
+
+    #%% where was the epoch saved
+    # plot the average
+    # can i see the rest of the triggers?
+    # some way to include the annotations in the plot? what have I used in my first script?
+
+# Using data from preloaded Raw for 22322 events and 4501 original time points ...
+# 94 bad epochs dropped
+
+# this is then the average of 22322 events
+# so the zero point on the plot is the 0 point depending on all individual events
+
+all_anno_ave = pupil_epochs.average()
+
+all_anno_ave.plot()
+# %%
+# I took this from the mne website, not sure how it works, the plot shows what I think are event lines
+# with the number 5 and 55 on top. How are these numbers connected to the specifications in this plotting function
+
+catch_trials_and_buttonpresses = mne.pick_events(events_from_annot, include=[7, 1])
+pupil_epochs["202"].plot(
+    events=catch_trials_and_buttonpresses,
+    event_id=event_dict,
+)
+
+# in the pupil_epochs[...] I can only enter "220" or "221"
+# I do not understand the events=... though
+
+# in the mne tutorial they ran an event_dict before that specified the names for the events that are used in "inlcude=[5, 32]"
+# %%

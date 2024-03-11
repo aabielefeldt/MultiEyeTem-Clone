@@ -4,6 +4,9 @@ import mne
 import numpy as np
 import pandas as pd
 from datetime import datetime
+import pingouin as pg
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 # %% Load Metadata
 
@@ -45,3 +48,11 @@ for i in good_partis:
 
 # %%
 
+lm_results = pg.linear_regression(aves['time'], aves['pupils'])
+display(lm_results.round(4))
+
+plt.figure(figsize=(10, 6))
+sns.lmplot(x='time', y='pupils', data=aves) #, ci=None line_kws={'color': 'red'})
+plt.show()
+
+# %%
