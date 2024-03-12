@@ -21,8 +21,6 @@ mne.viz.set_browser_backend('matplotlib')
 
 # %%
 
-filepath = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_data_2024-02-29_13:54/REUNMA-epo.fif"
-
 aves = pd.DataFrame()
 
 for i in good_partis:
@@ -45,6 +43,11 @@ for i in good_partis:
     ave_pp['subID'] = i
     aves = pd.concat([aves, ave_pp])
     # aves.append([ave.to_data_frame(), i])
+
+# %%
+# so far this is not plotting the average of all participants but the average of each one individually
+
+
 
 # %%
 
