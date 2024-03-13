@@ -272,6 +272,11 @@ display(freqs_df)
 
 
 
+# %%
+
+# I could also use shift_time() to shift the 0 point of the epoch for example to the start of the delay period rather than have 0 be the onset of the test
+
+
 
 
 
