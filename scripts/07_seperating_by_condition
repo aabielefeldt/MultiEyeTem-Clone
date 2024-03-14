@@ -64,8 +64,6 @@ average_epochs.plot()
 
 # %% 
 
-# seperating by condition -> then in the next step taking the average?
-
 # CONDITION 1
 
 # could also do the following with the same effect but seems to take longer??:
@@ -153,7 +151,16 @@ evks = dict(zip(conds, evokeds_list))
 
 mne.viz.plot_compare_evokeds(evks, picks="pupil", combine=combine)
 
+# %%
 
+# this is from the mne website and could be used to plot all three conditions next to each other if amended
+
+# evokeds = dict()
+# query = "NumberOfLetters == {}"
+# for n_letters in epochs.metadata["NumberOfLetters"].unique():
+#     evokeds[str(n_letters)] = epochs[query.format(n_letters)].average()
+
+# mne.viz.plot_compare_evokeds(evokeds, cmap=("word length", "viridis"), picks="Pz")
 # %%
 
 # statistics on the dataframes?
@@ -172,20 +179,18 @@ anova_result
 
 
 # %%
-fig2=fig
+
 ax = fig.get_axes()[0]
 ax.axvline(-3.5, label="hiho")
 fig.legend()
 fig
-
-# add label
 
 
 # %%
 
 # %%
 ax.get_xticks()
-# %%
+
 
 # %%
 
