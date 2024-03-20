@@ -4,6 +4,7 @@ import mne
 import numpy as np
 import pandas as pd
 from datetime import datetime
+import matplotlib.pyplot as plt
 
 # %% Load Metadata
 
@@ -82,28 +83,28 @@ for i in one_subID:
     freqs.append(freq_pp)
     events_from_annot, event_dict = mne.events_from_annotations(
     raw, event_id=custom_mapping)
-
-    # need to somehow save this with reference to the subID
-    pupil_epochs = mne.Epochs(
-        raw,
-        # had to collapse the events from annot to the length of the events of interest (test_onset_dict), seems to be a bug in mne (report?)
-        events_from_annot[np.isin(events_from_annot, [220, 221])[:,-1]],
+    raw.plot()
+    # # need to somehow save this with reference to the subID
+    # pupil_epochs = mne.Epochs(
+    #     raw,
+    #     # had to collapse the events from annot to the length of the events of interest (test_onset_dict), seems to be a bug in mne (report?)
+    #     events_from_annot[np.isin(events_from_annot, [220, 221])[:,-1]],
         
-        metadata=metadata_pp,
-        tmin=-6.5,
-        tmax=2.5,
+    #     metadata=metadata_pp,
+    #     tmin=-6.5,
+    #     tmax=2.5,
         
         
-        picks=['pupil_left', 'pupil_right'],
-        event_repeated='merge',
-        preload=True,
-        reject_by_annotation=False
-    )
+    #     picks=['pupil_left', 'pupil_right'],
+    #     event_repeated='merge',
+    #     preload=True,
+    #     reject_by_annotation=False
+    
 
 # now it correctly shows 576 events and all works, only part removed now is event_id
 # what is that for then?
 
-
+# %%
 
 
 

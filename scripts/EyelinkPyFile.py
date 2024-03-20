@@ -62,7 +62,7 @@ os.makedirs(folder_name)
 # use once I have my epochs correct
 freqs = []
 # for i in good_partis:
-one_subID = ['REUNMA']
+# one_subID = ['REUNMA']
 for i in good_partis:
     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
 
@@ -84,7 +84,7 @@ for i in good_partis:
         event_id=test_onset_dict,
         tmin=-6.5,
         tmax=2.5,
-
+        baseline=None,
         metadata=metadata_pp,
         picks=['pupil_left', 'pupil_right'],
         event_repeated='merge',
@@ -93,13 +93,15 @@ for i in good_partis:
     )
     # save epoch in fif format to a specified folder
     
-    pupil_epochs.plot(n_epochs=4)
+    # pupil_epochs.plot(n_epochs=4)
 
     # save 
     filename = f"{i}-epo.fif"
     filepath = os.path.join(folder_name, filename)
     pupil_epochs.save(filepath, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
 freqs_df = pd.DataFrame(freqs, columns=['subID', 'frequency'])
+freqs_df.to_csv('freqs_df_file.csv', sep=',', index=True, encoding='utf-8')
+
 display(freqs_df)
 # only one has a different sampling freuqency and that one is 1000hz so higher than the rest (500hz)´
 

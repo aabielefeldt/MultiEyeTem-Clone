@@ -1,0 +1,57 @@
+# %%
+# Importsconda
+import mne
+import numpy as np
+import pandas as pd
+from datetime import datetime
+import pingouin as pg
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# %% Load Metadata
+
+df = pd.read_csv('../data/df.csv')
+good_partis = df['subID'].unique()
+new_partis = np.delete(good_partis, np.where(good_partis == ['KJN4WD']))
+
+# %%
+# if qt is used as backend the kernel crashes
+# this can probably be deleted once run, but might just keep in in to be safe
+mne.viz.set_browser_backend('matplotlib')
+
+
+# %%
+
+freqs = []
+infos =  {'subID': [], 'info': []}
+# for i in good_partis:
+
+for i in good_partis:
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
+
+    eyelink_file = folder_path + "/" + i + ".asc"
+    print(eyelink_file)
+    raw = mne.io.read_raw_eyelink(eyelink_file)
+
+    metadata_pp = df.loc[(df['subID'] == i)]
+    freq_pp = [i, (raw.info['sfreq'])]
+    freqs.append(freq_pp)
+
+    # i think this isnt quite what I wanted. this way the subID and the info are not connected
+    infos[i] = raw.info
+    
+
+freqs_df = pd.DataFrame(freqs, columns=['subID', 'frequency'])
+display(freqs_df)
+
+
+# %%
+
+trial_dict = {'subID': [], 'info': []}
+
+for i in good_partis:
+    # trying to append something from good_partis to the id of good_partis
+    trial_dict[i]= (30)
+
+trial_dict
+# %%
