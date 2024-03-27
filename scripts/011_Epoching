@@ -92,7 +92,6 @@ for i in good_partis:
         reject_by_annotation=False
     )
     # save epoch in fif format to a specified folder
-    
     # pupil_epochs.plot(n_epochs=4)
 
     # save 

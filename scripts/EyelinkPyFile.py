@@ -353,6 +353,8 @@ for annot in raw.annotations:
 # Am I correct in believing that the event ID's are not the triggers but are what I called them before in the dictionary above?. Not sure is that is useful
 # These return annotations
 # Am I using them afterwards at all?
+# Trigger Explanation: i.e 17 -> refers to item 2 at orientation 1 presented in the first position (<=48)
+
 custom_event_mapping = {
     1: "obj1/pos1/ori1", 2: "obj1/pos1/ori2", 3: "obj1/pos1/ori3", 4: "obj1/pos1/ori4",
     5: "obj1/pos1/ori5", 6: "obj1/pos1/ori6", 7: "obj1/pos1/ori7", 8: "obj1/pos1/ori8",

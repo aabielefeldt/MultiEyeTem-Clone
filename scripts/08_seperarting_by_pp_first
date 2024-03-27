@@ -19,13 +19,9 @@ new_partis = np.delete(good_partis, np.where(good_partis == ['KJN4WD']))
 # this can probably be deleted once run, but might just keep in in to be safe
 mne.viz.set_browser_backend('matplotlib')
 
-
-
-
 # %%
-
-
 #  JUST FOR NOW - DELETed THE DIFFERENTLY SAMPLED EPOCH FROM THE FOLDER, copy folder still has it
+# update, included the downsampled epochs in the Epochs_data_after_downsampling folder and used it below
 
 # appending all epochs into one list and combining both pupil channels
 con1_evoked_all_pp = []
@@ -39,12 +35,12 @@ all_con_evoked = pd.DataFrame()
 
 sub_con_aves = []
 
-for i in new_partis:
+for i in good_partis:
     
     # /mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_data_2024-03-20_14:25 -- is the new path after changing the epochs baseline to None, 
     # ran epochs with 011_Epoching
     # differently sampled subID epochs are removed in this folder too (but kept in the copy of that folder)
-    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_data_2024-03-20_14:25"
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_data_after_downsampling"
 
     epoch_file = folder_path + "/" + i + "-epo.fif"
 
@@ -125,9 +121,30 @@ ax.text(-4.5, 880, "object position 3", color='black', fontsize=10, ha='center',
 ax.text(-5.5, 880, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
 ax.text(-6.5, 880, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
 
-plt.savefig('pupil_fig.png', bbox_inches = 'tight')
+plt.savefig('pupil_fig_after_downsampling.png', bbox_inches = 'tight')
 
 plt.show
+
+# %%
+
+# applying baselines - plotting them - and saving the figures to compare?
+# need to apply the baseline to every individual? so need to do it within a loop?
+# yes since I need to apply it to the epochs object
+
+
+# applying baseline correction merely, for each channel:
+
+# calculates the average amplitude in the baseline period, and
+# subtracts this average from the entire epoch.
+
+
+epochs.apply_baseline()
+
+
+
+
+
+
 
 
 # %%
