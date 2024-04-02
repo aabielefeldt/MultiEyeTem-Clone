@@ -51,9 +51,13 @@ for i in good_partis:
 
     pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method="mean")
 
-    con1_epochs = pupil_epochs_combined["items_presented == 1"]
-    con2_epochs = pupil_epochs_combined["items_presented == 2"]
-    con3_epochs = pupil_epochs_combined["items_presented == 3"]
+
+    # APPLYING DIFFERENT BASELINES (SAVE FIG INDIVIDUALLY!!)
+    pupil_epochs_combined_bl = pupil_epochs_combined.apply_baseline(baseline=(2, 2.5))
+
+    con1_epochs = pupil_epochs_combined_bl["items_presented == 1"]
+    con2_epochs = pupil_epochs_combined_bl["items_presented == 2"]
+    con3_epochs = pupil_epochs_combined_bl["items_presented == 3"]
 
     con1_ave = con1_epochs.average()
     con2_ave = con2_epochs.average()
@@ -92,8 +96,9 @@ all_pp_con3 = all_con_evoked.loc[all_con_evoked['Load']==3]
 
 evoked_dict = {1: [con1_evoked_all_pp_list], 2: [con2_evoked_all_pp_list], 3: [con3_evoked_all_pp_list]}
 
-
 # %% 
+
+# copy to make the labels more intuitive and habe tjem change with the different baselines
 
 # since changing the errorbar to 'se' it only takes a minute to plot
 
@@ -114,14 +119,18 @@ ax.axvline(-6.5, color='black', alpha=0.33)  # Customize color and saturation
 # at the moment the text are in the middle of the plot and are overlapping each other.
 # could maybe have them be printed at a diagonal on top of the plot?
 
-# Add labels above the vertical lines
-ax.text(0, 880, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
-ax.text(-3.5, 880, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
-ax.text(-4.5, 880, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
-ax.text(-5.5, 880, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
-ax.text(-6.5, 880, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+# Define y-coordinate for labels (as a fraction of the plot height)
+label_y = 1.05  # Adjust this value as needed
 
-plt.savefig('pupil_fig_after_downsampling.png', bbox_inches = 'tight')
+# Add labels above the vertical lines
+ax.text(0, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+ax.text(-3.5, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+ax.text(-4.5, ax.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+ax.text(-5.5, ax.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+ax.text(-6.5, ax.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+
+
+plt.savefig('pupil_fig_after_bl2-2.5.png', bbox_inches = 'tight')
 
 plt.show
 
@@ -133,12 +142,20 @@ plt.show
 
 
 # applying baseline correction merely, for each channel:
-
 # calculates the average amplitude in the baseline period, and
 # subtracts this average from the entire epoch.
 
+# con1_evoked_all_pp, con2_evoked_all_pp, con3_evoked_all_pp are the lists with the individual
+# evoked objects, maybe I could use these to apply the baseline?
+# but the baseline needs to be applied to the epochs directly I think
 
-epochs.apply_baseline()
+
+# for i in good_partis:
+    
+
+
+
+# pupil_epochs_combined.apply_baseline()
 
 
 
