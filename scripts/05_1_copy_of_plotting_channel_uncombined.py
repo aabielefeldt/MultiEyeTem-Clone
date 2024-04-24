@@ -39,12 +39,12 @@ all_con_evoked = pd.DataFrame()
 
 sub_con_aves = []
 
-for i in new_partis:
+for i in good_partis:
     
     # /mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_data_2024-03-20_14:25 -- is the new path after changing the epochs baseline to None, 
     # ran epochs with 011_Epoching
     # differently sampled subID epochs are removed in this folder too (but kept in the copy of that folder)
-    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_data_2024-03-20_14:25"
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_data_after_downsampling"
 
     epoch_file = folder_path + "/" + i + "-epo.fif"
 

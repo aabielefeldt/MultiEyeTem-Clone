@@ -1,0 +1,57 @@
+# %%
+# Importsconda
+import mne
+import numpy as np
+import pandas as pd
+from datetime import datetime
+import pingouin as pg
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# %% 
+# read all_con_evoked dataframe
+
+all_con_evoked = pd.read_csv('../data/all_con_evoked.csv')
+
+# %%
+
+# statistics on the dataframes?
+# redo this as a repeated measures anova (check recording) and also potentially choose a certain time window instead of using all data
+# doing this for the delay period
+start_time = -3.5
+end_time = 0
+all_con_evoked_time_window = all_con_evoked[(all_con_evoked['time'] >= start_time) & (all_con_evoked['time'] <= end_time)]
+display(all_con_evoked_time_window)
+fig, ax = plt.subplots(figsize=(10,8))
+sns.lineplot(data=all_con_evoked_time_window, x='time', y='pupils', hue='Load', palette='crest', errorbar='se')
+
+
+average_time = all_con_evoked_time_window.groupby(['time', 'subID'])['pupils'].mean().reset_index()
+display(average_time)
+fig, ax = plt.subplots(figsize=(10,8))
+sns.lineplot(data=average_time, x='time', y='pupils', hue='subID', palette='crest', errorbar='se')
+
+
+# dataframe über zeit averagen
+
+# anova_result = pg.anova(data=all_con_ave_df, dv='pupils', between='Load')
+anova_result = pg.rm_anova(dv='pupils', within='time', subject='subID', data=average_time)
+anova_result
+# %%
+
+# only have one value for time per subject? so the completely averaged timecourse per condition per participant?
+
+average_timecourse = all_con_evoked_time_window.groupby(['subID', 'Load'])['pupils'].mean().reset_index()
+display(average_timecourse)
+
+fig, ax = plt.subplots(figsize=(10,8))
+sns.pointplot(data=average_timecourse, x='Load', y='pupils', hue='subID', palette='crest', errorbar='se')
+
+anova_result = pg.rm_anova(dv='pupils', within='Load', subject='subID', data=average_timecourse)
+display(anova_result)
+
+
+# why are the two ANOVAs the same?
+anova_result = pg.rm_anova(dv='pupils', within='Load', subject='subID', data=all_con_evoked_time_window)
+display(anova_result)
+# %%

@@ -1,0 +1,56 @@
+# %%
+# Importsconda
+import mne
+import numpy as np
+import pandas as pd
+
+# %% Load Metadata
+
+df = pd.read_csv('../data/df.csv')
+good_partis = df['subID'].unique()
+
+# %%
+# if qt is used as backend the kernel crashes
+# this can probably be deleted once run, but might just keep in in to be safe
+mne.viz.set_browser_backend('matplotlib')
+
+
+# %% 
+# Dictionary for triggers used for onset of epoch?
+# could also be a dict however:
+
+folder_name = f"Epochs_data_first_item_2"
+
+os.makedirs(folder_name, exist_ok=True)
+
+
+# %%
+for i in good_partis:
+    
+    # /mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_data_2024-03-20_14:25 -- is the new path after changing the epochs baseline to None, 
+    # ran epochs with 011_Epoching
+    # differently sampled subID epochs are removed in this folder too (but kept in the copy of that folder)
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_data_after_downsampling"
+
+    epoch_file = folder_path + "/" + i + "-epo.fif"
+    epochs = mne.read_epochs(epoch_file)
+
+
+# %%
+
+con1_epochs = epochs['items_presented==1']
+
+con2_epochs = epochs['items_presented==2']
+
+con3_epochs = epochs['items_presented==3']
+
+# %%
+con3_epochs.average().plot()
+
+#%%
+
+con1_epochs.apply_baseline(baseline=(-5, -4.5))
+con2_epochs.apply_baseline(baseline=(-6, -5.5))
+con3_epochs.apply_baseline(baseline=(-6.5, -6)) # this is after the onset of the first object
+
+# %%

@@ -1,0 +1,63 @@
+# %%
+# Importsconda
+import mne
+import numpy as np
+import pandas as pd
+from datetime import datetime
+import pingouin as pg
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# %% 
+# read all_con_evoked dataframe
+
+all_con_evoked = pd.read_csv('../data/all_con_evoked.csv')
+
+# %% 
+
+# since changing the errorbar to 'se' it only takes a minute to plot
+
+fig, ax = plt.subplots(figsize=(10,8))
+
+# stefan included get_axes in his code to show axvlines, seems to work without it though and even returns an error 
+# ax = fig.get_axes()[0]
+
+sns.lineplot(data=all_con_evoked, x='time', y='pupils', hue='Load', palette='crest', errorbar='se')
+
+ax.axvline(0, color='blue')
+ax.axvline(-3.5, color='darkblue')
+ax.axvline(-4.5, color='black')  # Customize color and saturation
+ax.axvline(-5.5, color='black', alpha=0.66)  # Customize color and saturation
+ax.axvline(-6.5, color='black', alpha=0.33)  # Customize color and saturation
+
+# Include the window that was used for the baseline
+
+
+
+# at the moment the text are in the middle of the plot and are overlapping each other.
+# could maybe have them be printed at a diagonal on top of the plot?
+
+# Define y-coordinate for labels (as a fraction of the plot height)
+label_y = 1.05  # Adjust this value as needed
+
+# Add labels above the vertical lines
+ax.text(0, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+ax.text(-3.5, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+ax.text(-4.5, ax.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+ax.text(-5.5, ax.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+ax.text(-6.5, ax.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+
+ax.axvspan(baseline[0], baseline[1], ymin=0, ymax=1, color='blue', alpha=0.4)
+
+# automatically changing the name to the set baseline
+baseline = (all_con_evoked.at[0, 'baseline_start'], all_con_evoked.at[0, 'baseline_end'])
+baseline_str = '_'.join(map(str, baseline))
+name=f"pupil_fig_{baseline_str}.png"
+
+
+plt.suptitle('Pupil dilation across conditions', y=1.1, fontsize = 20)
+plt.title(f'Applied baseline {baseline}', y=1.2, color='blue', alpha=0.4)
+plt.savefig(name, bbox_inches = 'tight')
+plt.show
+
+# %%

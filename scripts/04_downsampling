@@ -84,22 +84,22 @@ test_onset_dict = {"onset_concrete_cued_left": 220,
 # from mne downsampling best practice
 # original
 
-# current_sfreq = raw.info["sfreq"]
-# desired_sfreq = 500  # Hz
-# decim = np.round(current_sfreq / desired_sfreq).astype(int)
-# obtained_sfreq = current_sfreq / decim
-# lowpass_freq = obtained_sfreq / 3.0
+current_sfreq = raw.info["sfreq"]
+desired_sfreq = 500  # Hz
+decim = np.round(current_sfreq / desired_sfreq).astype(int)
+obtained_sfreq = current_sfreq / decim
+lowpass_freq = obtained_sfreq / 3.0
 
-# raw_filtered = raw.copy().filter(l_freq=None, h_freq=lowpass_freq)
-# events = mne.find_events(raw_filtered)
-# epochs = mne.Epochs(raw_filtered, events, decim=decim)
+raw_filtered = raw.copy().filter(l_freq=None, h_freq=lowpass_freq)
+events = mne.find_events(raw_filtered)
+epochs = mne.Epochs(raw_filtered, events, decim=decim)
 
-# print(
-#     "desired sampling frequency was {} Hz; decim factor of {} yielded an "
-#     "actual sampling frequency of {} Hz.".format(
-#         desired_sfreq, decim, epochs.info["sfreq"]
-#     )
-# )
+print(
+    "desired sampling frequency was {} Hz; decim factor of {} yielded an "
+    "actual sampling frequency of {} Hz.".format(
+        desired_sfreq, decim, epochs.info["sfreq"]
+    )
+)
 
 # do I need to downsample the raw file or the epoched file?
 # %%
