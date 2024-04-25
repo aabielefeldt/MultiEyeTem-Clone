@@ -47,6 +47,8 @@ custom_mapping = {
 test_onset_dict = {"onset_concrete_cued_left": 220,
     "onset_concrete_cued_right": 221}
 
+test_pos1_dict = dict()
+
 # %%
 
 # Get current date

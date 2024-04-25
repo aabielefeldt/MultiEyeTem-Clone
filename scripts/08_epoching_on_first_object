@@ -3,6 +3,7 @@
 import mne
 import numpy as np
 import pandas as pd
+import itertools
 
 # %% Load Metadata
 
@@ -17,6 +18,10 @@ mne.viz.set_browser_backend('matplotlib')
 
 
 # %% Custom Mappings
+
+# in the custom mapping, I am mapping the annotations (which are my trigger numbers in the experiment and 
+# displayed in quotations marks here), to event IDs that are identical to the triggers (otherwise they were arbitrary numbers)
+
 
 # this might not be all of the triggers
 custom_mapping = {
@@ -40,6 +45,104 @@ custom_mapping = {
 }
 
 
+# %%
+# need to use the actual keys to know where the IDs are /pos1/
+
+trigger_matching = {
+    1: "obj1/pos1/ori1", 2: "obj1/pos1/ori2", 3: "obj1/pos1/ori3", 4: "obj1/pos1/ori4",
+    5: "obj1/pos1/ori5", 6: "obj1/pos1/ori6", 7: "obj1/pos1/ori7", 8: "obj1/pos1/ori8",
+    9: "obj1/pos1/ori9", 10: "obj1/pos1/ori10", 11: "obj1/pos1/ori11", 12: "obj1/pos1/ori12",
+    13: "obj1/pos1/ori13", 14: "obj1/pos1/ori14", 15: "obj1/pos1/ori15", 16: "obj1/pos1/ori16",
+    17: "obj2/pos1/ori1", 18: "obj2/pos1/ori2", 19: "obj2/pos1/ori3", 20: "obj2/pos1/ori4",
+    21: "obj2/pos1/ori5", 22: "obj2/pos1/ori6", 23: "obj2/pos1/ori7", 24: "obj2/pos1/ori8",
+    25: "obj2/pos1/ori9", 26: "obj2/pos1/ori10", 27: "obj2/pos1/ori11", 28: "obj2/pos1/ori12",
+    29: "obj2/pos1/ori13", 30: "obj2/pos1/ori14", 31: "obj2/pos1/ori15", 32: "obj2/pos1/ori16",
+    33: "obj3/pos1/ori1", 34: "obj3/pos1/ori2", 35: "obj3/pos1/ori3", 36: "obj3/pos1/ori4",
+    37: "obj3/pos1/ori5", 38: "obj3/pos1/ori6", 39: "obj3/pos1/ori7", 40: "obj3/pos1/ori8",
+    41: "obj3/pos1/ori9", 42: "obj3/pos1/ori10", 43: "obj3/pos1/ori11", 44: "obj3/pos1/ori12",
+    45: "obj3/pos1/ori13", 46: "obj3/pos1/ori14", 47: "obj3/pos1/ori15", 48: "obj3/pos1/ori16",
+    49: "obj1/pos2/ori1", 50: "obj1/pos2/ori2", 51: "obj1/pos2/ori3", 52: "obj1/pos2/ori4",
+    53: "obj1/pos2/ori5", 54: "obj1/pos2/ori6", 55: "obj1/pos2/ori7", 56: "obj1/pos2/ori8",
+    57: "obj1/pos2/ori9", 58: "obj1/pos2/ori10", 59: "obj1/pos2/ori11", 60: "obj1/pos2/ori12",
+    61: "obj1/pos2/ori13", 62: "obj1/pos2/ori14", 63: "obj1/pos2/ori15", 64: "obj1/pos2/ori16",
+    65: "obj2/pos2/ori1", 66: "obj2/pos2/ori2", 67: "obj2/pos2/ori3", 68: "obj2/pos2/ori4",
+    69: "obj2/pos2/ori5", 70: "obj2/pos2/ori6", 71: "obj2/pos2/ori7", 72: "obj2/pos2/ori8",
+    73: "obj2/pos2/ori9", 74: "obj2/pos2/ori10", 75: "obj2/pos2/ori11", 76: "obj2/pos2/ori12",
+    77: "obj2/pos2/ori13", 78: "obj2/pos2/ori14", 79: "obj2/pos2/ori15", 80: "obj2/pos2/ori16",
+    81: "obj3/pos2/ori1", 82: "obj3/pos2/ori2", 83: "obj3/pos2/ori3", 84: "obj3/pos2/ori4",
+    85: "obj3/pos2/ori5", 86: "obj3/pos2/ori6", 87: "obj3/pos2/ori7", 88: "obj3/pos2/ori8",
+    89: "obj3/pos2/ori9", 90: "obj3/pos2/ori10", 91: "obj3/pos2/ori11", 92: "obj3/pos2/ori12",
+    93: "obj3/pos2/ori13", 94: "obj3/pos2/ori14", 95: "obj3/pos2/ori15", 96: "obj3/pos2/ori16",
+    97: "obj1/pos3/ori1", 98: "obj1/pos3/ori2", 99: "obj1/pos3/ori3", 100: "obj1/pos3/ori4",
+    101: "obj1/pos3/ori5", 102: "obj1/pos3/ori6", 103: "obj1/pos3/ori7", 104: "obj1/pos3/ori8",
+    105: "obj1/pos3/ori9", 106: "obj1/pos3/ori10", 107: "obj1/pos3/ori11", 108: "obj1/pos3/ori12",
+    109: "obj1/pos3/ori13", 110: "obj1/pos3/ori14", 111: "obj1/pos3/ori15", 112: "obj1/pos3/ori16",
+    113: "obj2/pos3/ori1", 114: "obj2/pos3/ori2", 115: "obj2/pos3/ori3", 116: "obj2/pos3/ori4",
+    117: "obj2/pos3/ori5", 118: "obj2/pos3/ori6", 119: "obj2/pos3/ori7", 120: "obj2/pos3/ori8",
+    121: "obj2/pos3/ori9", 122: "obj2/pos3/ori10", 123: "obj2/pos3/ori11", 124: "obj2/pos3/ori12",
+    125: "obj2/pos3/ori13", 126: "obj2/pos3/ori14", 127: "obj2/pos3/ori15", 128: "obj2/pos3/ori16",
+    129: "obj3/pos3/ori1", 130: "obj3/pos3/ori2", 131: "obj3/pos3/ori3", 132: "obj3/pos3/ori4",
+    133: "obj3/pos3/ori5", 134: "obj3/pos3/ori6", 135: "obj3/pos3/ori7", 136: "obj3/pos3/ori8",
+    137: "obj3/pos3/ori9", 138: "obj3/pos3/ori10", 139: "obj3/pos3/ori11", 140: "obj3/pos3/ori12",
+    141: "obj3/pos3/ori13", 142: "obj3/pos3/ori14", 143: "obj3/pos3/ori15", 144: "obj3/pos3/ori16",
+    220: "onset_concrete_cued_left",
+    221: "onset_concrete_cued_right", 241: "left_button_press", 242: "right_button_press", 244: "feedback_cued_item",
+    245: "mask", 246: "beginning/end_of_task"
+}
+
+
+# now I want to extract all the eventIDs from the trigger matching where there is pos1 in the description
+
+
+# %%
+
+# !!!!! THE ODERING OF THIS IS DIFFERENT THAN IN THE ORIGINAL USED IN THE EXPERIMENT
+
+# can also write code making the triggers themselves: 
+n_objects = ['obj1', 'obj2', 'obj3']
+n_positions = ['pos1', 'pos2', 'pos3']
+n_orientations = n_orientations = [f'ori{i}' for i in range(1, 17)]
+
+# Generate combinations of the three conditions
+combinations = itertools.product(n_positions, n_objects, n_orientations)
+
+# Create a dictionary to store the combinations
+trigger_dict = {}
+
+# Populate the dictionary with formatted combinations
+for idx, combo in enumerate(combinations, start=1):
+    trigger_dict[idx] = '/'.join(combo)
+
+additional_pairs = {
+    220: "onset_concrete_cued_left",
+    221: "onset_concrete_cued_right",
+    241: "left_button_press",
+    242: "right_button_press",
+    244: "feedback_cued_item",
+    245: "mask",
+    246: "beginning/end_of_task"
+}
+
+trigger_dict.update(additional_pairs)
+
+
+# # %% 
+
+# # Extract keys with "pos1" in the value
+# keys_with_pos1 = [key for key, value in trigger_dict.items() if "pos1" in value]
+
+# # Print the keys
+# print("Keys with 'pos1' in the value:", keys_with_pos1)
+
+
+# %%
+
+# Extract key-value pairs with "pos1" in the value as a dictionary
+pos1_pairs = {key: value for key, value in trigger_dict.items() if "pos1" in value}
+
+# Print the dictionary
+print("Key-value pairs with 'pos1' in the value:")
+print(pos1_pairs)
 # %% 
 # Dictionary for triggers used for onset of epoch?
 # could also be a dict however:
@@ -48,8 +151,10 @@ folder_name = f"Epochs_data_first_item"
 
 os.makedirs(folder_name, exist_ok=True)
 
-test_onset_dict = {"onset_concrete_cued_left": 220,
-    "onset_concrete_cued_right": 221}
+# test_onset_dict = {"onset_concrete_cued_left": 220,
+#     "onset_concrete_cued_right": 221}
+
+
 
 conditions = [1, 2, 3]
 
@@ -76,12 +181,12 @@ for condition in conditions:
         # the index of the metadata for the events
 
         # make sure the index is really correct
-        events_condition = events_onset[metadata_pp.index, :]
+        #events_condition = events_onset[metadata_pp.index, :]
 
         pupil_epochs = mne.Epochs(
             raw,
             events_condition,
-            event_id=test_onset_dict,
+            event_id=pos1_pairs,
             tmin=-6.5,
             tmax=2.5,
             baseline=None,
