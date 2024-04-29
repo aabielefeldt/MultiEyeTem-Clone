@@ -64,8 +64,8 @@ os.makedirs(folder_name)
 # use once I have my epochs correct
 freqs = []
 # for i in good_partis:
-# one_subID = ['REUNMA']
-for i in good_partis:
+one_subID = ['REUNMA']
+for i in one_subID:
     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
 
     eyelink_file = folder_path + "/" + i + ".asc"

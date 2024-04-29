@@ -101,7 +101,7 @@ trigger_matching = {
 # can also write code making the triggers themselves: 
 n_objects = ['obj1', 'obj2', 'obj3']
 n_positions = ['pos1', 'pos2', 'pos3']
-n_orientations = n_orientations = [f'ori{i}' for i in range(1, 17)]
+n_orientations = [f'ori{i}' for i in range(1, 17)]
 
 # Generate combinations of the three conditions
 combinations = itertools.product(n_positions, n_objects, n_orientations)
@@ -111,34 +111,32 @@ trigger_dict = {}
 
 # Populate the dictionary with formatted combinations
 for idx, combo in enumerate(combinations, start=1):
-    trigger_dict[idx] = '/'.join(combo)
+    trigger_dict['_'.join(combo)] = idx
 
 additional_pairs = {
-    220: "onset_concrete_cued_left",
-    221: "onset_concrete_cued_right",
-    241: "left_button_press",
-    242: "right_button_press",
-    244: "feedback_cued_item",
-    245: "mask",
-    246: "beginning/end_of_task"
+    "onset_concrete_cued_left": 220,
+    "onset_concrete_cued_right": 221,
+    "left_button_press": 241,
+    "right_button_press": 242,
+    "feedback_cued_item": 244,
+    "mask": 245,
+    "beginning/end_of_task": 246
 }
 
 trigger_dict.update(additional_pairs)
 
 
-# # %% 
+# %% 
 
-# # Extract keys with "pos1" in the value
-# keys_with_pos1 = [key for key, value in trigger_dict.items() if "pos1" in value]
-
-# # Print the keys
-# print("Keys with 'pos1' in the value:", keys_with_pos1)
+# Extract values with "pos1" in the key
+values_with_pos1 = [trigger_dict[key] for key in trigger_dict if "pos1" in key]
 
 
 # %%
 
-# Extract key-value pairs with "pos1" in the value as a dictionary
-pos1_pairs = {key: value for key, value in trigger_dict.items() if "pos1" in value}
+
+# Extract key-value pairs from trigger_dict where the value contains "pos1"
+pos1_pairs = {key: trigger_dict[key] for key in trigger_dict if "pos1" in key}
 
 # Print the dictionary
 print("Key-value pairs with 'pos1' in the value:")
@@ -154,12 +152,32 @@ os.makedirs(folder_name, exist_ok=True)
 # test_onset_dict = {"onset_concrete_cued_left": 220,
 #     "onset_concrete_cued_right": 221}
 
-
+one_subID = ['REUNMA']
 
 conditions = [1, 2, 3]
 
 for condition in conditions:
-    for i in good_partis:
+
+
+
+    # I am now seperating the metadata by load first (192 rows) but epoching the data over all events where there was pos1 which is all 
+    # of them (576 rows)
+    # when the plan to use for condition in conditions is still correct (seemed like Stefan agreed), how can I include that condition
+    # in the events (events_pos1)?
+    # The triggers do not tell us about the condition .. right? 
+    # pos1_obj1_ori1 - 
+    # 
+    # I could probably just change the metadata to all conditions, and then seperate the epochs by condition afterwards because I can extract
+    # that using the metadata
+    # but why did we think we would run the conditions through the loop then?
+    # check recording
+    
+
+
+
+
+
+    for i in one_subID:
         folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
 
         eyelink_file = folder_path + "/" + i + ".asc"
@@ -174,7 +192,7 @@ for condition in conditions:
         # Filter events based on the current condition
 
         # all events per participant
-        events_onset = events_from_annot[np.isin(events_from_annot, [220, 221])[:, -1]]
+        events_pos1 = events_from_annot[np.isin(events_from_annot, [values_with_pos1])[:, -1]]
 
         # need to now filter them to only include those for one condition
         # the metadata is already set to only one condition in this loop and therefore the idea here is to use
@@ -185,7 +203,7 @@ for condition in conditions:
 
         pupil_epochs = mne.Epochs(
             raw,
-            events_condition,
+            events_pos1,
             event_id=pos1_pairs,
             tmin=-6.5,
             tmax=2.5,
@@ -201,3 +219,5 @@ for condition in conditions:
         filename = f"{i}-condition-{condition}-epo.fif"
         filepath = os.path.join(folder_name, filename)
         pupil_epochs.save(filepath, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
+
+# %%
