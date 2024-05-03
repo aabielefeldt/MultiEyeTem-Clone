@@ -171,9 +171,12 @@ for condition in conditions:
     # that using the metadata
     # but why did we think we would run the conditions through the loop then?
     # check recording
+
+    # for condition in conditions ... shouldn't the events themselves not matter much? The events_pos1 is what the np.isin shit was beforehand 
+    # this should probably originally be just all the events but that didn't work in the original epoching so I had to extract just those that 
+    # are occuring in what I am trying to epoch. 
+
     
-
-
 
 
 
@@ -184,7 +187,8 @@ for condition in conditions:
         print(eyelink_file)
         raw = mne.io.read_raw_eyelink(eyelink_file)
 
-        metadata_pp = df.loc[(df['subID'] == i) & (df['items_presented'] == condition)]
+        # metadata_pp = df.loc[(df['subID'] == i) & (df['items_presented'] == condition)]
+        metadata_pp = df.loc[(df['subID'] == i)]
         
         events_from_annot, event_dict = mne.events_from_annotations(
             raw, event_id=custom_mapping)
@@ -220,4 +224,67 @@ for condition in conditions:
         filepath = os.path.join(folder_name, filename)
         pupil_epochs.save(filepath, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
 
+# %%
+
+
+
+
+# %% 
+
+# seperate the epochs by condition
+
+
+# %%
+
+
+# copied from applying baseline
+one_subID = ['REUNMA']
+for i in one_subID:
+    
+    # /mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_data_2024-03-20_14:25 -- is the new path after changing the epochs baseline to None, 
+    # ran epochs with 011_Epoching
+    # differently sampled subID epochs are removed in this folder too (but kept in the copy of that folder)
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/scripts/Epochs_data_first_item"
+
+    epoch_file = folder_path + "/" + i + "-condition-1-epo.fif"
+
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+    pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
+
+    roi_dict = dict(pupils=pupil_ix)
+
+    pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method="mean")
+
+# %%
+
+pupil_epochs_combined.plot()
+
+# %%
+pupil_epochs_combined.average().plot()
+# %%
+
+con1_epochs = pupil_epochs_combined['items_presented==1']
+
+con1_evoked = con1_epochs.average()
+
+con2_epochs = pupil_epochs_combined['items_presented==2']
+
+con2_evoked = con2_epochs.average()
+
+con3_epochs = pupil_epochs_combined['items_presented==3']
+
+con3_evoked = con3_epochs.average()
+
+# %%
+
+
+# BASELINE????
+
+evoked_all_cons = []
+
+evoked_all_cons.append(con1_evoked)
+evoked_all_cons.append(con2_evoked)
+evoked_all_cons.append(con3_evoked)
+
+display(evoked_all_cons)
 # %%
