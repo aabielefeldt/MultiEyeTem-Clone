@@ -131,10 +131,6 @@ trigger_dict.update(additional_pairs)
 # Extract values with "pos1" in the key
 values_with_pos1 = [trigger_dict[key] for key in trigger_dict if "pos1" in key]
 
-
-# %%
-
-
 # Extract key-value pairs from trigger_dict where the value contains "pos1"
 pos1_pairs = {key: trigger_dict[key] for key in trigger_dict if "pos1" in key}
 
@@ -142,12 +138,13 @@ pos1_pairs = {key: trigger_dict[key] for key in trigger_dict if "pos1" in key}
 print("Key-value pairs with 'pos1' in the value:")
 print(pos1_pairs)
 # %% 
-# Dictionary for triggers used for onset of epoch?
-# could also be a dict however:
 
+# Create folder name using current date in data folder
+datafolder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data"
 folder_name = f"Epochs_data_first_item"
-
-os.makedirs(folder_name, exist_ok=True)
+filepath = os.path.join(datafolder_path, folder_name)
+# Create the folder
+os.makedirs(filepath, exist_ok=True)
 
 # test_onset_dict = {"onset_concrete_cued_left": 220,
 #     "onset_concrete_cued_right": 221}
@@ -175,6 +172,10 @@ for condition in conditions:
     # for condition in conditions ... shouldn't the events themselves not matter much? The events_pos1 is what the np.isin shit was beforehand 
     # this should probably originally be just all the events but that didn't work in the original epoching so I had to extract just those that 
     # are occuring in what I am trying to epoch. 
+
+
+
+    # + originally I wanted to epoch different timeframes depending on the condition (i.e. that the epochs for condition 1 are shorter)
 
     
 

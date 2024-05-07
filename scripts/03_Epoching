@@ -54,12 +54,14 @@ test_pos1_dict = dict()
 # Get current date
 current_date = datetime.now().strftime("%Y-%m-%d_%H:%M")
 
-# Create folder name using current date
+# Create folder name using current date in data folder
+datafolder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data"
 folder_name = f"Epochs_data_{current_date}"
-
+filepath = os.path.join(datafolder_path, folder_name)
 # Create the folder
-os.makedirs(folder_name)
+os.makedirs(filepath, exist_ok=True)
 
+# %% 
 # Looping over all subIDs
 # use once I have my epochs correct
 freqs = []
