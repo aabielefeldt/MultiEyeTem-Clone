@@ -190,13 +190,26 @@ for value, count in zip(unique_values, counts):
     print(f"Value: {value}, Count: {count}")
 
 # how does it then end up being 577 events for this person? And not for the others
+
+# 'pos1_obj2_ori8': 24 happens 13 times, all other triggers 12 times
+
+
+
 # %%
 
 
-# only 35T018 or also other ones?
+# only 35T018 or also other ones? - no only 35T018
 # what exactly are the events. events_pos1 are drawn from events_from_annotation -- 
 # so is there another annotation? no its all 1-48 as the unique values, there is just one more of those in 
 # raw file? how can that be? 
 
 
 # am I loading the already downsampled data?
+
+
+# %% 
+
+df35 = df[df['subID']=='35T018']
+df35# %%
+
+# %%
