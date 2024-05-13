@@ -43,6 +43,11 @@ custom_mapping = {
     '220': 220, "221": 221, '241': 241, '242': 242, '244': 244, '245': 245, '246': 246
 }
 
+# to have this be run as code I would need to use the original annotations?? These are only read while doing the epochs.. Can I do it without them? 
+# Just have Code to put in the dictionary always the number that is 
+
+
+
 # %%
 
 # check if ordering is correct (what I wrote in notion is not correct I think but this should be right)
@@ -118,6 +123,7 @@ for i in good_partis:
         
         events_from_annot, event_dict = mne.events_from_annotations(
             raw, event_id=custom_mapping)
+        display(events_from_annot)
 
         # Filter events based on the current condition
 
@@ -135,7 +141,7 @@ for i in good_partis:
             raw,
             events_pos1,
             event_id=pos1_pairs,
-            tmin=-6.5,
+            tmin=-6.6,
             tmax=2.5,
             baseline=None,
             metadata=metadata_pp,

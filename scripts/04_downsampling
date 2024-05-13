@@ -185,6 +185,8 @@ print(
 folder_name = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_data_after_downsampling"
 filename = f"{i}-epo.fif"
 filepath = os.path.join(folder_name, filename)
+# is the original epoch overwritten with this ? - probably
+# baseline is set to None for pupil_eochs_bl
 pupil_epochs_bl.save(filepath, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
 
 #pupil_epochs_bl.average().plot()

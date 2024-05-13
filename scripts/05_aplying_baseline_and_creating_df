@@ -106,3 +106,4 @@ all_con_evoked.to_csv('../data/all_con_evoked.csv', index=False)
 
 
 
+## IS THE DOWNSAMPLED PARTICIPANT IN THE DF??
