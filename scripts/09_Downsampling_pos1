@@ -4,6 +4,7 @@ import mne
 import numpy as np
 import pandas as pd
 from datetime import datetime
+import itertools
 
 # %% Load Metadata
 
@@ -41,10 +42,12 @@ custom_mapping = {
 
 # %%
 # subID to resample from freqs_df (which has been created in the epochs script)
-freqs_df = pd.read_csv('/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Tables_and_Dataframes/freqs_df.csv')
-subject = freqs_df[freqs_df['frequency']>500]
-i = subject['subID']
-# i = 'KJN4WD'
+
+# UNCOMMENT THIS AFTER HAVING DONE THE ORIGINAL EPOCHS AGAIN
+# freqs_df = pd.read_csv('/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Tables_and_Dataframes/freqs_df.csv')
+# subject = freqs_df[freqs_df['frequency']>500]
+# i = subject['subID']
+i = 'KJN4WD'
 
 folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
 
@@ -73,12 +76,60 @@ raw_filtered = raw.copy().filter(l_freq=None, h_freq=lowpass_freq)
 events_from_annot, event_dict = mne.events_from_annotations(
     raw_filtered, event_id=custom_mapping)
 
+# %%
+
+# check if ordering is correct (what I wrote in notion is not correct I think but this should be right)
+
+# can also write code making the triggers themselves: 
+n_objects = ['obj1', 'obj2', 'obj3']
+n_positions = ['pos1', 'pos2', 'pos3']
+n_orientations = [f'ori{i}' for i in range(1, 17)]
+
+# Generate combinations of the three conditions
+combinations = itertools.product(n_positions, n_objects, n_orientations)
+
+# Create a dictionary to store the combinations
+trigger_dict = {}
+
+# Populate the dictionary with formatted combinations
+for idx, combo in enumerate(combinations, start=1):
+    trigger_dict['_'.join(combo)] = idx
+
+additional_pairs = {
+    "onset_concrete_cued_left": 220,
+    "onset_concrete_cued_right": 221,
+    "left_button_press": 241,
+    "right_button_press": 242,
+    "feedback_cued_item": 244,
+    "mask": 245,
+    "beginning/end_of_task": 246
+}
+
+trigger_dict.update(additional_pairs)
+
+
+# %% 
+
+# Extract values with "pos1" in the key
+values_with_pos1 = [trigger_dict[key] for key in trigger_dict if "pos1" in key]
+
+# Extract key-value pairs from trigger_dict where the value contains "pos1"
+pos1_pairs = {key: trigger_dict[key] for key in trigger_dict if "pos1" in key}
+
+# Print the dictionary
+print("Key-value pairs with 'pos1' in the value:")
+print(pos1_pairs)
+
+
+events_pos1 = events_from_annot[np.isin(events_from_annot, [values_with_pos1])[:, -1]]
+
+
 pupil_epochs = mne.Epochs(
     raw_filtered, 
-    events_from_annot[np.isin(events_from_annot, [220, 221])[:,-1]],
-    event_id=test_onset_dict, 
-    tmin=-6.5,
-    tmax=2.5,
+    events_pos1,
+    event_id=pos1_pairs,
+    tmin=-0.1,
+    tmax=9,
     baseline=None,
     metadata=metadata_pp,
     picks=['pupil_left', 'pupil_right'],
@@ -88,28 +139,16 @@ pupil_epochs = mne.Epochs(
     decim=decim
 )
 
-    pupil_epochs_pos1 = mne.Epochs(
-        raw,
-        events_pos1,
-        event_id=pos1_pairs,
-        tmin=-0.1,
-        tmax=9,
-        baseline=None,
-        metadata=metadata_pp,
-        picks=['pupil_left', 'pupil_right'],
-        event_repeated='merge',
-        preload=True,
-        reject_by_annotation=False
-    )
-
 print(
     "desired sampling frequency was {} Hz; decim factor of {} yielded an "
     "actual sampling frequency of {} Hz.".format(
         desired_sfreq, decim, pupil_epochs.info["sfreq"]
     )
 )
-folder_name = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_data_after_downsampling"
-filename = f"{i}-epo.fif"
+folder_name = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_pos1"
+filename = f"{i}_pos1-epo.fif"
 filepath = os.path.join(folder_name, filename)
-pupil_epochs_bl.save(filepath, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
+pupil_epochs.save(filepath, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
 
+
+# %%

@@ -20,7 +20,6 @@ new_partis = np.delete(good_partis, np.where(good_partis == ['KJN4WD']))
 mne.viz.set_browser_backend('matplotlib')
 
 # %%
-# update, included the downsampled epochs in the Epochs_data_after_downsampling folder and used it below
 
 # appending all epochs into one list and combining both pupil channels
 con1_evoked_all_pp = []
@@ -37,7 +36,7 @@ for i in good_partis:
     # /mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_data_2024-03-20_14:25 -- is the new path after changing the epochs baseline to None, 
     # ran epochs with 011_Epoching
     # differently sampled subID epochs are removed in this folder too (but kept in the copy of that folder)
-    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_data_first_item_all_pos1"
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_pos1"
 
     epoch_file = folder_path + "/" + i + "_pos1-epo.fif"
 
@@ -61,9 +60,9 @@ for i in good_partis:
 
     # shortening the epochs based on condition (crop defaults to inclduing tmax)
 
-    # con1_epochs_pos1.crop(-0.1, 7)
-    # con2_epochs_pos1.crop(-0.1, 8)
-    # con3_epochs_pos1.crop(-0.1, 9)
+    con1_epochs_pos1.crop(-0.1, 7)
+    con2_epochs_pos1.crop(-0.1, 8)
+    con3_epochs_pos1.crop(-0.1, 9)
 
     con1_ave_pos1 = con1_epochs_pos1.average()
     con2_ave_pos1 = con2_epochs_pos1.average()
@@ -107,7 +106,7 @@ evoked_dict = {1: [con1_evoked_all_pp_list], 2: [con2_evoked_all_pp_list], 3: [c
 
 all_con_evoked_pos1 = all_con_evoked_pos1.reset_index()
 
-all_con_evoked_pos1.to_csv('../scripts/all_con_evoked_pos1.csv', index=False)
+all_con_evoked_pos1.to_csv('../data/Tables_and_Dataframes/all_con_evoked_pos1.csv', index=False)
 
 ## IS THE DOWNSAMPLED PARTICIPANT IN THE DF??
 

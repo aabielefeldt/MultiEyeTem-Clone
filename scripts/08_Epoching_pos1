@@ -97,7 +97,7 @@ print(pos1_pairs)
 # try saving this in the data folder not in the script folder
 
 datafolder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data"
-folder_name = f"Epochs_data_first_item_all_pos1"
+folder_name = f"Epochs_pos1"
 epochs_folderpath = os.path.join(datafolder_path, folder_name)
 os.makedirs(epochs_folderpath, exist_ok=True)
 
