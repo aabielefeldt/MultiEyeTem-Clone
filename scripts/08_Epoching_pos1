@@ -107,7 +107,7 @@ os.makedirs(epochs_folderpath, exist_ok=True)
 
 # make the epochs slightly longer so I can have a intertrialbaseline for condition 3 (-6.6 - -6.5)
 # do I need to make three for every participant? Or can I just take the one and seperate by condition
-one_subID = ['REUNMA']
+# one_subID = ['REUNMA']
 
 # at the moment no loop over conditions - does it work?
 
@@ -141,8 +141,8 @@ for i in good_partis:
             raw,
             events_pos1,
             event_id=pos1_pairs,
-            tmin=-6.6,
-            tmax=2.5,
+            tmin=-0.1,
+            tmax=9,
             baseline=None,
             metadata=metadata_pp,
             picks=['pupil_left', 'pupil_right'],
@@ -152,7 +152,7 @@ for i in good_partis:
         )
 
         # Save epoch in fif format to a specified folder
-        filename = f"{i}-epo_pos1.fif"
+        filename = f"{i}_pos1-epo.fif"
         epochs_path = os.path.join(epochs_folderpath, filename)
         pupil_epochs_pos1.save(epochs_path, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
 
@@ -164,31 +164,23 @@ for i in good_partis:
 
 # remove the stuff above because I need to actually create the epochs here to have it be replicable
 
+# do I need to combine all the events to be one?
 
 # %%
 
-con1_epochs_pos1 = pupil_epochs_pos1['items_presented==1']
 
-con2_epochs_pos1 = pupil_epochs_pos1['items_presented==2']
+# # put this in a loop and potentially add this to the next script
 
-con3_epochs_pos1 = pupil_epochs_pos1['items_presented==3']
+# con1_epochs_pos1 = pupil_epochs_pos1['items_presented==1']
 
-# %%
-con3_epochs_pos1.average().plot()
+# con2_epochs_pos1 = pupil_epochs_pos1['items_presented==2']
+
+# con3_epochs_pos1 = pupil_epochs_pos1['items_presented==3']
+
+# # %%
+# con3_epochs_pos1.average().plot()
 
 
-# %%
+# Why do the plot
 
-# shortening the epochs based on condition (crop defaults to inclduing tmax)
-
-con1_epochs_pos1.crop(-4.6, 2.5)
-con2_epochs_pos1.crop(-5.6, 2.5)
-con3_epochs_pos1.crop(-6.6, 2.5)
-#%%
-# Applying baseline based on condition
-con1_epochs_pos1.apply_baseline(baseline=(-4.6, -4.5))
-con2_epochs_pos1.apply_baseline(baseline=(-5.6, -5.5))
-con3_epochs_pos1.apply_baseline(baseline=(-6.6, -6.5)) # this is after the onset of the first object
-
-# %%
 

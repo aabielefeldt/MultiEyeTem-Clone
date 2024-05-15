@@ -3,7 +3,6 @@
 import mne
 import numpy as np
 import pandas as pd
-from datetime import datetime
 
 # %% Load Metadata
 
@@ -47,27 +46,22 @@ custom_mapping = {
 test_onset_dict = {"onset_concrete_cued_left": 220,
     "onset_concrete_cued_right": 221}
 
-test_pos1_dict = dict()
-
 # %%
-
-# Get current date
-current_date = datetime.now().strftime("%Y-%m-%d_%H:%M")
-
-# Create folder name using current date in data folder
+# Creating a folder to save the epochs in 
 datafolder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data"
-folder_name = f"Epochs_data_{current_date}"
+folder_name = f"Epochs_data_test_onset"
 filepath = os.path.join(datafolder_path, folder_name)
-# Create the folder
 os.makedirs(filepath, exist_ok=True)
+
 
 # %% 
 # Looping over all subIDs
-# use once I have my epochs correct
+
+# Epoching all raw eyelink files, timelocking to the onset of the probe object (test onset)
+# then saving all these epochs in a folder 
+
 freqs = []
-# for i in good_partis:
-one_subID = ['REUNMA']
-for i in one_subID:
+for i in good_partis:
     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
 
     eyelink_file = folder_path + "/" + i + ".asc"
@@ -98,12 +92,31 @@ for i in one_subID:
     # save epoch in fif format to a specified folder
     # pupil_epochs.plot(n_epochs=4)
 
-    # save 
+    # save the epochs in both folders
     filename = f"{i}-epo.fif"
     filepath = os.path.join(folder_name, filename)
     pupil_epochs.save(filepath, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
+
+    # save in the other folder
+    filepath_2 = os.path.join(folder_name_2, filename)
+    pupil_epochs.save(filepath_2, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
+
+# creating a dataframe with all subjects sampling frequency to later select differently sampled datafiles
 freqs_df = pd.DataFrame(freqs, columns=['subID', 'frequency'])
-freqs_df.to_csv('freqs_df_file.csv', sep=',', index=True, encoding='utf-8')
+
+#creating a folder for all table and dataframes that are created in this project
+data_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data'
+csv_foldername = f'Tables_and_Dataframes'
+csv_path = os.path.join(data_folder, csv_foldername)
+os.makedirs(csv_path, exist_ok=True)
+
+# saving the dataframe of sampling frequencies
+freqs_df_name = f'freqs_df.csv'
+csv_filepath = os.path.join(csv_path, freqs_df_name)
+freqs_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
 
 display(freqs_df)
+
 # only one has a different sampling freuqency and that one is 1000hz so higher than the rest (500hz)´
+
+# %%

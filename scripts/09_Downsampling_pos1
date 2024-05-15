@@ -14,7 +14,6 @@ good_partis = df['subID'].unique()
 # if qt is used as backend the kernel crashes
 # this can probably be deleted once run, but might just keep in in to be safe
 mne.viz.set_browser_backend('matplotlib')
- 
 
 # %% Custom Mappings
 
@@ -41,9 +40,11 @@ custom_mapping = {
 
 
 # %%
-# subID to resample from freqs_df 
-
-i = 'KJN4WD'
+# subID to resample from freqs_df (which has been created in the epochs script)
+freqs_df = pd.read_csv('/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Tables_and_Dataframes/freqs_df.csv')
+subject = freqs_df[freqs_df['frequency']>500]
+i = subject['subID']
+# i = 'KJN4WD'
 
 folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
 
@@ -57,91 +58,10 @@ raw, event_id=custom_mapping)
 
 test_onset_dict = {"onset_concrete_cued_left": 220,
     "onset_concrete_cued_right": 221}
-# freqs_df = pd.DataFrame(freqs, columns=['subID', 'frequency'])
-# display(freqs_df)
-# %%
-
-
-# could I also figure out the sampling size by running a loop over the epochs to save time? can I somehow find out the subID or yet better the  
-# Downsample if necessary
-
-# KJN4WD is the only subID that was sampled at 1000hz
-
-# this is probably not what I want since I am here downsampling the epochs (I think), which leads to a lot
-# of artefacts and is therefore not best practice
-
-# for KJN4WD in good_partis:
-#     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
-
-#     eyelink_file = folder_path + "/" + i + ".asc"
-#     if pupil_epochs.info['sfreq'] > 500:
-#         epochs = downsample_epochs(epochs, 500)  # Downsample to 500 Hz
-#         participant_epochs.append(pupil_epochs)
-
-
-
-# %% 
-# from mne downsampling best practice
-# original
-
-current_sfreq = raw.info["sfreq"]
-desired_sfreq = 500  # Hz
-decim = np.round(current_sfreq / desired_sfreq).astype(int)
-obtained_sfreq = current_sfreq / decim
-lowpass_freq = obtained_sfreq / 3.0
-
-raw_filtered = raw.copy().filter(l_freq=None, h_freq=lowpass_freq)
-events = mne.find_events(raw_filtered)
-epochs = mne.Epochs(raw_filtered, events, decim=decim)
-
-print(
-    "desired sampling frequency was {} Hz; decim factor of {} yielded an "
-    "actual sampling frequency of {} Hz.".format(
-        desired_sfreq, decim, epochs.info["sfreq"]
-    )
-)
-
-# do I need to downsample the raw file or the epoched file?
-# %%
-# %%
-
-# copy of above with changes according to how I did all the other epochs
-# without baseline
-
-
-current_sfreq = raw.info["sfreq"]
-desired_sfreq = 500  # Hz
-decim = np.round(current_sfreq / desired_sfreq).astype(int)
-obtained_sfreq = current_sfreq / decim
-lowpass_freq = obtained_sfreq / 3.0
-
-raw_filtered = raw.copy().filter(l_freq=None, h_freq=lowpass_freq)
-events_from_annot, event_dict = mne.events_from_annotations(
-    raw_filtered, event_id=custom_mapping)
-pupil_epochs_nobl = mne.Epochs(
-    raw_filtered, 
-    events_from_annot[np.isin(events_from_annot, [220, 221])[:,-1]],
-    event_id=test_onset_dict, 
-    tmin=-6.5,
-    tmax=2.5,
-    picks=['pupil_left', 'pupil_right'],
-    event_repeated='merge',
-    preload=True,
-    reject_by_annotation=False,
-    decim=decim
-)
-
-print(
-    "desired sampling frequency was {} Hz; decim factor of {} yielded an "
-    "actual sampling frequency of {} Hz.".format(
-        desired_sfreq, decim, pupil_epochs_nobl.info["sfreq"]
-    )
-)
-pupil_epochs_nobl.average().plot()
 
 # %%
-
-# copied again, with baseline
+# baseline set to None
+# baseline is only added for all epochs in the next script
 
 current_sfreq = raw.info["sfreq"]
 desired_sfreq = 500  # Hz
@@ -153,7 +73,7 @@ raw_filtered = raw.copy().filter(l_freq=None, h_freq=lowpass_freq)
 events_from_annot, event_dict = mne.events_from_annotations(
     raw_filtered, event_id=custom_mapping)
 
-pupil_epochs_bl = mne.Epochs(
+pupil_epochs = mne.Epochs(
     raw_filtered, 
     events_from_annot[np.isin(events_from_annot, [220, 221])[:,-1]],
     event_id=test_onset_dict, 
@@ -168,27 +88,28 @@ pupil_epochs_bl = mne.Epochs(
     decim=decim
 )
 
-# how can I use the decim parameter? In the original epoching I used baseline=None, are these even connected?
-# baseline defaults to (None, 0), i.e. beginning of the the data until time point zero. What does that mean if it is
-# left out in the best practices epochs here?
-# decim: Factor by which to subsample the data.
-# without the baseline=None there is still a baseline applied to the epochs,
-# the plot then again shows the pupil size to be between -75 and +75
-
+    pupil_epochs_pos1 = mne.Epochs(
+        raw,
+        events_pos1,
+        event_id=pos1_pairs,
+        tmin=-0.1,
+        tmax=9,
+        baseline=None,
+        metadata=metadata_pp,
+        picks=['pupil_left', 'pupil_right'],
+        event_repeated='merge',
+        preload=True,
+        reject_by_annotation=False
+    )
 
 print(
     "desired sampling frequency was {} Hz; decim factor of {} yielded an "
     "actual sampling frequency of {} Hz.".format(
-        desired_sfreq, decim, pupil_epochs_bl.info["sfreq"]
+        desired_sfreq, decim, pupil_epochs.info["sfreq"]
     )
 )
 folder_name = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_data_after_downsampling"
 filename = f"{i}-epo.fif"
 filepath = os.path.join(folder_name, filename)
-# is the original epoch overwritten with this ? - probably
-# baseline is set to None for pupil_eochs_bl
 pupil_epochs_bl.save(filepath, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
 
-#pupil_epochs_bl.average().plot()
-
-# %%

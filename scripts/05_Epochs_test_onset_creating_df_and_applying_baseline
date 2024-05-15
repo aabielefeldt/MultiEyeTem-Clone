@@ -3,7 +3,6 @@
 import mne
 import numpy as np
 import pandas as pd
-from datetime import datetime
 import pingouin as pg
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -102,7 +101,7 @@ evoked_dict = {1: [con1_evoked_all_pp_list], 2: [con2_evoked_all_pp_list], 3: [c
 
 all_con_evoked = all_con_evoked.reset_index()
 
-all_con_evoked.to_csv('../data/all_con_evoked.csv', index=False)
+all_con_evoked.to_csv('../scripts/all_con_evoked.csv', index=False)
 
 
 

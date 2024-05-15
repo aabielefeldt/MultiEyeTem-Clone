@@ -1,0 +1,111 @@
+# %%
+# Importsconda
+import mne
+import numpy as np
+import pandas as pd
+import pingouin as pg
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# %% 
+# read all_con_evoked dataframe
+
+all_con_evoked_pos1 = pd.read_csv('../scripts/all_con_evoked_pos1.csv')
+
+# just to compare the two plots
+all_con_evoked = pd.read_csv('../scripts/all_con_evoked.csv')
+
+# %% 
+
+# since changing the errorbar to 'se' it only takes a minute to plot
+
+fig, ax = plt.subplots(figsize=(10,8))
+
+# stefan included get_axes in his code to show axvlines, seems to work without it though and even returns an error 
+# ax = fig.get_axes()[0]
+
+sns.lineplot(data=all_con_evoked_pos1, x='time', y='pupils', hue='Load', palette='crest', errorbar='se', ax=ax)
+
+ax.axvline(0, color='black', alpha=0.33)
+ax.axvline(1, color='black', alpha=0.66)
+ax.axvline(2, color='black')  
+ax.axvline(3, color='darkblue')  
+ax.axvline(6.5, color='blue')  
+
+
+# Define y-coordinate for labels (as a fraction of the plot height)
+label_y = 1.05  # Adjust this value as needed
+
+# Add labels above the vertical lines
+ax.text(0, ax.get_ylim()[1] * label_y, "object position 1, condition 3", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+ax.text(1, ax.get_ylim()[1] * label_y, "object position 1, condition 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+ax.text(2, ax.get_ylim()[1] * label_y, "object position 1, condition 1", color='black', fontsize=10, ha='center', rotation=45)
+ax.text(3, ax.get_ylim()[1] * label_y, "onset delay",  color='darkblue', fontsize=10, ha='center', rotation=45)
+ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+
+
+
+# automatically changing the name to the set baseline
+baseline = (all_con_evoked_pos1.at[0, 'baseline_start'], all_con_evoked_pos1.at[0, 'baseline_end'])
+baseline_str = '_'.join(map(str, baseline))
+name=f"pupil_fig_pos1_bl{baseline_str}.png"
+
+# Include window that was used for the baseline
+ax.axvspan(baseline[0], baseline[1], ymin=0, ymax=1, color='blue', alpha=0.4)
+
+plt.suptitle('Pupil dilation across conditions', y=1.1, fontsize = 20)
+plt.title(f'Applied baseline {baseline}', y=1.2, color='blue', alpha=0.4)
+plt.savefig(name, bbox_inches = 'tight')
+
+
+
+# %%
+# try plotting the three conditions in three subplots?
+
+fig, axs = plt.subplots(3, figsize=(10,8))
+all_pp_con1_pos1 = all_con_evoked_pos1.loc[all_con_evoked_pos1['Load']==1]
+all_pp_con2_pos1 = all_con_evoked_pos1.loc[all_con_evoked_pos1['Load']==2]
+all_pp_con3_pos1 = all_con_evoked_pos1.loc[all_con_evoked_pos1['Load']==3]
+
+
+sns.lineplot(ax=axs[0], data=all_pp_con1_pos1, x='time', y='pupils', hue='Load', palette='crest', errorbar='se')
+
+sns.lineplot(ax=axs[1], data=all_pp_con2_pos1, x='time', y='pupils', hue='Load', palette='crest', errorbar='se')
+
+sns.lineplot(ax=axs[2], data=all_pp_con3_pos1, x='time', y='pupils', hue='Load', palette='crest', errorbar='se')
+
+# %%
+
+some_subIDs = ['REUNMA', 'CYPUTL', '30K8XE', 'Z16JQR']
+# trying to only plot one participant
+for i in some_subIDs:
+    plt.figure()
+    sns.lineplot(data=all_con_evoked_pos1[(all_con_evoked_pos1['subID']==i) & (all_con_evoked_pos1['Load']== 1)] , x='time', y='pupils', hue='Load', palette='crest', errorbar='se')
+         
+    # doin the same for the original epochs
+    plt.figure()
+    sns.lineplot(data=all_con_evoked[(all_con_evoked['subID']==i) & (all_con_evoked['Load']== 1)] , x='time', y='pupils', hue='Load', palette='crest', errorbar='se')
+    
+# %%
+# maybe the baseline is wrong? 
+
+# doin the same for the original epochs
+sns.lineplot(data=all_con_evoked[(all_con_evoked['subID']=='CYPUTL') & (all_con_evoked['Load']== 1)] , x='time', y='pupils', hue='Load', palette='crest', errorbar='se')
+
+# %%
+
+# Create a new figure and axis
+fig, ax = plt.subplots()
+
+# Plot the data
+for load, data in all_con_evoked_pos1.groupby('Load'):
+    ax.errorbar(data['time'], data['pupils'], yerr=data['pupils'].sem(), label=f'Load {load}', fmt='-o')
+
+# Set labels and legend
+ax.set_xlabel('Time')
+ax.set_ylabel('Pupils')
+ax.legend()
+
+# Show the plot
+plt.show()
+# %%
