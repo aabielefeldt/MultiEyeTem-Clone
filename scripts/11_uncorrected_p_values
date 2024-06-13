@@ -1,0 +1,120 @@
+# %%
+# Importsconda
+import mne
+import numpy as np
+import pandas as pd
+import pingouin as pg
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# %% Load Metadata
+
+df = pd.read_csv('../data/Tables_and_Dataframes/df.csv')
+good_partis = df['subID'].unique()
+all_con_evoked_pos1 = pd.read_csv('../data/Tables_and_Dataframes/all_con_evoked_pos1.csv')
+
+# %%
+# create time window
+# check that the timing is correct
+start_time = -0.1
+end_time = 7
+all_con_evoked_time_window = all_con_evoked_pos1[(all_con_evoked_pos1['time'] >= start_time) & (all_con_evoked_pos1['time'] <= end_time)]
+
+# all_con_evoked needs to be a new df for the evokeds from the pos1 epochs
+ts = all_con_evoked_time_window['time'].unique()
+# %%
+# run a repeated measures on-way ANOVA over every timepoint
+stats_list = []
+for it in ts:
+    # do I need to collapse this somehow (calculate the mean? at the moment it ist)
+    # why i this not using the time window? - because I am running the loop only over the timepoints in the timewindow
+    evoked_it_time = all_con_evoked_pos1.loc[all_con_evoked_pos1['time'] == it]
+    stats = pg.rm_anova(data=evoked_it_time, dv='pupils', subject='subID', within='Load')
+    stats['time'] = it
+    stats_list.append(stats)
+
+# what are my dependent variables?
+
+# %%
+
+# Concatenate all the results into a single DataFrame
+ANOVA_timepoints_results = pd.concat(stats_list, ignore_index=True)
+ANOVA_timepoints_results.to_csv('../data/Tables_and_Dataframes/ANOVA_timepoints_results.csv', index=False)
+
+# Filter the significant results
+sig_results = ANOVA_timepoints_results[ANOVA_timepoints_results['p-unc'] <= 0.05]
+sig_results.to_csv('../data/Tables_and_Dataframes/sig_results.csv', index=False)
+
+# %%
+# trying to find time windows of sequential significant values
+
+# PROBLEM: I probably need to shorten the time window in which I am running the analyses to 
+# maximum +7 seconds because from there on there is no data for at least one of the conditions because I 
+# cropped the epochs depending on condition
+
+# this one is working (apparently, but might need to check if I am overwriting sig_results)
+#Chat GPT
+
+sig_results = pd.read_csv('../data/Tables_and_Dataframes/sig_results.csv')
+# Ensure significant_results is sorted by time
+sig_results = sig_results.sort_values(by='time').reset_index(drop=True)
+
+time_windows = []
+current_window = []
+min_window_size = 2
+
+# Iterate through the sorted significant results
+for idx in range(len(sig_results)):
+    # Append the current row to the current window
+    current_window.append(sig_results.iloc[idx])
+
+    # Check if the next time point is exactly 0.002 seconds apart (rounded)
+    if idx == len(sig_results) - 1 or round(sig_results.iloc[idx + 1]['time'] - sig_results.iloc[idx]['time'], 3) > 0.002:
+        # If the current window size is greater than or equal to the minimum window size, store it
+        if len(current_window) >= min_window_size:
+            time_windows.append(pd.DataFrame(current_window))
+        # Reset the current window
+        current_window = []
+
+# Append the last window if it meets the criteria
+if len(current_window) >= min_window_size:
+    time_windows.append(pd.DataFrame(current_window))
+
+# Print the time windows for verification
+for window in time_windows:
+    print(window)
+    print("---")
+
+# saving each window to a separate CSV file:
+for idx, window in enumerate(time_windows):
+    window.to_csv(f'../data/Tables_and_Dataframes/time_window_{idx}.csv', index=False)
+
+
+# %%
+
+# next I want to add these significance points to the plot
+# but also I can maybe check beforehand where there are time windows where there are signifcant p-values in sequence
+
+time_window_0 = pd.read_csv('../data/Tables_and_Dataframes/time_window_0.csv')
+time_window_1 = pd.read_csv('../data/Tables_and_Dataframes/time_window_1.csv')
+time_window_2 = pd.read_csv('../data/Tables_and_Dataframes/time_window_2.csv')
+
+display(type(time_window_0))
+display(len(time_window_0))
+display(time_window_0['time'][0])
+display(time_window_0['time'].tail(1))
+
+# %%
+
+time_window_0_start = time_window_0.iloc[0]['time']
+time_window_0_end = time_window_0.iloc[-1]['time']
+
+time_window_1_start = time_window_1.iloc[0]['time']
+time_window_1_end = time_window_1.iloc[-1]['time']
+time_window_2_start = time_window_2.iloc[0]['time']
+time_window_2_end = time_window_2.iloc[-1]['time']
+
+len(time_window_0)
+len(time_window_1)
+len(time_window_2)
+
