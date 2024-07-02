@@ -1,0 +1,34 @@
+# %%
+import mne
+import pandas as pd
+
+
+# %%
+
+# what I need to actually run the interpolation
+# Load Metadata
+
+df = pd.read_csv('../data/Tables_and_Dataframes/df.csv')
+good_partis = df['subID'].unique()
+
+# the data: 
+for i in good_partis:
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
+
+    eyelink_file = folder_path + "/" + i + ".asc"
+    print(eyelink_file)
+    raw = mne.io.read_raw_eyelink(eyelink_file) 
+    # blink interpolation
+    # do blink interpolation before epoching? probably because its preprocessing, need to then somehow save the new raw (what is the output of this?) and use that for epoching?
+    # ! operates in place 
+
+    # "The time in seconds before and after a blink to consider invalid and include in the segment to be interpolated over. Default is 0.05 seconds"
+    # "During blink periods, eyegaze coordinates are not reported, and pupil size data are 0" --> not NAN !!
+
+    # "We don’t want these blink artifacts biasing our analysis, so we have two options: Drop the blink periods from our data during epoching, or interpolate the missing data during the blink periods."
+    # - am I dropping them during epoching at the moment? If yes I need to stop that after interpolation
+
+    # should I change the default buffer (time of interpolation before and after blink) - > in the tutorial they use (0.05, 0.2)
+
+    # probably needs to be in the loop
+    mne.preprocessing.eyetracking.interpolate_blinks(raw, buffer=0.05, match='BAD_blink', interpolate_gaze=False)

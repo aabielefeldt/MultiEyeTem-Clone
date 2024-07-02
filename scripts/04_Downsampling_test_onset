@@ -7,7 +7,7 @@ from datetime import datetime
 
 # %% Load Metadata
 
-df = pd.read_csv('../data/df.csv')
+df = pd.read_csv('../data/Tables_and_Dataframes/df.csv')
 good_partis = df['subID'].unique()
 
 # %%

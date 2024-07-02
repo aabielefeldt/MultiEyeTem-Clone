@@ -1,0 +1,12 @@
+# %%
+# Importsconda
+import mne
+import numpy as np
+import pandas as pd
+import pingouin as pg
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# %%
+
+# this probably needs to be done only on the original test onset data where the delay period is the same for all conditions

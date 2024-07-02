@@ -7,7 +7,7 @@ import itertools
 
 # %% Load Metadata
 
-df = pd.read_csv('../data/df.csv')
+df = pd.read_csv('../data/Tables_and_Dataframes/df.csv')
 good_partis = df['subID'].unique()
 
 # %%
@@ -107,17 +107,18 @@ os.makedirs(epochs_folderpath, exist_ok=True)
 
 # make the epochs slightly longer so I can have a intertrialbaseline for condition 3 (-6.6 - -6.5)
 # do I need to make three for every participant? Or can I just take the one and seperate by condition
-# one_subID = ['REUNMA']
+one_subID = ['REUNMA']
 
 # at the moment no loop over conditions - does it work?
 
-for i in good_partis:
+for i in one_subID:
         folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
 
         eyelink_file = folder_path + "/" + i + ".asc"
         print(eyelink_file)
         raw = mne.io.read_raw_eyelink(eyelink_file)
 
+        mne.preprocessing.eyetracking.interpolate_blinks(raw, buffer=0.05, match='BAD_blink', interpolate_gaze=False)
         # metadata_pp = df.loc[(df['subID'] == i) & (df['items_presented'] == condition)]
         metadata_pp = df.loc[(df['subID'] == i)]
         
@@ -152,9 +153,9 @@ for i in good_partis:
         )
 
         # Save epoch in fif format to a specified folder
-        filename = f"{i}_pos1-epo.fif"
+        filename = f"{i}_pos1-epo_interpol.fif"
         epochs_path = os.path.join(epochs_folderpath, filename)
-        pupil_epochs_pos1.save(epochs_path, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
+        pupil_epochs_pos1.save(epochs_path, overwrite=False, split_size='1.8GB', split_naming='bids', verbose=None)
 
 
 
