@@ -111,7 +111,7 @@ one_subID = ['REUNMA']
 
 # at the moment no loop over conditions - does it work?
 
-for i in one_subID:
+for i in good_partis:
         folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
 
         eyelink_file = folder_path + "/" + i + ".asc"
@@ -153,9 +153,9 @@ for i in one_subID:
         )
 
         # Save epoch in fif format to a specified folder
-        filename = f"{i}_pos1-epo_interpol.fif"
+        filename = f"{i}_pos1_interpol-epo.fif"
         epochs_path = os.path.join(epochs_folderpath, filename)
-        pupil_epochs_pos1.save(epochs_path, overwrite=False, split_size='1.8GB', split_naming='bids', verbose=None)
+        pupil_epochs_pos1.save(epochs_path, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
 
 
 
@@ -185,3 +185,11 @@ for i in one_subID:
 # Why do the plot
 
 
+# %% 
+
+# trying to compare interpolated with non-interpolated epochs
+
+epo_trial_interpol = mne.read_epochs("../data/Epochs_pos1/REUNMA_pos1_interpol-epo.fif")
+
+epo_trial = mne.read_epochs("../data/Epochs_pos1/REUNMA_pos1-epo.fif")
+# %%

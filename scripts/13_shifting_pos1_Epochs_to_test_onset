@@ -49,6 +49,8 @@ all_con_evoked_pos1_shifted.loc[all_con_evoked_pos1_shifted['Load']==1, 'time'] 
 all_con_evoked_pos1_shifted.loc[all_con_evoked_pos1_shifted['Load']==2, 'time'] +=2
 all_con_evoked_pos1_shifted.loc[all_con_evoked_pos1_shifted['Load']==3, 'time'] +=1
 
+all_con_evoked_pos1_shifted.to_csv('../data/Tables_and_Dataframes/all_con_evoked_pos1_shifted.csv', index=False)
+
 fig, ax = plt.subplots(figsize=(10,8))
 sns.lineplot(data=all_con_evoked_pos1_shifted, x='time', y='pupils', hue='Load', palette='crest', errorbar='se', ax=ax)
 
