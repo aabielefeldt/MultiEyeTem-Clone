@@ -107,7 +107,7 @@ os.makedirs(epochs_folderpath, exist_ok=True)
 
 # make the epochs slightly longer so I can have a intertrialbaseline for condition 3 (-6.6 - -6.5)
 # do I need to make three for every participant? Or can I just take the one and seperate by condition
-one_subID = ['REUNMA']
+# one_subID = ['REUNMA']
 
 # at the moment no loop over conditions - does it work?
 

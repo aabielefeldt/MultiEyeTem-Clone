@@ -45,9 +45,9 @@ sns.lineplot(data=all_con_evoked_pos1, x='time', y='pupils', hue='Load', palette
 # %%
 # all_con_evoked_pos1_shifted should end up looking like all_con_evoked (slight differenced due to the baseline maybe)
 all_con_evoked_pos1_shifted = all_con_evoked_pos1.copy()
-all_con_evoked_pos1_shifted.loc[all_con_evoked_pos1_shifted['Load']==1, 'time'] +=3
-all_con_evoked_pos1_shifted.loc[all_con_evoked_pos1_shifted['Load']==2, 'time'] +=2
-all_con_evoked_pos1_shifted.loc[all_con_evoked_pos1_shifted['Load']==3, 'time'] +=1
+all_con_evoked_pos1_shifted.loc[all_con_evoked_pos1_shifted['Load']==1, 'time'] +=2
+all_con_evoked_pos1_shifted.loc[all_con_evoked_pos1_shifted['Load']==2, 'time'] +=1
+all_con_evoked_pos1_shifted.loc[all_con_evoked_pos1_shifted['Load']==3, 'time'] +=0
 
 all_con_evoked_pos1_shifted.to_csv('../data/Tables_and_Dataframes/all_con_evoked_pos1_shifted.csv', index=False)
 
