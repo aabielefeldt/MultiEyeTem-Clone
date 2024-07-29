@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 # %% Load Metadata
 
-df = pd.read_csv('../data/df.csv')
+df = pd.read_csv('../data/Tables_and_Dataframes/df.csv')
 good_partis = df['subID'].unique()
 new_partis = np.delete(good_partis, np.where(good_partis == ['KJN4WD']))
 
@@ -38,7 +38,7 @@ for i in good_partis:
     # /mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_data_2024-03-20_14:25 -- is the new path after changing the epochs baseline to None, 
     # ran epochs with 011_Epoching
     # differently sampled subID epochs are removed in this folder too (but kept in the copy of that folder)
-    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_data_after_downsampling"
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_test_onset"
 
     epoch_file = folder_path + "/" + i + "-epo.fif"
 
@@ -106,3 +106,4 @@ all_con_evoked.to_csv('../scripts/all_con_evoked.csv', index=False)
 
 
 ## IS THE DOWNSAMPLED PARTICIPANT IN THE DF??
+# %%
