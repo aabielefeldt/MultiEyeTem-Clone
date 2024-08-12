@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 # %% Load Metadata
 
-df = pd.read_csv('../data/df.csv')
+df = pd.read_csv('../data/Tables_and_Dataframes/df.csv')
 good_partis = df['subID'].unique()
 new_partis = np.delete(good_partis, np.where(good_partis == ['KJN4WD']))
 
@@ -109,17 +109,6 @@ all_con_evoked_pos1 = all_con_evoked_pos1.reset_index()
 all_con_evoked_pos1.to_csv('../data/Tables_and_Dataframes/all_con_evoked_pos1.csv', index=False)
 
 ## IS THE DOWNSAMPLED PARTICIPANT IN THE DF??
-
-
-# somehow the plot looks different from the original (not pos1) plot. 
-# the difference must (I think) be in the pos1 events
-# are the events since they are then staggered somehow ?
-# it is still 576 events per participant, 1 event per trial
-# the events are not at the same time therefore but that shouldnt matter right?
-# The idea of the events not being at the same time should just shift the lines, but is it?
-# only plotting one condition doesn't change the plot
-# the pos1 timing on the x axis might not align automatically?
-# 
 
 
 

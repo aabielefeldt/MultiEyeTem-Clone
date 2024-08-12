@@ -1,0 +1,26 @@
+# %%
+# Importsconda
+import mne
+import numpy as np
+import pandas as pd
+import pingouin as pg
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+
+
+# This script is meant to show the differences due to 
+# plotting test_onset vs shifted pos1 epochs (the test_onset epochs are 
+# then supposed to be deleted)
+# I will before running this, save the test_onset epochs and epoching scripts 
+# somewhere else so I can run all the other stuff without it
+
+# I will then also compare the blink-interpolated data with the non-interpolated data
+# for that I should probably also restructure my scripts so the ultimate pipeline only keeps 
+# the interpolated version, but for now I am also keeping the not interpolated
+
+
+# %% comparing the test_onset vs pos1 plot
+# could also jsut load the plots for the two here?
+
+

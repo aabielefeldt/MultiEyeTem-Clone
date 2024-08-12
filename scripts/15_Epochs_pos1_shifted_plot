@@ -34,61 +34,90 @@ sig_results_shifted = pd.read_csv('../data/Tables_and_Dataframes/sig_results_shi
 
 # %% 
 
-# since changing the errorbar to 'se' it only takes a minute to plot
-
-fig, ax = plt.subplots(figsize=(10,8))
-
-# stefan included get_axes in his code to show axvlines, seems to work without it though and even returns an error 
-# ax = fig.get_axes()[0]
-
-sns.lineplot(data=all_con_evoked_pos1_shifted, x='time', y='pupils', hue='Load', palette='crest', errorbar='se', ax=ax)
-
-ax.axvline(1, color='black', alpha=0.33)
-ax.axvline(2, color='black', alpha=0.66)
-ax.axvline(3, color='black')  
-ax.axvline(0, color='darkblue')  
-# ax.axvline(6.5, color='blue')  
+with sns.plotting_context(context='paper'): # , font_scale=3.5, rc=None 
+    # -> do I need to change any of the scales or should it be correct just left as paper?? 
+    # - doesnt seem to change anything without the extra settings
+    fig, ax = plt.subplots(figsize=(10,8)) #
 
 
-# Define y-coordinate for labels (as a fraction of the plot height)
-label_y = 1.05  # Adjust this value as needed
 
-# Add labels above the vertical lines
+    # stefan included get_axes in his code to show axvlines, seems to work without it though and even returns an error 
+    # ax = fig.get_axes()[0]
 
-# these do not make sense either! 0 is always object position 1 no matter which condition
-ax.text(3, ax.get_ylim()[1] * label_y, "onset delay, condition 3", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
-ax.text(2, ax.get_ylim()[1] * label_y, "onset delay, condition 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
-ax.text(1, ax.get_ylim()[1] * label_y, "onset delay, condition 1", color='black', fontsize=10, ha='center', rotation=45)
+    sns.lineplot(data=all_con_evoked_pos1_shifted, x='time', y='pupils', hue='Load', palette='crest', errorbar='se', ax=ax)
 
-# the following two probably do not make sense because onset delay and onset probe are different in this case
-ax.text(0, ax.get_ylim()[1] * label_y, "object position 1, all conditions",  color='darkblue', fontsize=10, ha='center', rotation=45)
-#ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+    sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
+    # ax.axvline(1, color='black', alpha=0.33)
+    # ax.axvline(2, color='black', alpha=0.66)
+    # ax.axvline(3, color='black')  
+    # ax.axvline(0, color='darkblue')  
+    # ax.axvline(6.5, color='blue')  
 
-# add significance bars
-
-# ax.plot(x[sig], y_sig, ".", label="significant")
-# can I just use the sig_results themselves directly?
-sig = sig_results_shifted['time'].values
-y_sig = [ax.get_ylim()[0]] * len(sig)
-ax.plot(sig, y_sig, ".", label="significant")
+    # timing?
+    ax.axvline(0, color='black', alpha=0.33)
+    ax.axvline(1, color='black', alpha=0.66)
+    ax.axvline(2, color='black')
+    ax.axvline(3, color='darkblue')
+    ax.axvline(6.5, color='blue')
 
 
-# automatically changing the name to the set baseline
-baseline = (all_con_evoked_pos1_shifted.at[0, 'baseline_start'], all_con_evoked_pos1_shifted.at[0, 'baseline_end'])
-baseline_str = '_'.join(map(str, baseline))
-name=f"pupil_fig_pos1_bl{baseline_str}.png"
+    # Define y-coordinate for labels (as a fraction of the plot height)
+    label_y = 1.05  # Adjust this value as needed
 
-# Include window that was used for the baseline
-ax.axvspan(baseline[0], baseline[1], ymin=0, ymax=1, color='blue', alpha=0.4)
+    # Add labels above the vertical lines
 
-plt.suptitle('Pupil dilation across conditions', y=1.1, fontsize = 20)
-plt.title(f'Applied baseline {baseline}', y=1.2, color='blue', alpha=0.4)
-plt.savefig(name, bbox_inches = 'tight')
+    # these do not make sense either! 0 is always object position 1 no matter which condition
+    # ax.text(3, ax.get_ylim()[1] * label_y, "onset delay, condition 3", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+    # ax.text(2, ax.get_ylim()[1] * label_y, "onset delay, condition 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+    # ax.text(1, ax.get_ylim()[1] * label_y, "onset delay, condition 1", color='black', fontsize=10, ha='center', rotation=45)
+
+    # # the following two probably do not make sense because onset delay and onset probe are different in this case
+    # ax.text(0, ax.get_ylim()[1] * label_y, "object position 1, all conditions",  color='darkblue', fontsize=10, ha='center', rotation=45)
+    # #ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+
+
+    # Add labels above the vertical lines
+    ax.text(0, ax.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+    ax.text(1, ax.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+    ax.text(2, ax.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+    ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+    ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+
+
+
+
+    # add significance bars
+
+    # ax.plot(x[sig], y_sig, ".", label="significant")
+    # can I just use the sig_results themselves directly?
+    sig = sig_results_shifted['time'].values
+    y_sig = [ax.get_ylim()[0]] * len(sig)
+    ax.plot(sig, y_sig, ".", label="significant")
+
+
+    # automatically changing the name to the set baseline
+    baseline = (all_con_evoked_pos1_shifted.at[0, 'baseline_start'], all_con_evoked_pos1_shifted.at[0, 'baseline_end'])
+    baseline_str = '_'.join(map(str, baseline))
+    name=f"pupil_fig_pos1_bl{baseline_str}.png"
+
+    # Include window that was used for the baseline
+    # Note: probably need to delete this because the window wouldnt show the right timing depending on the condition
+    ax.axvspan(baseline[0], baseline[1], ymin=0, ymax=1, color='blue', alpha=0.4)
+
+    # Set x-axis to show all whole numbers within range
+    x_ticks = np.arange(int(all_con_evoked_pos1_shifted['time'].min()), int(all_con_evoked_pos1_shifted['time'].max()) + 1, 1)
+    ax.set_xticks(x_ticks)
+    ax.set_xticklabels(x_ticks)
+
+    plt.suptitle('Pupil dilation across conditions', y=1.1, fontsize = 20)
+    plt.title(f'Applied baseline {baseline}', y=1.2, color='blue', alpha=0.4)
+    plt.savefig(name, bbox_inches = 'tight')
 
 
 
 # %%
 # Extra plot
+# delete this one? Probably not needed, maybe save somewhere and then delete
 # plotting the three conditions in three subplots
 
 fig, axs = plt.subplots(3, sharex=True, figsize=(10,8))
@@ -108,7 +137,7 @@ sns.lineplot(ax=axs[2], data=all_pp_con3_pos1, x='time', y='pupils', hue='Load',
 
 #could also just add them for those load conditions where they are relevant and not to all of them
 # these do not make sense either! 0 is always object position 1 no matter which condition
-axs[0].text(3, axs[0].get_ylim()[1] * label_y, "onset delay, condition 3", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+axs[0].text(3, axs[0].get_ylim()[1] * label_y, "onset delay, condition 3", color='black', alpha=0.33,  fontsize=10, ha='center', rotation=45)
 axs[0].text(2, axs[0].get_ylim()[1] * label_y, "onset delay, condition 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
 axs[0].text(1, axs[0].get_ylim()[1] * label_y, "onset delay, condition 1", color='black', fontsize=10, ha='center', rotation=45)
 
