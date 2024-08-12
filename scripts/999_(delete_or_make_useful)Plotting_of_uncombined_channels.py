@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 # %% Load Metadata
 
-df = pd.read_csv('../data/df.csv')
+df = pd.read_csv('../data/Tables_and_Dataframes/df.csv')
 good_partis = df['subID'].unique()
 new_partis = np.delete(good_partis, np.where(good_partis == ['KJN4WD']))
 
@@ -121,7 +121,12 @@ ax.text(-4.5, 880, "object position 3", color='black', fontsize=10, ha='center',
 ax.text(-5.5, 880, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
 ax.text(-6.5, 880, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
 
-plt.savefig('pupil_fig_nocombine_channel.png', bbox_inches = 'tight')
+name = 'pupil_fig_nocombine_channel.png'
+figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/Figures'
+figure_filepath = os.path.join(figures_folder, name)
+
+plt.savefig(figure_filepath, bbox_inches = 'tight')
+
 
 plt.show
 

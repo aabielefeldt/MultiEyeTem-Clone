@@ -83,9 +83,6 @@ with sns.plotting_context(context='paper'): # , font_scale=3.5, rc=None
     ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
     ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
 
-
-
-
     # add significance bars
 
     # ax.plot(x[sig], y_sig, ".", label="significant")
@@ -98,7 +95,7 @@ with sns.plotting_context(context='paper'): # , font_scale=3.5, rc=None
     # automatically changing the name to the set baseline
     baseline = (all_con_evoked_pos1_shifted.at[0, 'baseline_start'], all_con_evoked_pos1_shifted.at[0, 'baseline_end'])
     baseline_str = '_'.join(map(str, baseline))
-    name=f"pupil_fig_pos1_bl{baseline_str}.png"
+    name=f"pupil_fig_pos1_shifted_bl{baseline_str}.png"
 
     # Include window that was used for the baseline
     # Note: probably need to delete this because the window wouldnt show the right timing depending on the condition
@@ -109,9 +106,13 @@ with sns.plotting_context(context='paper'): # , font_scale=3.5, rc=None
     ax.set_xticks(x_ticks)
     ax.set_xticklabels(x_ticks)
 
+    figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/Figures'
+    figure_filepath = os.path.join(figures_folder, name)
+
+
     plt.suptitle('Pupil dilation across conditions', y=1.1, fontsize = 20)
     plt.title(f'Applied baseline {baseline}', y=1.2, color='blue', alpha=0.4)
-    plt.savefig(name, bbox_inches = 'tight')
+    plt.savefig(figure_filepath, bbox_inches = 'tight')
 
 
 
@@ -153,11 +154,15 @@ for i, ax in enumerate(axs.flat):
 
 baseline = (all_con_evoked_pos1_shifted.at[0, 'baseline_start'], all_con_evoked_pos1_shifted.at[0, 'baseline_end'])
 baseline_str = '_'.join(map(str, baseline))
-name=f"pupil_fig_seperated_pos1_bl{baseline_str}.png"
+name=f"pupil_fig_pos1_shifted_seperated_bl{baseline_str}.png"
+
+figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/Figures'
+figure_filepath = os.path.join(figures_folder, name)
+
 
 plt.suptitle('Pupil dilation across conditions', y=1.15,  fontsize = 20)
 plt.figtext(0.5, 1.1, f'Applied baseline {baseline}', ha='center', color='blue', alpha=0.4)
-plt.savefig(name, bbox_inches = 'tight')
+plt.savefig(figure_filepath, bbox_inches = 'tight')
 
 
 # %%

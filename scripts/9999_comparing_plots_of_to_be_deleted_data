@@ -6,7 +6,7 @@ import pandas as pd
 import pingouin as pg
 import seaborn as sns
 import matplotlib.pyplot as plt
-
+import matplotlib.image as mpimg
 
 
 # This script is meant to show the differences due to 
@@ -24,3 +24,41 @@ import matplotlib.pyplot as plt
 # could also jsut load the plots for the two here?
 
 
+figure = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/Figures/pupil_fig_testonset_-6.5_-6.0.png"
+# Load the image
+img = mpimg.imread(figure)
+plt.figure(figsize=(12, 8))
+# Display the image
+plt.imshow(img)
+plt.axis('off')  # Turn off axis labels
+plt.show()
+
+print("This is the original plot using the epochs timelocked to the onset of the test\probe item (testonset)")
+
+# %%
+
+figure = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/Figures/pupil_fig_pos1_bl-0.1_0.0.png"
+# Load the image
+img = mpimg.imread(figure)
+plt.figure(figsize=(12, 8))
+# Display the image
+plt.imshow(img)
+plt.axis('off')  # Turn off axis labels
+plt.show()
+
+print("This is the plot using the epochs timelocked to the first occurence of an item depending on load (pos1). The timing is different here since the onset of time of the test is shifted according to each load condition")
+
+# %%
+
+figure = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/Figures/pupil_fig_pos1_shifted_bl-0.1_0.0.png"
+# Load the image
+img = mpimg.imread(figure)
+plt.figure(figsize=(12, 8))
+# Display the image
+plt.imshow(img)
+plt.axis('off')  # Turn off axis labels
+plt.show()
+
+print("This is the plot using the epochs timelocked to the first occurence of an item depending on load (pos1) but shifted so that the delay is at the same time for all conditions (like in the testonset plot)")
+
+# %%
