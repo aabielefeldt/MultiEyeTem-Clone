@@ -8,7 +8,7 @@ import itertools
 
 # %% Load Metadata
 
-df = pd.read_csv('../data/df.csv')
+df = pd.read_csv('../data/Tables_and_Dataframes/df.csv')
 good_partis = df['subID'].unique()
 
 # %%
@@ -59,6 +59,7 @@ metadata_pp = df.loc[(df['subID'] == i)]
 events_from_annot, event_dict = mne.events_from_annotations(
 raw, event_id=custom_mapping)
 
+# Note: can the following be deleted? - not running on test_onset
 test_onset_dict = {"onset_concrete_cued_left": 220,
     "onset_concrete_cued_right": 221}
 

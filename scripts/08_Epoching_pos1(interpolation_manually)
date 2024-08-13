@@ -101,7 +101,6 @@ folder_name = f"Epochs_pos1"
 epochs_folderpath = os.path.join(datafolder_path, folder_name)
 os.makedirs(epochs_folderpath, exist_ok=True)
 
-
 #  %%
 # Making the epochs over pos1
 
