@@ -7,7 +7,10 @@ import pingouin as pg
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
+# %%
 
+mne.viz.set_browser_backend('matplotlib')
+# %%
 
 # This script is meant to show the differences due to 
 # plotting test_onset vs shifted pos1 epochs (the test_onset epochs are 
@@ -62,17 +65,30 @@ plt.show()
 print("This is the plot using the epochs timelocked to the first occurence of an item depending on load (pos1) but shifted so that the delay is at the same time for all conditions (like in the testonset plot)")
 
 # %%
-
-
+##############
 # trying to compare interpolated with non-interpolated epochs
 
 epo_trial_interpol = mne.read_epochs("../data/Epochs_pos1/REUNMA_pos1_interpol-epo.fif")
 
 epo_trial = mne.read_epochs("../data/Epochs_pos1/REUNMA_pos1-epo.fif")
-# %%
 
-mne.viz.set_browser_backend('matplotlib')
 # %%
 
 epo_trial_interpol = mne.read_epochs("../data/Epochs_pos1/KJN4WD_pos1_interpol-epo.fif")
 epo_trial_interpol
+
+
+#%%
+
+figure = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/Figures/pupil_fig_pos1_shifted_interpol_bl-0.1_0.0.png"
+# Load the image
+img = mpimg.imread(figure)
+plt.figure(figsize=(12, 8))
+# Display the image
+plt.imshow(img)
+plt.axis('off')  # Turn off axis labels
+plt.show()
+
+print("This is the plot using the epochs timelocked to the first occurence of an item depending on load (pos1), shifted so that the delay is at the same time for all conditions (like in the testonset plot) AND interpolated (blink interpolation applied during epoching(?))")
+
+# %%

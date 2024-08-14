@@ -1,0 +1,58 @@
+# %%
+# Importsconda
+import mne
+import numpy as np
+import pandas as pd
+from datetime import datetime
+import pingouin as pg
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# %% Load Metadata
+
+df = pd.read_csv('../data/Tables_and_Dataframes/df.csv')
+good_partis = df['subID'].unique()
+# new_partis = np.delete(good_partis, np.where(good_partis == ['KJN4WD']))
+
+# %%
+# if qt is used as backend the kernel crashes
+# this can probably be deleted once run, but might just keep in in to be safe
+mne.viz.set_browser_backend('matplotlib')
+
+# %% 
+# read all_con_evoked dataframe
+
+all_con_evoked_pos1_interpol = pd.read_csv('../data/Tables_and_Dataframes/all_con_evoked_pos1_interpol.csv')
+
+# just to compare the two plots
+all_con_evoked = pd.read_csv('../data/Tables_and_Dataframes/all_con_evoked.csv')
+
+# ???
+# sig_results_interpol  = pd.read_csv('../data/Tables_and_Dataframes/sig_results_interpol.csv')
+
+
+
+# shifting the conditions so that the epochs that are epoched on pos1 are time-locked to 
+
+
+# %% plot testing with different dfs
+
+fig, ax = plt.subplots(figsize=(10,8))
+sns.lineplot(data=all_con_evoked_pos1_interpol, x='time', y='pupils', hue='Load', palette='crest', errorbar='se', ax=ax)
+# %%
+# all_con_evoked_pos1_shifted should end up looking like all_con_evoked (slight differenced due to the baseline maybe)
+all_con_evoked_pos1_shifted_interpol = all_con_evoked_pos1_interpol.copy()
+all_con_evoked_pos1_shifted_interpol.loc[all_con_evoked_pos1_shifted_interpol['Load']==1, 'time'] +=2
+all_con_evoked_pos1_shifted_interpol.loc[all_con_evoked_pos1_shifted_interpol['Load']==2, 'time'] +=1
+all_con_evoked_pos1_shifted_interpol.loc[all_con_evoked_pos1_shifted_interpol['Load']==3, 'time'] +=0
+
+all_con_evoked_pos1_shifted_interpol.to_csv('../data/Tables_and_Dataframes/all_con_evoked_pos1_shifted_interpol.csv', index=False)
+
+fig, ax = plt.subplots(figsize=(10,8))
+sns.lineplot(data=all_con_evoked_pos1_shifted_interpol, x='time', y='pupils', hue='Load', palette='crest', errorbar='se', ax=ax)
+
+# %%
+# add and adapt the script for the uncorrected p values so they run on the shifted data
+# make sure that that is correct and I am not making a denkfehler
+
+# then add stefans cluster permutation test
