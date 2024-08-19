@@ -60,21 +60,11 @@ with sns.plotting_context(context='paper'): # , font_scale=3.5, rc=None
     ax.axvline(3, color='darkblue')
     ax.axvline(6.5, color='blue')
 
-
-    # Define y-coordinate for labels (as a fraction of the plot height)
-    label_y = 1.05  # Adjust this value as needed
-
     # Add labels above the vertical lines
-
-    # these do not make sense either! 0 is always object position 1 no matter which condition
-    # ax.text(3, ax.get_ylim()[1] * label_y, "onset delay, condition 3", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
-    # ax.text(2, ax.get_ylim()[1] * label_y, "onset delay, condition 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
-    # ax.text(1, ax.get_ylim()[1] * label_y, "onset delay, condition 1", color='black', fontsize=10, ha='center', rotation=45)
-
-    # # the following two probably do not make sense because onset delay and onset probe are different in this case
-    # ax.text(0, ax.get_ylim()[1] * label_y, "object position 1, all conditions",  color='darkblue', fontsize=10, ha='center', rotation=45)
-    # #ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
-
+    # ax.get_ylim()[1] accesses the current upper limit on the y axis
+    # Define y-coordinate for labels (as a fraction of the plot height)
+    # Adjust this value as needed
+    label_y = 1.05
 
     # Add labels above the vertical lines
     ax.text(0, ax.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
@@ -83,7 +73,7 @@ with sns.plotting_context(context='paper'): # , font_scale=3.5, rc=None
     ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
     ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
 
-    # add significance bars
+    # add significance dots
 
     # ax.plot(x[sig], y_sig, ".", label="significant")
     # can I just use the sig_results themselves directly?
@@ -108,7 +98,6 @@ with sns.plotting_context(context='paper'): # , font_scale=3.5, rc=None
 
     figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/Figures'
     figure_filepath = os.path.join(figures_folder, name)
-
 
     plt.suptitle('Pupil dilation across conditions', y=1.1, fontsize = 20)
     plt.title(f'Applied baseline {baseline}', y=1.2, color='blue', alpha=0.4)
