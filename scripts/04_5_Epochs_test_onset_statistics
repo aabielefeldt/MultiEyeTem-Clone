@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 # %% 
 # read all_con_evoked dataframe
 
-all_con_evoked = pd.read_csv('../data/all_con_evoked.csv')
+all_con_evoked = pd.read_csv('../data/Tables_and_Dataframes/all_con_evoked.csv')
 
 # %%
 # This is just extracting the time window and plotting that window
