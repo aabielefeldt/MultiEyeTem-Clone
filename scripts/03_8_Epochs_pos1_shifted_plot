@@ -3,7 +3,6 @@
 import mne
 import numpy as np
 import pandas as pd
-import pingouin as pg
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -11,9 +10,6 @@ import matplotlib.pyplot as plt
 # read all_con_evoked dataframe
 
 all_con_evoked_pos1_shifted = pd.read_csv('../data/Tables_and_Dataframes/all_con_evoked_pos1_shifted.csv')
-
-# just to compare the two plots
-all_con_evoked = pd.read_csv('../data/Tables_and_Dataframes/all_con_evoked.csv')
 
 ###
 ###

@@ -1,0 +1,56 @@
+# %%
+# Importsconda
+import mne
+import pandas as pd
+
+# %% Load Metadata
+
+df = pd.read_csv('../data/Tables_and_Dataframes/df.csv')
+good_partis = df['subID'].unique()
+# %%
+# if qt is used as backend the kernel crashes
+mne.viz.set_browser_backend('matplotlib')
+
+# %%
+# same as creating evoked dfs, just without combining the channels
+# appending all epochs into one list and combining both pupil channels
+# also no baseline
+
+evoked_df_uncombined = pd.DataFrame()
+
+for i in good_partis:
+    
+    # reading epochs per participant
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_pos1"
+    epoch_file = folder_path + "/" + i + "_pos1-epo.fif"
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+
+    # seperating per load condition
+    con1_epochs = pupil_epoch["items_presented == 1"]
+    con2_epochs = pupil_epoch["items_presented == 2"]
+    con3_epochs = pupil_epoch["items_presented == 3"]
+
+    # averaging per load condition
+    con1_ave = con1_epochs.average()
+    con2_ave = con2_epochs.average()
+    con3_ave = con3_epochs.average()
+    
+    # adding individual averaged data to dataframe including load and subID
+    con1_ave_df = con1_ave.to_data_frame()
+    con1_ave_df['Load'] = 1
+    con1_ave_df['subID'] = i
+    con2_ave_df = con2_ave.to_data_frame()
+    con2_ave_df['Load'] = 2
+    con2_ave_df['subID'] = i
+    con3_ave_df = con3_ave.to_data_frame()
+    con3_ave_df['Load'] = 3
+    con3_ave_df['subID'] = i
+
+    # concatenating to evoked_df_uncombined
+    evoked_df_uncombined = pd.concat([evoked_df_uncombined, con1_ave_df])
+    evoked_df_uncombined = pd.concat([evoked_df_uncombined, con2_ave_df])
+    evoked_df_uncombined = pd.concat([evoked_df_uncombined, con3_ave_df])
+
+evoked_df_uncombined = evoked_df_uncombined.reset_index()
+
+evoked_df_uncombined.to_csv('../data/Tables_and_Dataframes/evoked_df_uncombined.csv', index=False)
