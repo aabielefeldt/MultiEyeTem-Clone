@@ -7,18 +7,18 @@ import pingouin as pg
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-# %% Load Metadata
-
-df = pd.read_csv('../data/Tables_and_Dataframes/df.csv')
-good_partis = df['subID'].unique()
-all_con_evoked_pos1_shifted_interpol = pd.read_csv('../data/Tables_and_Dataframes/all_con_evoked_pos1_shifted_interpol.csv')
+# %% 
+# read evoked dataframe
+evoked_df_pos1_interpol_shifted = pd.read_csv('../data/Tables_and_Dataframes/evoked_df_pos1_interpol_shifted.csv')
 
 # %%
-# create time window
+# create time window - what for?? probably to only run statistics where there is indeed data for all conditions
+# Load 1 data is only from -0.1 to 7
+# however where is it after shifting?? this is probably not correct
 # check that the timing is correct
 start_time = -0.1
 end_time = 7
-all_con_evoked_time_window = all_con_evoked_pos1_shifted_interpol[(all_con_evoked_pos1_shifted_interpol['time'] >= start_time) & (all_con_evoked_pos1_shifted_interpol['time'] <= end_time)]
+all_con_evoked_time_window = evoked_df_pos1_interpol_shifted[(evoked_df_pos1_interpol_shifted['time'] >= start_time) & (evoked_df_pos1_interpol_shifted['time'] <= end_time)]
 
 # all_con_evoked needs to be a new df for the evokeds from the pos1 epochs
 ts = all_con_evoked_time_window['time'].unique()
@@ -28,7 +28,7 @@ stats_list = []
 for it in ts:
     # do I need to collapse this somehow (calculate the mean? at the moment it ist)
     # why i this not using the time window? - because I am running the loop only over the timepoints in the timewindow
-    evoked_it_time = all_con_evoked_pos1_shifted_interpol.loc[all_con_evoked_pos1_shifted_interpol['time'] == it]
+    evoked_it_time = evoked_df_pos1_interpol_shifted.loc[evoked_df_pos1_interpol_shifted['time'] == it]
     stats = pg.rm_anova(data=evoked_it_time, dv='pupils', subject='subID', within='Load')
     stats['time'] = it
     stats_list.append(stats)
