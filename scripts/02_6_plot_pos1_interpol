@@ -12,7 +12,7 @@ evoked_df_pos1_interpol = pd.read_csv('../data/Tables_and_Dataframes/evoked_df_p
 
 # %% 
 
-with sns.plotting_context(context='paper'): # , font_scale=3.5, rc=None 
+with sns.plotting_context(context='paper', font_scale=1.5): # , font_scale=3.5, rc=None 
 
     fig, ax = plt.subplots(figsize=(10,8))
 
@@ -20,9 +20,9 @@ with sns.plotting_context(context='paper'): # , font_scale=3.5, rc=None
 
     sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
     
-    ax.axvline(1, color='black', alpha=0.33)
+    ax.axvline(3, color='black', alpha=0.33)
     ax.axvline(2, color='black', alpha=0.66)
-    ax.axvline(3, color='black')  
+    ax.axvline(1, color='black')  
     ax.axvline(0, color='darkblue')  
 
     # Define y-coordinate for labels (as a fraction of the plot height)
@@ -37,6 +37,8 @@ with sns.plotting_context(context='paper'): # , font_scale=3.5, rc=None
     # Highlighting the baseline window
     baseline = (evoked_df_pos1_interpol.at[0, 'baseline_start'], evoked_df_pos1_interpol.at[0, 'baseline_end'])
     baseline_str = '_'.join(map(str, baseline))
+    
+    # Include window that was used for the baseline
     ax.axvspan(baseline[0], baseline[1], ymin=0, ymax=1, color='blue', alpha=0.4)
 
     # Set x-axis to show all whole numbers within range

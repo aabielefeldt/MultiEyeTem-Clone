@@ -3,22 +3,20 @@
 import mne
 import numpy as np
 import pandas as pd
-import pingouin as pg
 import seaborn as sns
 import matplotlib.pyplot as plt
 
 # %% 
-# read all_con_evoked dataframe
-
-all_con_evoked = pd.read_csv('../scripts/all_con_evoked.csv')
+# read evoked dataframe
+evoked_df_test_onset = pd.read_csv('../data/Tables_and_Dataframes/evoked_df_test_onset.csv')
 
 # %% 
 
-with sns.plotting_context(context='paper'): # , font_scale=3.5, rc=None 
+with sns.plotting_context(context='paper', font_scale=1.5):
 
     fig, ax = plt.subplots(figsize=(10,8))
 
-    sns.lineplot(data=all_con_evoked, x='time', y='pupils', hue='Load', palette='crest', errorbar='se')
+    sns.lineplot(data=evoked_df_test_onset, x='time', y='pupils', hue='Load', palette='crest', errorbar='se')
 
     sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
 
@@ -27,7 +25,6 @@ with sns.plotting_context(context='paper'): # , font_scale=3.5, rc=None
     ax.axvline(-4.5, color='black')
     ax.axvline(-3.5, color='darkblue')
     ax.axvline(0, color='blue')
-
 
     # Define y-coordinate for labels (as a fraction of the plot height)
     label_y = 1.05  # Adjust this value as needed
@@ -39,22 +36,34 @@ with sns.plotting_context(context='paper'): # , font_scale=3.5, rc=None
     ax.text(-3.5, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
     ax.text(0, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
 
-
     # automatically changing the name to the set baseline
-    baseline = (all_con_evoked.at[0, 'baseline_start'], all_con_evoked.at[0, 'baseline_end'])
+    baseline = (evoked_df_test_onset.at[0, 'baseline_start'], evoked_df_test_onset.at[0, 'baseline_end'])
     baseline_str = '_'.join(map(str, baseline))
-    name=f"pupil_fig_testonset_{baseline_str}.png"
 
     # Include the window that was used for the baseline
     ax.axvspan(baseline[0], baseline[1], ymin=0, ymax=1, color='blue', alpha=0.4)
 
+    # Set x-axis to show all whole numbers within range
+    x_ticks = np.arange(int(evoked_df_test_onset['time'].min()), int(evoked_df_test_onset['time'].max()) + 1, 1)
+    ax.set_xticks(x_ticks)
+    ax.set_xticklabels(x_ticks)
+
+    # Increase font size of x and y tick labels
+    ax.tick_params(axis='x', labelsize=14)
+    ax.tick_params(axis='y', labelsize=14)
+
+    # Adding a title
     plt.suptitle('Pupil dilation across conditions', y=1.1, fontsize = 20)
     plt.title(f'Applied baseline {baseline}', y=1.2, color='blue', alpha=0.4)
 
+    # Adding a legend
+    ax.legend(title='Load', loc='upper right', fontsize=12)
+    
+    # Save the figure
+    name=f"pupil_fig_test_onset_{baseline_str}.png"
     figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/Figures'
     figure_filepath = os.path.join(figures_folder, name)
-
     plt.savefig(figure_filepath, bbox_inches = 'tight')
-    plt.show
+
 
 # %%

@@ -117,8 +117,6 @@ for i in good_partis:
         print(eyelink_file)
         raw = mne.io.read_raw_eyelink(eyelink_file)
 
-        mne.preprocessing.eyetracking.interpolate_blinks(raw, buffer=0.05, match='BAD_blink', interpolate_gaze=False)
-        # metadata_pp = df.loc[(df['subID'] == i) & (df['items_presented'] == condition)]
         metadata_pp = df.loc[(df['subID'] == i)]
         
         events_from_annot, event_dict = mne.events_from_annotations(

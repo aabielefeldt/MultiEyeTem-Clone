@@ -7,16 +7,17 @@ import pandas as pd
 
 df = pd.read_csv('../data/Tables_and_Dataframes/df.csv')
 good_partis = df['subID'].unique()
+
 # %%
 # if qt is used as backend the kernel crashes
 mne.viz.set_browser_backend('matplotlib')
 
 # %%
-# same as creating evoked dfs, just without combining the channels
-# appending all epochs into one list and combining both pupil channels
-# also no baseline
-
+# same as creating evoked dfs, just without combining the channels and without baseline
+# appending all epochs into one dataframe and combining both pupil channels
 evoked_df_uncombined = pd.DataFrame()
+
+evoked_df_pos1_interpol
 
 for i in good_partis:
     

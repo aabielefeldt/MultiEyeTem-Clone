@@ -7,15 +7,13 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 # %% 
-# read evoked dataframe
+# read evoked dataframe and associated significant results 
 evoked_df_pos1_interpol_shifted = pd.read_csv('../data/Tables_and_Dataframes/evoked_df_pos1_interpol_shifted.csv')
-
-# need to redo this
-sig_results_interpol_shifted = pd.read_csv('../data/Tables_and_Dataframes/sig_results_interpol_shifted.csv')
+sig_results_pos1_interpol_shifted = pd.read_csv('../data/Tables_and_Dataframes/sig_results_pos1_interpol_shifted.csv')
 
 # %% 
 
-with sns.plotting_context(context='paper'): # , font_scale=3.5, rc=None 
+with sns.plotting_context(context='paper', font_scale=1.5): 
     
     fig, ax = plt.subplots(figsize=(10,8))
 
@@ -39,8 +37,8 @@ with sns.plotting_context(context='paper'): # , font_scale=3.5, rc=None
     ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
     ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
 
-    # add significance bars
-    sig = sig_results_interpol_shifted['time'].values
+    # add significance dots
+    sig = sig_results_pos1_interpol_shifted['time'].values
     y_sig = [ax.get_ylim()[0]] * len(sig)
     ax.plot(sig, y_sig, ".", color='red', label='p < 0.05')
 

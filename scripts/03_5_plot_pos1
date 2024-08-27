@@ -12,7 +12,7 @@ evoked_df_pos1 = pd.read_csv('../data/Tables_and_Dataframes/evoked_df_pos1.csv')
 
 # %%
 
-with sns.plotting_context(context='paper'): # , font_scale=3.5, rc=None 
+with sns.plotting_context(context='paper', font_scale=1.5):
 
     fig, ax = plt.subplots(figsize=(10,8))
 

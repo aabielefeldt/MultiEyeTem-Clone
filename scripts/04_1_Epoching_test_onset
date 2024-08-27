@@ -14,8 +14,6 @@ good_partis = df['subID'].unique()
 # this can probably be deleted once run, but might just keep in in to be safe
 mne.viz.set_browser_backend('matplotlib')
 
-
-
 # %% Custom Mappings
 
 # this might not be all of the triggers

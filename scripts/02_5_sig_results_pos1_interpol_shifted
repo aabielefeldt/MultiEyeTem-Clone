@@ -1,0 +1,40 @@
+# %%
+# Importsconda
+import mne
+import numpy as np
+import pandas as pd
+import pingouin as pg
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# %% 
+# read evoked dataframe
+evoked_df_pos1_interpol_shifted = pd.read_csv('../data/Tables_and_Dataframes/evoked_df_pos1_interpol_shifted.csv')
+
+# %%
+# create time window for analysis
+start_time = 3
+end_time = 6.5
+delay_time_window = evoked_df_pos1_interpol_shifted[(evoked_df_pos1_interpol_shifted['time'] >= start_time) & (evoked_df_pos1_interpol_shifted['time'] <= end_time)]
+
+# all_con_evoked needs to be a new df for the evokeds from the pos1 epochs
+ts = delay_time_window['time'].unique()
+# %%
+# run a repeated measures one-way ANOVA over every timepoint
+stats_list = []
+for it in ts:
+    evoked_it_time = evoked_df_pos1_interpol_shifted.loc[evoked_df_pos1_interpol_shifted['time'] == it]
+    stats = pg.rm_anova(data=evoked_it_time, dv='pupils', subject='subID', within='Load')
+    stats['time'] = it
+    stats_list.append(stats)
+
+
+# %%
+# Concatenate all the results into a single DataFrame
+ANOVA_timepoints_results_pos1_shifted_interpol = pd.concat(stats_list, ignore_index=True)
+ANOVA_timepoints_results_pos1_shifted_interpol.to_csv('../data/Tables_and_Dataframes/ANOVA_timepoints_results_pos1_shifted_interpol.csv', index=False)
+
+# Filter the significant results
+sig_results_pos1_interpol_shifted = ANOVA_timepoints_results_pos1_shifted_interpol[ANOVA_timepoints_results_pos1_shifted_interpol['p-unc'] <= 0.05]
+sig_results_pos1_interpol_shifted.to_csv('../data/Tables_and_Dataframes/sig_results_pos1_interpol_shifted.csv', index=False)
+
