@@ -6,13 +6,11 @@ import pandas as pd
 import itertools
 
 # %% Load Metadata
-
 df = pd.read_csv('../data/Tables_and_Dataframes/df.csv')
 good_partis = df['subID'].unique()
 
 # %%
 # if qt is used as backend the kernel crashes
-# this can probably be deleted once run, but might just keep in in to be safe
 mne.viz.set_browser_backend('matplotlib')
 
 
@@ -155,38 +153,3 @@ for i in good_partis:
         pupil_epochs_pos1.save(epochs_path, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
 
 
-
-# %% 
-# do I need to do all of this in a loop to do this for every participant?
-
-
-# remove the stuff above because I need to actually create the epochs here to have it be replicable
-
-# do I need to combine all the events to be one?
-
-# %%
-
-
-# # put this in a loop and potentially add this to the next script
-
-# con1_epochs_pos1 = pupil_epochs_pos1['items_presented==1']
-
-# con2_epochs_pos1 = pupil_epochs_pos1['items_presented==2']
-
-# con3_epochs_pos1 = pupil_epochs_pos1['items_presented==3']
-
-# # %%
-# con3_epochs_pos1.average().plot()
-
-
-# Why do the plot
-
-
-# %% 
-
-# trying to compare interpolated with non-interpolated epochs
-
-epo_trial_interpol = mne.read_epochs("../data/Epochs_pos1/REUNMA_pos1_interpol-epo.fif")
-
-epo_trial = mne.read_epochs("../data/Epochs_pos1/REUNMA_pos1-epo.fif")
-# %%

@@ -39,48 +39,30 @@ custom_mapping = {
     '220': 220, "221": 221, '241': 241, '242': 242, '244': 244, '245': 245, '246': 246
 }
 
+# %% new custom mapping
+
+custom_mapping = {}
+
+# Define IDs for specific non-numeric annotations
+custom_mapping['fixation'] = 152
+custom_mapping['saccade'] = 153
+
+# Generate mapping for annotations that have integer descriptions
+for description in annotations.description:
+    # Check if the description is an integer using isdigit()
+    if description.isdigit():
+        custom_mapping[description] = int(description)
+
+# Sort the dictionary by increasing integer values of keys
+sorted_custom_mapping = dict(sorted(custom_mapping.items(), key=lambda item: int(item[0]) if item[0].isdigit() else float('inf')))
+
+# Print the automatically generated custom mapping
+print("Custom mapping generated from annotations:")
+print(sorted_custom_mapping)
+
+
 
 # %%
-# subID to resample from freqs_df (which has been created in the epochs script)
-
-# UNCOMMENT THIS AFTER HAVING DONE THE ORIGINAL EPOCHS AGAIN
-# freqs_df = pd.read_csv('/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Tables_and_Dataframes/freqs_df.csv')
-# subject = freqs_df[freqs_df['frequency']>500]
-# i = subject['subID']
-i = 'KJN4WD'
-
-folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
-
-eyelink_file = folder_path + "/" + i + ".asc"
-print(eyelink_file)
-raw = mne.io.read_raw_eyelink(eyelink_file)
-
-metadata_pp = df.loc[(df['subID'] == i)]
-events_from_annot, event_dict = mne.events_from_annotations(
-raw, event_id=custom_mapping)
-
-# Note: can the following be deleted? - not running on test_onset
-test_onset_dict = {"onset_concrete_cued_left": 220,
-    "onset_concrete_cued_right": 221}
-
-# %%
-# baseline set to None
-# baseline is only added for all epochs in the next script
-
-current_sfreq = raw.info["sfreq"]
-desired_sfreq = 500  # Hz
-decim = np.round(current_sfreq / desired_sfreq).astype(int)
-obtained_sfreq = current_sfreq / decim
-lowpass_freq = obtained_sfreq / 3.0
-
-raw_filtered = raw.copy().filter(l_freq=None, h_freq=lowpass_freq)
-events_from_annot, event_dict = mne.events_from_annotations(
-    raw_filtered, event_id=custom_mapping)
-
-# %%
-
-# check if ordering is correct (what I wrote in notion is not correct I think but this should be right)
-
 # can also write code making the triggers themselves: 
 n_objects = ['obj1', 'obj2', 'obj3']
 n_positions = ['pos1', 'pos2', 'pos3']
@@ -108,48 +90,68 @@ additional_pairs = {
 
 trigger_dict.update(additional_pairs)
 
-
-# %% 
-
-# Extract values with "pos1" in the key
-values_with_pos1 = [trigger_dict[key] for key in trigger_dict if "pos1" in key]
-
-# Extract key-value pairs from trigger_dict where the value contains "pos1"
-pos1_pairs = {key: trigger_dict[key] for key in trigger_dict if "pos1" in key}
-
-# Print the dictionary
-print("Key-value pairs with 'pos1' in the value:")
-print(pos1_pairs)
-
-
-events_pos1 = events_from_annot[np.isin(events_from_annot, [values_with_pos1])[:, -1]]
-
-
-pupil_epochs = mne.Epochs(
-    raw_filtered, 
-    events_pos1,
-    event_id=pos1_pairs,
-    tmin=-0.1,
-    tmax=9,
-    baseline=None,
-    metadata=metadata_pp,
-    picks=['pupil_left', 'pupil_right'],
-    event_repeated='merge',
-    preload=True,
-    reject_by_annotation=False,
-    decim=decim
-)
-
-print(
-    "desired sampling frequency was {} Hz; decim factor of {} yielded an "
-    "actual sampling frequency of {} Hz.".format(
-        desired_sfreq, decim, pupil_epochs.info["sfreq"]
-    )
-)
-folder_name = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_pos1"
-filename = f"{i}_pos1-epo.fif"
-filepath = os.path.join(folder_name, filename)
-pupil_epochs.save(filepath, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
-
-
 # %%
+# subID to resample from freqs_df (which has been created in the epochs script)
+
+freqs_df = pd.read_csv('/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Tables_and_Dataframes/freqs_df.csv')
+wrong_partis  = freqs_df[freqs_df['frequency'] > 500]['subID'].unique()
+print(wrong_partis)
+
+for i in wrong_partis:
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
+
+    eyelink_file = folder_path + "/" + i + ".asc"
+    print(eyelink_file)
+    raw = mne.io.read_raw_eyelink(eyelink_file)
+
+    metadata_pp = df.loc[(df['subID'] == i)]
+    events_from_annot, event_dict = mne.events_from_annotations(
+    raw, event_id=custom_mapping)
+
+    current_sfreq = raw.info["sfreq"]
+    desired_sfreq = 500  # Hz
+    decim = np.round(current_sfreq / desired_sfreq).astype(int)
+    obtained_sfreq = current_sfreq / decim
+    lowpass_freq = obtained_sfreq / 3.0
+
+    raw_filtered = raw.copy().filter(l_freq=None, h_freq=lowpass_freq)
+    events_from_annot, event_dict = mne.events_from_annotations(
+        raw_filtered, event_id=custom_mapping)
+
+    # Extract values with "pos1" in the key
+    values_with_pos1 = [trigger_dict[key] for key in trigger_dict if "pos1" in key]
+
+    # Extract key-value pairs from trigger_dict where the value contains "pos1"
+    pos1_pairs = {key: trigger_dict[key] for key in trigger_dict if "pos1" in key}
+
+    # Print the dictionary
+    print("Key-value pairs with 'pos1' in the value:")
+    print(pos1_pairs)
+
+    events_pos1 = events_from_annot[np.isin(events_from_annot, [values_with_pos1])[:, -1]]
+
+    pupil_epochs = mne.Epochs(
+        raw_filtered, 
+        events_pos1,
+        event_id=pos1_pairs,
+        tmin=-0.1,
+        tmax=9,
+        baseline=None,
+        metadata=metadata_pp,
+        picks=['pupil_left', 'pupil_right'],
+        event_repeated='merge',
+        preload=True,
+        reject_by_annotation=False,
+        decim=decim
+    )
+
+    print(
+        "desired sampling frequency was {} Hz; decim factor of {} yielded an "
+        "actual sampling frequency of {} Hz.".format(
+            desired_sfreq, decim, pupil_epochs.info["sfreq"]
+        )
+    )
+    folder_name = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_pos1"
+    filename = f"{i}_pos1-epo.fif"
+    filepath = os.path.join(folder_name, filename)
+    pupil_epochs.save(filepath, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)

@@ -6,13 +6,11 @@ import pandas as pd
 import itertools
 
 # %% Load Metadata
-
 df = pd.read_csv('../data/Tables_and_Dataframes/df.csv')
 good_partis = df['subID'].unique()
 
 # %%
 # if qt is used as backend the kernel crashes
-# this can probably be deleted once run, but might just keep in in to be safe
 mne.viz.set_browser_backend('matplotlib')
 
 

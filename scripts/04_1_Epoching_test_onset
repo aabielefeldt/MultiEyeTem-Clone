@@ -5,16 +5,45 @@ import numpy as np
 import pandas as pd
 
 # %% Load Metadata
-
 df = pd.read_csv('../data/Tables_and_Dataframes/df.csv')
 good_partis = df['subID'].unique()
 
 # %%
 # if qt is used as backend the kernel crashes
-# this can probably be deleted once run, but might just keep in in to be safe
 mne.viz.set_browser_backend('matplotlib')
 
 # %% Custom Mappings
+
+# %%
+
+# copy from downsampling, is this the alternative to custom mapping?
+# can also write code making the triggers themselves: 
+n_objects = ['obj1', 'obj2', 'obj3']
+n_positions = ['pos1', 'pos2', 'pos3']
+n_orientations = [f'ori{i}' for i in range(1, 17)]
+
+# Generate combinations of the three conditions
+combinations = itertools.product(n_positions, n_objects, n_orientations)
+
+# Create a dictionary to store the combinations
+trigger_dict = {}
+
+# Populate the dictionary with formatted combinations
+for idx, combo in enumerate(combinations, start=1):
+    trigger_dict['_'.join(combo)] = idx
+
+additional_pairs = {
+    "onset_concrete_cued_left": 220,
+    "onset_concrete_cued_right": 221,
+    "left_button_press": 241,
+    "right_button_press": 242,
+    "feedback_cued_item": 244,
+    "mask": 245,
+    "beginning/end_of_task": 246
+}
+
+trigger_dict.update(additional_pairs)
+
 
 # this might not be all of the triggers
 custom_mapping = {
@@ -47,7 +76,7 @@ test_onset_dict = {"onset_concrete_cued_left": 220,
 # %%
 # Creating a folder to save the epochs in 
 datafolder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data"
-folder_name = f"Epochs_data_test_onset"
+folder_name = f"Epochs_test_onset"
 filepath = os.path.join(datafolder_path, folder_name)
 os.makedirs(filepath, exist_ok=True)
 
@@ -88,17 +117,9 @@ for i in good_partis:
         reject_by_annotation=False
     )
     # save epoch in fif format to a specified folder
-    # pupil_epochs.plot(n_epochs=4)
-
-    # save the epochs in both folders
     filename = f"{i}-epo.fif"
     filepath = os.path.join(folder_name, filename)
     pupil_epochs.save(filepath, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
-
-    # save in the other folder
-    filepath_2 = os.path.join(folder_name_2, filename)
-    pupil_epochs.save(filepath_2, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
-
 
 # %%
 # creating a dataframe with all subjects sampling frequency to later select differently sampled datafiles
@@ -116,7 +137,3 @@ csv_filepath = os.path.join(data_folder, freqs_df_name)
 freqs_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
 
 display(freqs_df)
-
-# only one has a different sampling freuqency and that one is 1000hz so higher than the rest (500hz)´
-
-# %%
