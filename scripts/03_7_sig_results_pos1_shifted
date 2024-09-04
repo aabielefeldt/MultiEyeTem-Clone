@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 # %%
 # read evoked dataframe
-evoked_df_pos1_shifted = pd.read_csv('../data/Tables_and_Dataframes/evoked_df_pos1_shifted.csv')
+evoked_df_pos1_shifted = pd.read_csv('../data/csv_files/evoked_df_pos1_shifted.csv')
 
 # %%
 # create time window for analysis
@@ -32,8 +32,8 @@ for it in ts:
 # %%
 # Concatenate all the results into a single DataFrame
 ANOVA_timepoints_results_pos1_shifted = pd.concat(stats_list, ignore_index=True)
-ANOVA_timepoints_results_pos1_shifted.to_csv('../data/Tables_and_Dataframes/ANOVA_timepoints_results_pos1_shifted.csv', index=False)
+ANOVA_timepoints_results_pos1_shifted.to_csv('../data/csv_files/ANOVA_timepoints_results_pos1_shifted.csv', index=False)
 
 # Filter the significant results
 sig_results_pos1_shifted = ANOVA_timepoints_results_pos1_shifted[ANOVA_timepoints_results_pos1_shifted['p-unc'] <= 0.05]
-sig_results_pos1_shifted.to_csv('../data/Tables_and_Dataframes/sig_results_pos1_shifted.csv', index=False)
+sig_results_pos1_shifted.to_csv('../data/csv_files/sig_results_pos1_shifted.csv', index=False)

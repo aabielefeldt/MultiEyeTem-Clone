@@ -13,7 +13,7 @@ mne.viz.set_browser_backend('matplotlib')
 
 # %% 
 # read evoked dataframe 
-evoked_df_uncombined = pd.read_csv('../data/Tables_and_Dataframes/evoked_df_uncombined.csv')
+evoked_df_uncombined = pd.read_csv('../data/csv_files/evoked_df_uncombined.csv')
 
 fig, ax = plt.subplots(figsize=(10,8))
 
@@ -35,7 +35,7 @@ ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize
 ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
 
 name = 'pupil_fig_nocombine_channel.png'
-figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/Figures'
+figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures'
 figure_filepath = os.path.join(figures_folder, name)
 plt.suptitle('Pupil dilation uncombined channels', y=1.1, fontsize = 20)
 plt.savefig(figure_filepath, bbox_inches = 'tight')

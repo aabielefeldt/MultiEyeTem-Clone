@@ -6,7 +6,7 @@ import pandas as pd
 import itertools
 
 # %% Load Metadata
-df = pd.read_csv('../data/Tables_and_Dataframes/df.csv')
+df = pd.read_csv('../data/csv_files/df.csv')
 good_partis = df['subID'].unique()
 
 # %%
@@ -19,7 +19,7 @@ test_onset_dict = {"onset_concrete_cued_left": 220,
     "onset_concrete_cued_right": 221}
 # %%
 # subID to resample from freqs_df (which has been created in the epochs script)
-freqs_df = pd.read_csv('/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Tables_and_Dataframes/freqs_df.csv')
+freqs_df = pd.read_csv('/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/csv_files/freqs_df.csv')
 wrong_partis  = freqs_df[freqs_df['frequency'] > 500]['subID'].unique()
 print(wrong_partis)
 

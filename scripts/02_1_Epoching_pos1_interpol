@@ -6,7 +6,7 @@ import pandas as pd
 import itertools
 
 # %% Load Metadata
-df = pd.read_csv('../data/Tables_and_Dataframes/df.csv')
+df = pd.read_csv('../data/csv_files/df.csv')
 good_partis = df['subID'].unique()
 
 # %%
@@ -129,13 +129,9 @@ for i in good_partis:
 # creating a dataframe with all subjects sampling frequency to later select differently sampled datafiles
 freqs_df = pd.DataFrame(freqs, columns=['subID', 'frequency'])
 
-#creating a folder for all table and dataframes that are created in this project
-csv_foldername = f'Tables_and_Dataframes'
-csv_path = os.path.join(data_folder, csv_foldername)
-os.makedirs(csv_path, exist_ok=True)
 
 # saving freqs df
-data_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Tables_and_Dataframes'
+data_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/csv_files'
 freqs_df_name = f'freqs_df.csv'
 csv_filepath = os.path.join(data_folder, freqs_df_name)
 freqs_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')

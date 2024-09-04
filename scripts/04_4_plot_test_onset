@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 # %% 
 # read evoked dataframe
-evoked_df_test_onset = pd.read_csv('../data/Tables_and_Dataframes/evoked_df_test_onset.csv')
+evoked_df_test_onset = pd.read_csv('../data/csv_files/evoked_df_test_onset.csv')
 
 # %% 
 
@@ -61,7 +61,7 @@ with sns.plotting_context(context='paper', font_scale=1.5):
     
     # Save the figure
     name=f"pupil_fig_test_onset_{baseline_str}.png"
-    figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/Figures'
+    figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures'
     figure_filepath = os.path.join(figures_folder, name)
     plt.savefig(figure_filepath, bbox_inches = 'tight')
 

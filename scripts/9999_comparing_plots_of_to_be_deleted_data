@@ -27,7 +27,7 @@ mne.viz.set_browser_backend('matplotlib')
 # could also jsut load the plots for the two here?
 
 
-figure = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/Figures/pupil_fig_testonset_-6.5_-6.0.png"
+figure = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures/pupil_fig_testonset_-6.5_-6.0.png"
 # Load the image
 img = mpimg.imread(figure)
 plt.figure(figsize=(12, 8))
@@ -40,7 +40,7 @@ print("This is the original plot using the epochs timelocked to the onset of the
 
 # %%
 
-figure = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/Figures/pupil_fig_pos1_bl-0.1_0.0.png"
+figure = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures/pupil_fig_pos1_bl-0.1_0.0.png"
 # Load the image
 img = mpimg.imread(figure)
 plt.figure(figsize=(12, 8))
@@ -53,7 +53,7 @@ print("This is the plot using the epochs timelocked to the first occurence of an
 
 # %%
 
-figure = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/Figures/pupil_fig_pos1_shifted_bl-0.1_0.0.png"
+figure = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures/pupil_fig_pos1_shifted_bl-0.1_0.0.png"
 # Load the image
 img = mpimg.imread(figure)
 plt.figure(figsize=(12, 8))
@@ -80,7 +80,7 @@ epo_trial_interpol
 
 #%%
 
-figure = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/Figures/pupil_fig_pos1_shifted_interpol_bl-0.1_0.0.png"
+figure = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures/pupil_fig_pos1_shifted_interpol_bl-0.1_0.0.png"
 # Load the image
 img = mpimg.imread(figure)
 plt.figure(figsize=(12, 8))

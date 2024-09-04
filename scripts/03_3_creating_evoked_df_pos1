@@ -5,7 +5,7 @@ import pandas as pd
 
 # %% Load Metadata
 
-df = pd.read_csv('../data/Tables_and_Dataframes/df.csv')
+df = pd.read_csv('../data/csv_files/df.csv')
 good_partis = df['subID'].unique()
 
 # %% 
@@ -68,4 +68,4 @@ for i in good_partis:
 
 evoked_df_pos1 = evoked_df_pos1.reset_index()
 
-evoked_df_pos1.to_csv('../data/Tables_and_Dataframes/evoked_df_pos1.csv', index=False)
+evoked_df_pos1.to_csv('../data/csv_files/evoked_df_pos1.csv', index=False)
