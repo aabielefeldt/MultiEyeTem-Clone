@@ -1,0 +1,43 @@
+# %%
+# Imports
+import pandas as pd
+
+# %% Load Metadata
+
+df = pd.read_csv('../data/csv_files/df.csv')
+partis = df['subID'].unique()
+# %% 
+# Descriptive Statistics before Exclusion
+# Number of participants *before* exclusion
+len_partis = len(partis)
+print(f'There were {len_partis} participants in the original dataset.')
+
+# Gender
+# Group the DataFrame by sub_ID and get the first occurrence of sub_gender in each group
+gender_by_sub_id = df.groupby('subID')['sub_gender'].first()
+
+# Count the instances of 'M' within the grouped sub_gender data
+gender_counts = gender_by_sub_id.value_counts()
+if 'M' in gender_counts:
+    count_of_males = gender_counts['M']
+    print(f"Count of male Participants: {count_of_males}")
+
+# Calculate the proportion
+gender_propo = count_of_males / len(partis)
+print('Proportion of male participants:', gender_propo)
+
+# age
+age_by_sub_id = df.groupby('subID')['sub_age'].first()
+mean_age = age_by_sub_id.mean()
+sd_age = age_by_sub_id.std()
+print(f'The mean age of participants was {mean_age:.2f} with the standard deviation of {sd_age:.2f}')
+
+# number of participants with and without mask
+masked_pp = df.groupby('subID')['mask'].first()
+mask_counts = masked_pp.value_counts()
+print(f"There were {mask_counts[1]} Participants that had the Version of the task including the mask and {mask_counts[0]} without the mask.")
+
+# number of participants per stimuli set
+stimset_pp = df.groupby('subID')['stimuli_set'].first()
+stimset_counts = stimset_pp.value_counts()
+print(f"There were {stimset_counts['stimuli_set1']} Participants tested with stimuli set 1, {stimset_counts['stimuli_set2']} with stimuli set 2, and {stimset_counts['stimuli_set3']} with stimuli set 3.")

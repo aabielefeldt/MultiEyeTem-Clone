@@ -1,0 +1,329 @@
+# %%
+# Imports
+import pandas as pd
+
+# %% Load Metadata
+
+df = pd.read_csv('../data/csv_files/df.csv')
+
+# %% 
+# Binomial Tests of Accuracy
+
+# %% 
+# Binomial Test of All Conditions
+
+# %%
+# Get unique participant IDs
+partis = df['subID'].unique()
+
+# Set the assumed accuracy (expected proportion)
+expected_proportion = 0.5
+
+# Set your significance level
+alpha = 0.05
+
+# Create a list to store results
+results = []
+
+## data to be exlccluded and other info:
+# VHG934 missing in data
+# which data to exclude because of version and triggers missing?
+# Loop over each participant
+for i in partis:
+    # Get the data for the current participant
+    participant_data = df.loc[df['subID'] == i, 'acc_trial_concrete_cued']
+
+    # Calculate the mean accuracy for the current participant
+    mean_per_pp = participant_data.mean()
+
+    # Count the correct responses for the current participant
+    correct_responses = sum(participant_data)
+
+    trials = len(participant_data)
+
+    # can maybe not use the p = anymore because the result of the new binomtest (instead of binom_test) is a variable of the type "BinomTestResult", which has all statical values in it. Maybe I can then just omit the
+    # results.append and also maybe omit the empty results matrix at the top
+    binom_results = stats.binomtest(correct_responses, trials, p=expected_proportion)
+    k = binom_results.k
+    n = binom_results.n
+    p_value = binom_results.pvalue
+    # print(binomresults)
+    # print(binomresults.pvalue)
+    # Store the results in a tuple (participant ID, mean accuracy, p-value)
+    results.append((i, mean_per_pp, correct_responses, k, n, p_value))
+
+# # Print or analyze the results
+# for result in results:
+#     participant_id, mean_accuracy, correct_responses, k, n, p_value = result
+#     print(f"Participant {participant_id}:")
+#     print(f"  Mean Accuracy = {mean_accuracy:.4f}")
+#     print(f"  Correct Responses = {correct_responses} out of {n}")
+#     print(f"  Binomial Test (k={k}, n={n}, p-value={p_value:.4f})")
+#     print("  Interpretation:", end=" ")
+
+#     # Determine if the result is significant based on your alpha level
+#     if p_value < alpha:
+#         print("Significant")
+#     else:
+#         print("Not Significant")
+
+result_len = 0
+## List of the ones to be excluded
+for result in results:
+    participant_id, mean_accuracy, correct_responses, k, n, p_value = result
+    if p_value > 0.05:
+        result_len = result_len + 1
+        print(f"Participant {participant_id}:")
+        print(f"  Mean Accuracy = {mean_accuracy:.4f}")
+        print(f"  Correct Responses = {correct_responses} out of {n}")
+        print(f"  Binomial Test (k={k}, n={n}, p-value={p_value:.4f})")
+        print(f"  Interpretation:", end=" ")
+
+        # Determine if the result is significant based on your alpha level
+        if p_value < alpha:
+            print("Significant")
+        else:
+            print("Not Significant")
+print(f'There were {result_len} elements in the results')
+
+# In this case the result means that a participant that is not significant is not significantly different from the expected proportion or from chance level. They performed not better than chance level. However this would mean that performing significantly worse than chance level would not be exlcluded either
+
+
+# %% 
+# Binomial Test Condition 1
+
+# %%
+# Get unique participant IDs
+partis = df['subID'].unique()
+
+# Set the assumed accuracy (expected proportion)
+expected_proportion = 0.5
+
+# Set your significance level
+alpha = 0.05
+
+# Create a list to store results
+results = []
+
+#  data to be exlccluded and other info:
+# VHG934 missing in data
+# which data to exclude because of version and triggers missing?
+# Loop over each participant
+for i in partis:
+    # Get the data for the current participant
+    participant_data1 = df.loc[(df['subID'] == i) & (df['items_presented'] == 1), 'acc_trial_concrete_cued']
+
+    # Calculate the mean accuracy for the current participant
+    mean_per_pp = participant_data1.mean()
+
+    # Count the correct responses for the current participant
+    correct_responses = sum(participant_data1)
+
+    trials = len(participant_data1)
+
+    # can maybe not use the p = anymore because the result of the new binomtest (instead of binom_test) is a variable of the type "BinomTestResult", which has all statical values in it. Maybe I can then just omit the
+    # results.append and also maybe omit the empty results matrix at the top
+    binom_results = stats.binomtest(correct_responses, trials, p=expected_proportion, )
+    k = binom_results.k
+    n = binom_results.n
+    p_value = binom_results.pvalue
+    # print(binomresults)
+    # print(binomresults.pvalue)
+    # Store the results in a tuple (participant ID, mean accuracy, p-value)
+    results.append((i, mean_per_pp, correct_responses, k, n, p_value))
+
+# # Print or analyze the results
+# for result in results:
+#     participant_id, mean_accuracy, correct_responses, k, n, p_value = result
+#     print(f"Participant {participant_id}:")
+#     print(f"  Mean Accuracy = {mean_accuracy:.4f}")
+#     print(f"  Correct Responses = {correct_responses} out of {n}")
+#     print(f"  Binomial Test (k={k}, n={n}, p-value={p_value:.4f})")
+#     print("  Interpretation:", end=" ")
+
+#     # Determine if the result is significant based on your alpha level
+#     if p_value < alpha:
+#         print("Significant")
+#     else:
+#         print("Not Significant")
+
+result_len = 0
+#  List of the ones to be excluded
+for result in results:
+    participant_id, mean_accuracy, correct_responses, k, n, p_value = result
+    if p_value > 0.05:
+        result_len = result_len + 1
+        print(f"Participant {participant_id}:")
+        print(f"  Mean Accuracy = {mean_accuracy:.4f}")
+        print(f"  Correct Responses = {correct_responses} out of {n}")
+        print(f"  Binomial Test (k={k}, n={n}, p-value={p_value:.4f})")
+        print("  Interpretation:", end=" ")
+
+        # Determine if the result is significant based on your alpha level
+        if p_value < alpha:
+            print("Significant")
+        else:
+            print("Not Significant")
+print(f'There were {result_len} elements in the results')
+
+# In this case the result means that a participant that is not significant is not significantly different from the expected proportion or from chance level. They performed not better than chance level. However this would mean that performing significantly worse than chance level would not be exlcluded either
+
+
+# %% 
+# Binomial Test Condition 2
+
+# %%
+# Get unique participant IDs
+partis = df['subID'].unique()
+
+# Set the assumed accuracy (expected proportion)
+expected_proportion = 0.5
+
+# Set your significance level
+alpha = 0.05
+
+# Create a list to store results
+results = []
+
+#  data to be exlccluded and other info:
+# VHG934 missing in data
+# which data to exclude because of version and triggers missing?
+# Loop over each participant
+for i in partis:
+    # Get the data for the current participant
+    participant_data2 = df.loc[(df['subID'] == i) & (df['items_presented'] == 2), 'acc_trial_concrete_cued']
+
+    # Calculate the mean accuracy for the current participant
+    mean_per_pp = participant_data2.mean()
+
+    # Count the correct responses for the current participant
+    correct_responses = sum(participant_data2)
+
+    trials = len(participant_data2)
+
+    # can maybe not use the p = anymore because the result of the new binomtest (instead of binom_test) is a variable of the type "BinomTestResult", which has all statical values in it. Maybe I can then just omit the
+    # results.append and also maybe omit the empty results matrix at the top
+    binom_results = stats.binomtest(correct_responses, trials, p=expected_proportion, )
+    k = binom_results.k
+    n = binom_results.n
+    p_value = binom_results.pvalue
+    # print(binomresults)
+    # print(binomresults.pvalue)
+    # Store the results in a tuple (participant ID, mean accuracy, p-value)
+    results.append((i, mean_per_pp, correct_responses, k, n, p_value))
+
+# # Print or analyze the results
+# for result in results:
+#     participant_id, mean_accuracy, correct_responses, k, n, p_value = result
+#     print(f"Participant {participant_id}:")
+#     print(f"  Mean Accuracy = {mean_accuracy:.4f}")
+#     print(f"  Correct Responses = {correct_responses} out of {n}")
+#     print(f"  Binomial Test (k={k}, n={n}, p-value={p_value:.4f})")
+#     print("  Interpretation:", end=" ")
+
+#     # Determine if the result is significant based on your alpha level
+#     if p_value < alpha:
+#         print("Significant")
+#     else:
+#         print("Not Significant")
+
+result_len = 0
+#  List of the ones to be excluded
+for result in results:
+    participant_id, mean_accuracy, correct_responses, k, n, p_value = result
+    if p_value > 0.05:
+        result_len = result_len + 1
+        print(f"Participant {participant_id}:")
+        print(f"  Mean Accuracy = {mean_accuracy:.4f}")
+        print(f"  Correct Responses = {correct_responses} out of {n}")
+        print(f"  Binomial Test (k={k}, n={n}, p-value={p_value:.4f})")
+        print("  Interpretation:", end=" ")
+
+        # Determine if the result is significant based on your alpha level
+        if p_value < alpha:
+            print("Significant")
+        else:
+            print("Not Significant")
+print(f'There were {result_len} elements in the results')
+
+# In this case the result means that a participant that is not significant is not significantly different from the expected proportion or from chance level. They performed not better than chance level. However this would mean that performing significantly worse than chance level would not be exlcluded either
+
+
+# %% 
+# Binomial Test Condition 3
+
+# %%
+# Get unique participant IDs
+partis = df['subID'].unique()
+
+# Set the assumed accuracy (expected proportion)
+expected_proportion = 0.5
+
+# Set your significance level
+alpha = 0.05
+
+# Create a list to store results
+results = []
+
+#  data to be exlccluded and other info:
+# VHG934 missing in data
+# which data to exclude because of version and triggers missing?
+# Loop over each participant
+for i in partis:
+    # Get the data for the current participant
+    participant_data3 = df.loc[(df['subID'] == i) & (df['items_presented'] == 3), 'acc_trial_concrete_cued']
+
+    # Calculate the mean accuracy for the current participant
+    mean_per_pp = participant_data3.mean()
+
+    # Count the correct responses for the current participant
+    correct_responses = sum(participant_data3)
+
+    trials = len(participant_data3)
+
+    # can maybe not use the p = anymore because the result of the new binomtest (instead of binom_test) is a variable of the type "BinomTestResult", which has all statical values in it. Maybe I can then just omit the
+    # results.append and also maybe omit the empty results matrix at the top
+    binom_results = stats.binomtest(correct_responses, trials, p=expected_proportion, )
+    k = binom_results.k
+    n = binom_results.n
+    p_value = binom_results.pvalue
+    # print(binomresults)
+    # print(binomresults.pvalue)
+    # Store the results in a tuple (participant ID, mean accuracy, p-value)
+    results.append((i, mean_per_pp, correct_responses, k, n, p_value))
+
+# Print or analyze the results
+for result in results:
+    participant_id, mean_accuracy, correct_responses, k, n, p_value = result
+    print(f"Participant {participant_id}:")
+    print(f"  Mean Accuracy = {mean_accuracy:.4f}")
+    print(f"  Correct Responses = {correct_responses} out of {n}")
+    print(f"  Binomial Test (k={k}, n={n}, p-value={p_value:.4f})")
+    print("  Interpretation:", end=" ")
+
+    # Determine if the result is significant based on your alpha level
+    if p_value < alpha:
+        print("Significant")
+    else:
+        print("Not Significant")
+
+result_len = 0
+#  List of the ones to be excluded
+for result in results:
+    participant_id, mean_accuracy, correct_responses, k, n, p_value = result
+    if p_value > 0.05:
+        result_len = result_len + 1
+        print(f"Participant {participant_id}:")
+        print(f"  Mean Accuracy = {mean_accuracy:.4f}")
+        print(f"  Correct Responses = {correct_responses} out of {n}")
+        print(f"  Binomial Test (k={k}, n={n}, p-value={p_value:.4f})")
+        print("  Interpretation:", end=" ")
+
+        # Determine if the result is significant based on your alpha level
+        if p_value < alpha:
+            print("Significant")
+        else:
+            print("Not Significant")
+print(f'There were {result_len} elements in the results')
+
+# In this case the result means that a participant that is not significant is not significantly different from the expected proportion or from chance level. They performed not better than chance level. However this would mean that performing significantly worse than chance level would not be exlcluded either
