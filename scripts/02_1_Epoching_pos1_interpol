@@ -62,8 +62,9 @@ os.makedirs(epochs_folderpath, exist_ok=True)
 # Creating epochs timelocked to pos1
 
 freqs = []
+onesubID = ['REUNMA']
 
-for i in good_partis:
+for i in onesubID:
         
         # read file per subID
         folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
