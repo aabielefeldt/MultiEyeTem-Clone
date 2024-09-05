@@ -1,0 +1,252 @@
+# %%
+# Imports
+import pandas as pd
+import matplotlib.pyplot as plt
+from statsmodels.stats.multicomp import pairwise_tukeyhsd #(not in envirnoment yet)
+import seaborn as sns
+import pingouin as pg
+
+# %% Load Metadata
+
+df = pd.read_csv('../data/csv_files/df.csv')
+good_partis = df['subID'].unique()
+
+# %% 
+# Confidence / Manipulation / Accuracy Checks
+
+# Mask vs no Mask
+mask_data = []
+no_mask_data = []
+for i in good_partis:
+    participant_data = df[df['subID'] == i]
+    if (participant_data['mask']==1).all():
+        mask_data.append(participant_data['acc_trial_concrete_cued'].mean())
+    else:
+        no_mask_data.append(participant_data['acc_trial_concrete_cued'].mean())
+# mask_data = df.loc[df['mask'] == 1, 'acc_trial_concrete_cued']
+# nomask_data = df.loc[df['mask'] == 0, 'acc_trial_concrete_cued']
+
+result_df = pg.ttest(mask_data, no_mask_data)
+display(result_df)
+
+# Access specific properties
+p_value = result_df['p-val'].values
+t_statistic = result_df['T'].values
+
+# Define the significance level (alpha)
+alpha = 0.05
+
+# Check if the p-value is less than alpha to determine significance
+if p_value < alpha:
+    print("The t-test indicates a significant difference in accuracy between the mask version and the no-mask version.")
+else:
+    print("The t-test does not indicate a significant difference in accuracy between the mask version and the no-mask version.")
+
+
+# %% 
+# Upside down vs upright accuracy
+
+# Note: doublecheck wether the specified degrees are consistent with the actual upright position of object during the experiment
+# Note: are these the correct specifications for the degrees now? (90 - 270 & 270 - 90) - mind the vertical OR line
+# Note: the length of the data of upright shown items is different from the length of the data of upside down shown items, they add up to the total though. Why?
+
+results = []
+
+# Iterate through each participant in good_partis
+for i in good_partis:
+
+    # Group the data for the current participant
+    participant_data = df[df['subID'] == i]
+
+    # Define filters for upright and upside-down orientations
+    upright_filter = (participant_data['object_cued_rot'] < 90) | (participant_data['object_cued_rot'] > 270)
+    upside_down_filter = (participant_data['object_cued_rot'] < 270) & (participant_data['object_cued_rot'] > 90)
+
+    # Apply filters to the participant's data
+    upright_data = participant_data[upright_filter]
+    upside_down_data = participant_data[upside_down_filter]
+
+    # Calculate the mean for upright and upside-down orientations
+    mean_upright = upright_data['acc_trial_concrete_cued'].mean()
+    mean_upside_down = upside_down_data['acc_trial_concrete_cued'].mean()
+
+    # Store the results for the current participant
+    results.append({'subID': i, 'mean_upright': mean_upright, 'mean_upside_down': mean_upside_down})
+
+# Convert the results list to a DataFrame
+upright_df = pd.DataFrame(results)
+
+# nearly the same mean as in the codeblock above
+mean_upright2 = upright_df['mean_upright'].mean()
+mean_upsidedown2 = upright_df['mean_upside_down'].mean()
+display(mean_upright2)
+display(mean_upsidedown2)
+# display(upright_df)
+
+# Perform paired t-test using pingouin
+ttest_result = pg.ttest(upright_df['mean_upright'], upright_df['mean_upside_down'])
+
+# Print the t-test result
+display(ttest_result)
+
+# Access specific properties
+p_value = ttest_result['p-val'].values
+t_statistic = ttest_result['T'].values
+
+# Define the significance level (alpha)
+alpha = 0.05
+
+# Check if the p-value is less than alpha to determine significance
+if p_value < alpha:
+    print("The t-test indicates a significant difference in accuracy between upright and upside-down probe items.")
+else:
+    print("The t-test does not indicate a significant difference in accuracy between upright and upside-down probe items.")
+
+
+# %% 
+# Stimuli Sets
+
+# Note: not done yet, stripplot not showing mean lines as expected 
+# Note to self: I am using groupby differently here, grouping directly by subID which means I do not need a loop. Can I use it the same way in other situations? In this instance I group by subID and stimset when there is actually only one stimset per
+# participant anyway. 
+
+# Create an empty list to store grouped data for each participant
+grouped_data_stim_sets = df.groupby(['subID', 'stimuli_set'])['acc_trial_concrete_cued'].mean().reset_index()
+
+# ANOVA on grouped data by participant
+anova_result_acc_stimset2 = pg.anova(data=grouped_data_stim_sets, dv='acc_trial_concrete_cued', between='stimuli_set')
+display(anova_result_acc_stimset2)
+
+# Plot boxplots for each participant
+plt.figure(figsize=(10, 6))
+
+# FutureWarning is related to the stripplot
+sns.stripplot(x='stimuli_set', y='acc_trial_concrete_cued', data=grouped_data_stim_sets)
+# Note: is se the right choice for the errorbar?
+# "In short, when you mention ‘mean’, .aggregate() searches for a function mean belonging to pd.Series, i.e. pd.Series.mean().
+# Whereas, if you mention mean (without quotes), .aggregate() will search for a function named mean in default Python, which is unavailable and will throw a NameError exception."
+# What is the dot in the plot? Is that also some statistic already?
+sns.pointplot(x='stimuli_set', y='acc_trial_concrete_cued', data=grouped_data_stim_sets, errorbar='se', linestyles="none", markers='_', scale=2) # Note: estimator='mean', -> doesnt seem to change anything
+plt.title('Means plus SE')
+plt.xlabel('Stimuli Sets')
+plt.ylabel('Mean Accuracy')
+plt.show()
+
+# %% 
+# Mean accuracy by condition, oneway ANOVA
+
+# Note: should I maybe do this on individual participants rather than the whole df? (do it in within a loop)
+
+# does all three conditions in one and groups them by 'items_presented' which is the condition (can add .values at the end if I want only the answer values)
+mean_acc = df['acc_trial_concrete_cued'].mean()
+print("Mean accuracy for all conditions:", mean_acc)
+
+mean_cond = df.groupby('items_presented')['acc_trial_concrete_cued'].mean()
+print("Mean accuracy per condition:", mean_cond)
+
+condition_means = mean_cond.tolist()
+
+
+
+# Pingouin ANOVA
+# Note: should this also run on participants or the full data?
+anova_result_acc_items = pg.anova(data=df, dv='acc_trial_concrete_cued', between='items_presented')
+display('Anova Results', anova_result_acc_items.round(4))
+
+# Define the significance level (alpha)
+alpha = 0.05
+
+# Check if the p-value is less than alpha to determine significance
+if anova_result_acc_items['p-unc'].values[0] < alpha:
+    print("The one-way ANOVA indicates a significant difference in accuracy among the three conditions.\n")
+    tukey = pg.pairwise_tukey(dv='acc_trial_concrete_cued', between='items_presented', data=df)
+    display(tukey.round(4))
+    significant_pairs = tukey[tukey['p-tukey'] < 0.05]
+    for index, row in significant_pairs.iterrows():
+        print(f"There is a significant difference between groups {row['A']} and {row['B']}.")
+        print(f"Mean difference: {row['mean(A)'] - row['mean(B)']}")
+else:
+    print("The one-way ANOVA does not indicate a significant difference in accuracy among the three conditions.")
+
+
+# %%
+# mean for all conditions
+mean_acc = df.groupby('subID')['acc_trial_concrete_cued'].mean().mean()
+display(mean_acc)
+
+# mean per condition exactly the same as in previous version without collapsing by participant first. does that make sense?
+mean_per_con = df.groupby('items_presented')['acc_trial_concrete_cued'].mean()
+display(mean_per_con)
+
+results = []
+for i in good_partis:
+    participant_data_acc = df.loc[df['subID'] == i].groupby(['items_presented', 'subID'])['acc_trial_concrete_cued'].mean().reset_index()
+    #participant_data_acc = df[df['subID'] == i].groupby(['block_number', 'subID'])['acc_trial_concrete_cued'].mean().reset_index()
+    # display(participant_data_acc)
+    results.append(participant_data_acc)
+
+results_acc_con = pd.concat(results)
+display(results_acc_con)
+
+
+# Pingouin ANOVA
+anova_result_acc_items = pg.anova(data=results_acc_con, dv='acc_trial_concrete_cued', between='items_presented')
+display(anova_result_acc_items.round(4))
+
+# Define the significance level (alpha)
+alpha = 0.05
+
+# Check if the p-value is less than alpha to determine significance
+if anova_result_acc_items['p-unc'].values[0] < alpha:
+    print("The one-way ANOVA indicates a significant difference in accuracy among the three conditions.\n")
+    tukey = pg.pairwise_tukey(dv='acc_trial_concrete_cued', between='items_presented', data=df)
+    display(tukey.round(4))
+    significant_pairs = tukey[tukey['p-tukey'] < 0.05]
+    for index, row in significant_pairs.iterrows():
+        print(f"There is a significant difference between groups {row['A']} and {row['B']}.")
+        print(f"Mean difference: {row['mean(A)'] - row['mean(B)']}")
+else:
+    print("The one-way ANOVA does not indicate a significant difference in accuracy among the three conditions.")
+
+
+# Plot boxplots for each participant
+plt.figure(figsize=(10, 6))
+sns.stripplot(x='items_presented', y='acc_trial_concrete_cued', data=results_acc_con)
+sns.pointplot(x='items_presented', y='acc_trial_concrete_cued', data=results_acc_con, estimator='mean', errorbar='se',linestyles="none", color= "g")
+plt.title('Boxplot showing accuracy per condition')
+plt.xlabel('Load Condition')
+plt.ylabel('Mean Accuracy')
+plt.show()
+
+# %% 
+# Accuraccy over time 
+
+# Note: I could have also done this per trial 
+# Note: do I need to use a residual plot first to check if I violate the assumptions of a linear regression?
+
+
+mean_block_allp = df.groupby(['subID', 'block_number'])['acc_trial_concrete_cued'].mean().reset_index()
+display(mean_block_allp)
+mean_block_subid = mean_block_allp.groupby('block_number')['acc_trial_concrete_cued'].mean().reset_index()
+display(mean_block_subid)
+
+# Note: which one of the two following linear regressions is correct? Probably the first, there are 16 data point for every participant (one for each block)
+# the second takes the mean data per block, so 16 data points in total
+# linear regression
+lm_results = pg.linear_regression(mean_block_allp['block_number'], mean_block_allp['acc_trial_concrete_cued'])
+display(lm_results.round(4))
+
+lm_results = pg.linear_regression(mean_block_subid['block_number'], mean_block_subid['acc_trial_concrete_cued'])
+display(lm_results.round(4))
+
+
+# WHAT IS THE DATA
+# Note: could there be a better plot to use?
+
+sns.lmplot(x='block_number', y='acc_trial_concrete_cued', data= mean_block_allp, ci=None, line_kws={'color': 'red'})
+
+# print statement 
+print('The R2 of the model is 0.034 and the adjusted R2 is 0.033, which means that our model roughly explains ~3% of the total variance in the accuracy over the blocks.') # Note: is this interpretation correct? Why is the amount of variance explained so low?
+
+# check effect size
+

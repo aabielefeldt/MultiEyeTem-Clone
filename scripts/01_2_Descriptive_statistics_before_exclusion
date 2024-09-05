@@ -8,8 +8,11 @@ df = pd.read_csv('../data/csv_files/df.csv')
 partis = df['subID'].unique()
 # %% 
 # Descriptive Statistics before Exclusion
+descriptive_stats_before_exclusion = {}
+
 # Number of participants *before* exclusion
 len_partis = len(partis)
+descriptive_stats_before_exclusion['Total Participants'] = len_partis
 print(f'There were {len_partis} participants in the original dataset.')
 
 # Gender
@@ -20,24 +23,37 @@ gender_by_sub_id = df.groupby('subID')['sub_gender'].first()
 gender_counts = gender_by_sub_id.value_counts()
 if 'M' in gender_counts:
     count_of_males = gender_counts['M']
+    descriptive_stats_before_exclusion['Male Participants'] = count_of_males
     print(f"Count of male Participants: {count_of_males}")
 
 # Calculate the proportion
 gender_propo = count_of_males / len(partis)
+descriptive_stats_before_exclusion['Proportion of Male Participants'] = gender_propo
 print('Proportion of male participants:', gender_propo)
 
 # age
 age_by_sub_id = df.groupby('subID')['sub_age'].first()
 mean_age = age_by_sub_id.mean()
 sd_age = age_by_sub_id.std()
+descriptive_stats_before_exclusion['Mean Age'] = mean_age
+descriptive_stats_before_exclusion['Standard Deviation Age'] = sd_age
 print(f'The mean age of participants was {mean_age:.2f} with the standard deviation of {sd_age:.2f}')
 
 # number of participants with and without mask
 masked_pp = df.groupby('subID')['mask'].first()
 mask_counts = masked_pp.value_counts()
+descriptive_stats_before_exclusion['Masked Participants'] = mask_counts[1]
+descriptive_stats_before_exclusion['Unmasked Participants'] = mask_counts[0]
 print(f"There were {mask_counts[1]} Participants that had the Version of the task including the mask and {mask_counts[0]} without the mask.")
 
 # number of participants per stimuli set
 stimset_pp = df.groupby('subID')['stimuli_set'].first()
 stimset_counts = stimset_pp.value_counts()
+descriptive_stats_before_exclusion['Stimuli Set 1 Participants'] = stimset_counts['stimuli_set1']
+descriptive_stats_before_exclusion['Stimuli Set 2 Participants'] = stimset_counts['stimuli_set2']
+descriptive_stats_before_exclusion['Stimuli Set 3 Participants'] = stimset_counts['stimuli_set3']
 print(f"There were {stimset_counts['stimuli_set1']} Participants tested with stimuli set 1, {stimset_counts['stimuli_set2']} with stimuli set 2, and {stimset_counts['stimuli_set3']} with stimuli set 3.")
+
+# %% Saving the descriptive statistics in a CSV file
+descriptive_stats_before_exclusion_df = pd.DataFrame(list(descriptive_stats_before_exclusion.items()), columns=['Measure', 'Value'])
+descriptive_stats_before_exclusion_df.to_csv('../data/csv_files/descriptive_statistics_before_exclusion.csv', index=False)

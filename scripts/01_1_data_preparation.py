@@ -1,13 +1,3 @@
-# %% 
-# # Preparations for Behavioural Analyses
-# 
-# 1. loading the data
-# 2. Deciding which participants to exlude depending on binomial tests of their accuracy
-# 3. Adding columns to the dataframe for later use
-# 4. Descriptive Statistics before excluding participants
-# 5. Excluding participants
-# 
-
 # %%
 import pandas as pd
 import os
@@ -50,6 +40,8 @@ df.loc[df['onset_mask'].notna() & (df['onset_mask'] > 0), 'mask'] = 1
 # Adding Column for Button Press
 # Note: There are no NANs in the button press column. What happens when no button was pressed? Probably they just get an inaccurate but this would not be seen in the data, without the trigger there would be no way of knowing whether it was inaccurate because no button was pressed or even though a button was pressed
 # Note: might be in the df already??
+# in the df there is the column "trigger_object_concrete" which has as its content 220 and 221 - the triggers indicating wether the probe object was tilted to the right or to the left from the cued ori
+# yes this column seems to map what I have done in my column "correct_rotation_response". A 220 reffering to a correct response of +8 degrees and a 221 referring to -8 degrees as a correct response
 # Calculate 'correct_rot_response'
 df['correct_rot_response'] = df['object_cued_rot'] - df['object_test_rot_cued']
 
@@ -85,6 +77,7 @@ df['stimuli_set'] = df.apply(determine_stimuli_set, axis=1)
 # %% 
 # Adding column for orientation bin
 
+# Note: am I using the orientation bins?
 # Define the orientation bins and labels
 orientation_bins = {
     11.25: 'Ori Bin A', 33.75: 'Ori Bin B', 56.25: 'Ori Bin C', 78.75: 'Ori Bin D',
