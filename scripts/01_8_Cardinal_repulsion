@@ -73,57 +73,71 @@ plt.legend
 # Show the plot
 plt.show()
 
-
 # %% 
 #  T-test against zero for all conditions together and every condition individually
 # Grouping the data by the necessary keys and producing a mean for button press clockwise for every condition and orientation and subject ID
 
-df_grouped = df.groupby(['subID', 'items_presented','object_cued_rot']).agg({'button_press_clockwise':(['mean'])}, as_index=False)
-display(df_grouped)
+df_grouped = df.groupby(by=['subID', 'items_presented', 'object_cued_rot'])['button_press_clockwise'].mean().reset_index()
 
 # Grouping by Condition
 condition_grps = df_grouped.groupby('items_presented', as_index=False)
-# Condition 1
-condition_1 = condition_grps.get_group(1).reset_index()
-# Condition 2
-condition_2 = condition_grps.get_group(2).reset_index()
-# Condition 3
-condition_3 = condition_grps.get_group(3).reset_index()
 
+all_con_difs = []        # List for condition-specific differences
+all_differences_all_con = []  # List for differences across all conditions
+conditions = np.sort(df['items_presented'].unique())
 
-# %%
-# all conditions
-
-all_differences_all_con = []
-subIDs = []
-for i in good_partis: 
-    df_grouped_all_con = df.groupby(['subID', 'object_cued_rot']).agg({'button_press_clockwise':(['mean'])}, as_index=False).reset_index()
-    participant_grps = df_grouped_all_con.groupby('subID', as_index=False)
-    participant_data = participant_grps.get_group(i)
-    differences = []
+for condition in conditions:
+    current_condition = condition_grps.get_group(condition)
     
-    # Define the pairs of orientations for subtraction
-    orientation_pairs = [(11.25, 348.75), (101.25, 78.75), (191.25, 168.75), (281.25, 258.75)]
+    for i in good_partis:
+        participant_grp = current_condition.groupby('subID', as_index=False)
+        participant_data = participant_grp.get_group(i)
+        differences = []
+        
+        # Define the pairs of orientations for subtraction
+        orientation_pairs = [(11.25, 348.75), (101.25, 78.75), (191.25, 168.75), (281.25, 258.75)]
 
-    for ori_x, ori_y in orientation_pairs:
-        value_x = participant_data.loc[participant_data['object_cued_rot'] == ori_x, 'button_press_clockwise'].mean()
-        value_y = participant_data.loc[participant_data['object_cued_rot'] == ori_y, 'button_press_clockwise'].mean()
+        for ori_x, ori_y in orientation_pairs:
+            value_x = participant_data.loc[participant_data['object_cued_rot'] == ori_x, 'button_press_clockwise'].mean()
+            value_y = participant_data.loc[participant_data['object_cued_rot'] == ori_y, 'button_press_clockwise'].mean()
+        
+            # Calculate the difference and append to the list
+            difference = value_x - value_y
+            differences.append(difference)
 
-        # Calculate the difference and append to the list
-        difference =  value_x - value_y
-        differences.append(difference)
+        mean_difference = np.mean(differences)
+        all_con_difs.append((i, mean_difference, condition))
+        
+    # Now, calculate the mean difference across all conditions (for the same participants) at the same time
+    df_grouped_all_con = df.groupby(['subID', 'object_cued_rot'])['button_press_clockwise'].mean().reset_index()
 
-    mean_difference = np.mean(differences)
-    all_differences_all_con.append(mean_difference)
-    #trying to append the subID here within the loop to the difference value, need to go into a new column
-    
-    subIDs.append(i)
+    for i in good_partis:
+        participant_grp_all_con = df_grouped_all_con.groupby('subID', as_index=False)
+        participant_data_all_con = participant_grp_all_con.get_group(i)
+        differences_all_con = []
 
+        for ori_x, ori_y in orientation_pairs:
+            value_x_all_con = participant_data_all_con.loc[participant_data_all_con['object_cued_rot'] == ori_x, 'button_press_clockwise'].mean()
+            value_y_all_con = participant_data_all_con.loc[participant_data_all_con['object_cued_rot'] == ori_y, 'button_press_clockwise'].mean()
 
-#suggestion from chatGPT, commented out the stuff below 
-differences_df_all_con = pd.DataFrame({'subID': subIDs, 'Mean_Difference': all_differences_all_con})
+            # Calculate the difference and append to the list
+            difference_all_con = value_x_all_con - value_y_all_con
+            differences_all_con.append(difference_all_con)
+
+        mean_difference_all_con = np.mean(differences_all_con)
+        all_differences_all_con.append((i, mean_difference_all_con))
+
+# Create DataFrames for both condition-specific differences and all conditions combined
+all_con_difs_df = pd.DataFrame(all_con_difs, columns=['subID', 'Mean_Difference', 'items_presented'])
+differences_df_all_con = pd.DataFrame(all_differences_all_con, columns=['subID', 'Mean_Difference_All_Con'])
+
+# Display the DataFrames
+display(all_con_difs_df)
 display(differences_df_all_con)
 
+
+#%% 
+# include t-test 
 ttest_results = pg.ttest(differences_df_all_con['Mean_Difference'], 0)
 display(ttest_results.round(4))
 
@@ -138,151 +152,9 @@ if p_value < alpha:
 else:
     print("The t-test does not indicate a significant difference in cardinal bias from 0 across all load conditions.")
 
-# %%
-all_differences_con1 = []
-subIDs = []
-for i in good_partis: 
-    participant_grp = condition_1.groupby('subID', as_index=False)
-    participant_data = participant_grp.get_group(i)
-    differences = []
-
-    # Define the pairs of orientations for subtraction
-    orientation_pairs = [(11.25, 348.75), (101.25, 78.75), (191.25, 168.75), (281.25, 258.75)]
-
-    for ori_x, ori_y in orientation_pairs:
-        value_x = participant_data.loc[participant_data['object_cued_rot'] == ori_x, 'button_press_clockwise'].mean()
-        
-        value_y = participant_data.loc[participant_data['object_cued_rot'] == ori_y, 'button_press_clockwise'].mean()
-    
-        # Calculate the difference and append to the list
-        difference =  value_x - value_y
-        differences.append(difference)
-
-    mean_difference = np.mean(differences)
-    all_differences_con1.append(mean_difference)
-    #trying to append the subID here within the loop to the difference value, need to go into a new column
-    
-    subIDs.append(i)
-
-
-#suggestion from chatGPT, commented out the stuff below 
-differences_df_con1 = pd.DataFrame({'subID': subIDs, 'Mean_Difference': all_differences_con1})
-display(differences_df_con1)
-
-ttest_results = pg.ttest(differences_df_con1['Mean_Difference'], 0)
-# print(f"T-Test results for Participant {i}:\n{ttest_results}")
-display(ttest_results.round(4))
-
-p_value = ttest_results['p-val'].values
-
-# Define the significance level (alpha)
-alpha = 0.05
-
-# Check if the p-value is less than alpha to determine significance
-if p_value < alpha:
-    print("The t-test indicates a significant difference in cardinal bias from 0 in load condition 1.")
-else:
-    print("The t-test does not indicate a significant difference in cardinal bias from 0 in load condition 1.")
-
-# %%
-all_differences_con2 = []
-subIDs = []
-for i in good_partis: 
-    participant_grp = condition_2.groupby('subID', as_index=False)
-    participant_data = participant_grp.get_group(i)
-    differences = []
-
-    # Define the pairs of orientations for subtraction
-    orientation_pairs = [(11.25, 348.75), (101.25, 78.75), (191.25, 168.75), (281.25, 258.75)]
-
-    for ori_x, ori_y in orientation_pairs:
-        value_x = participant_data.loc[participant_data['object_cued_rot'] == ori_x, 'button_press_clockwise'].mean()
-        value_y = participant_data.loc[participant_data['object_cued_rot'] == ori_y, 'button_press_clockwise'].mean()
-
-        # Calculate the difference and append to the list
-        difference =  value_x - value_y
-        differences.append(difference)
-
-    mean_difference = np.mean(differences)
-    all_differences_con2.append(mean_difference)
-    #trying to append the subID here within the loop to the difference value, need to go into a new column
-    
-    subIDs.append(i)
-
-
-#suggestion from chatGPT, commented out the stuff below 
-differences_df_con2 = pd.DataFrame({'subID': subIDs, 'Mean_Difference': all_differences_con2})
-display(differences_df_con2)
-
-ttest_results = pg.ttest(differences_df_con2['Mean_Difference'], 0)
-# print(f"T-Test results for Participant {i}:\n{ttest_results}")
-display(ttest_results.round(4))
-
-p_value = ttest_results['p-val'].values
-
-# Define the significance level (alpha)
-alpha = 0.05
-
-# Check if the p-value is less than alpha to determine significance
-if p_value < alpha:
-    print("The t-test indicates a significant difference in cardinal bias from 0 in load condition 2.")
-else:
-    print("The t-test does not indicate a significant difference in cardinal bias from 0 in load condition 2.")
-
-# %%
-all_differences_con3 = []
-subIDs = []
-for i in good_partis: 
-    participant_grp = condition_3.groupby('subID', as_index=False)
-    participant_data = participant_grp.get_group(i)
-    differences = []
-
-    # Define the pairs of orientations for subtraction
-    orientation_pairs = [(11.25, 348.75), (101.25, 78.75), (191.25, 168.75), (281.25, 258.75)]
-
-    for ori_x, ori_y in orientation_pairs:
-        value_x = participant_data.loc[participant_data['object_cued_rot'] == ori_x, 'button_press_clockwise'].mean()
-        value_y = participant_data.loc[participant_data['object_cued_rot'] == ori_y, 'button_press_clockwise'].mean()
-
-        # Calculate the difference and append to the list
-        difference =  value_x - value_y
-        differences.append(difference)
-
-    mean_difference = np.mean(differences)
-    all_differences_con3.append(mean_difference)
-    #trying to append the subID here within the loop to the difference value, need to go into a new column
-    
-    subIDs.append(i)
-
-
-# suggestion from chatGPT, commented out the stuff below 
-differences_df_con3 = pd.DataFrame({'subID': subIDs, 'Mean_Difference': all_differences_con3})
-display(differences_df_con3)
-
-ttest_results = pg.ttest(differences_df_con3['Mean_Difference'], 0)
-# print(f"T-Test results for Participant {i}:\n{ttest_results}")
-display(ttest_results.round(4))
-
-p_value = ttest_results['p-val'].values
-
-# Define the significance level (alpha)
-alpha = 0.05
-
-# Check if the p-value is less than alpha to determine significance
-if p_value < alpha:
-    print("The t-test indicates a significant difference in cardinal bias from 0 in load condition 3.")
-else:
-    print("The t-test does not indicate a significant difference in cardinal bias from 0 in load condition 3.")
-
 
 # %% 
 #  ANOVA comparing the cardinal repulsion in the load conditions
-
-# Pingouin ANOVA + plot 
-
-differences_df_con1['items_presented'] = 1
-differences_df_con2['items_presented'] = 2
-differences_df_con3['items_presented'] = 3
 
 combined_df2 = pd.concat([differences_df_con1, differences_df_con2, differences_df_con3])
 display(combined_df2)
@@ -290,11 +162,42 @@ display(combined_df2)
 anova_results = pg.anova(data=combined_df2, dv='Mean_Difference', between='items_presented')
 
 # Display ANOVA results
-display(anova_results)
+display(anova_results.round(4))
 
 # Define the significance level (alpha)
 alpha = 0.05
+p_value = anova_results['p-unc'].values
+if p_value < alpha:
+    print("The ANOVA test indicates a significant difference among the load conditions.")
+else:
+    print("The ANOVA test does not indicate a significant difference among the load conditions.")
 
+plt.figure(figsize=(10, 6))  # Set the figure size
+
+# Create a boxplot
+sns.stripplot(data=combined_df2, x='items_presented', y='Mean_Difference')
+sns.pointplot(data=combined_df2, x='items_presented', y='Mean_Difference', estimator='mean', linestyles='none')
+plt.xlabel('Items Presented')
+plt.ylabel('Mean Cardinal Repulsion at Cardinal Positions')
+plt.title('Stripplot of Cardinal Repulsion Indices for Different Conditions')
+plt.show()
+
+# %% 
+# same as above but:
+#  REPEATED MEASURES ANOVA comparing the cardinal repulsion in the load conditions
+# probably needs to be done like this since there are three values (one for every condition per participant)
+
+combined_df2 = pd.concat([differences_df_con1, differences_df_con2, differences_df_con3])
+display(combined_df2)
+
+anova_results = pg.rm_anova(data=combined_df2, dv='Mean_Difference', within='items_presented', subject='subID')
+
+# Display ANOVA results
+display(anova_results.round(4))
+
+# Define the significance level (alpha)
+alpha = 0.05
+p_value = anova_results['p-unc'].values
 if p_value < alpha:
     print("The ANOVA test indicates a significant difference among the load conditions.")
 else:
@@ -314,124 +217,24 @@ plt.show()
 # The following snippets need to be looked through and potentially deleted
 
 # %%
-# Continue here: check wether this could be useful - maybe easier than above
-
-# what did I do this for, this seems pretty perfect actually
-# ah yes, with the multiple keys within the groupby, I need to specifically use get_group with all three exact 
-# the reset_index at the end makes it a pandas dataframe again??? so weird. sometimes reset_index makes it a series and here
-# a dataframe again?
-
-mbp_df_2 = df.groupby(by=['object_cued_rot', 'items_presented', 'subID'])['button_press_clockwise'].mean().reset_index()
-mbp_df_con = mbp_df_2.groupby('items_presented')
-display('1:', mbp_df_2)
-display('2:', mbp_df_con)
-type(mbp_df_2)
-
-# for key, item in mbp_df_2:
-#     print(mbp_df_2.get_group(key), "\n\n")
-
-# mbp_df_2.groups
-# using mean() at the end of the groupby disables the groupby function
-
-
-con_1 = mbp_df_con.get_group((1))
-display('3:',con_1)
-
-# loc[(mbp_df_2['object_cued_rot'] == '11.25'), ['button_press_clockwise']]
-con_2 = mbp_df_con.get_group((2))
-con_3 = mbp_df_con.get_group((3))
-
-# %%
-oris = []
-oris_value = 11.25
-
-while oris_value <= 360:
-    oris.append(oris_value)
-    oris_value = oris_value + 360/16
-
-print(oris)
-
-# oris_unique = df['object_cued_rot'].unique()
-# oris_unique = np.sort(oris_unique)
-oris_unique = np.sort(df['object_cued_rot'].unique())
-oris_unique
-
-
-# %%
-# Trying to do the Cardinal Bias in one block
-# conditions = df['items_presented'].unique()
-
-# for condition in conditions:
-#     condition_2 = condition_grps.get_group(2).reset_index()
-
-# %%
 # using seaborn and pingouin
 
+# Probably delete this cell: the code seems to achieve the same as the code above, just less clean
 
 # I want to calculate the difference between the two orientations closest to the cardinal axes and take the average of those
 # four numbers 
 # either the hypothesis is that the difference between the two points is lower than zero or higher than zero (?)
 
 # x0 - y0
-
 # x90 - y90
-
 # x180 - y180
-
 # x270 - y270
+# mean of those four
 
-# mean der 4 zahlen
+# - -> 1 index per participant
+# expectation : higher than zero
+# 1-sample-t-test against 0
 
-# - -> 1 index pro proband
-
-# erwartung: höher als 0
-
-# testing mit 1-sample-t-test against 0
-result_dict = {}
-result_list_index = []
-
-for i in good_partis:
-    
-    participant_data = df[df['subID']==i]
-
-    # Create an empty list to store values for each participant
-    participant_values_x = []
-    participant_values_y = []
-
-    for ori in [11.25, 101.25, 191.25, 281.25]:
-        participant_data_ori_x = participant_data.loc[participant_data['object_cued_rot'] == ori, ['object_cued_rot', 'button_press_clockwise']].mean()
-      
-        # Append the 'button_press_clockwise' values to the list
-        participant_values_x.append(participant_data_ori_x)
-    
-    for ori in [348.75, 78.75, 168.75, 258.75]:
-        participant_data_ori_y = participant_data.loc[participant_data['object_cued_rot'] == ori, ['object_cued_rot', 'button_press_clockwise']].mean()
-      
-        # Append the 'button_press_clockwise' values to the list
-        participant_values_y.append(participant_data_ori_y)
-    
-        #index = (participant_values_x - participant_values_y)
-        #result_list_index.append(index)
-    # participant_index = participant_values_x - participant_values_y
-
-    # Store the lists of values in the dictionary with participant ID as the key
-    result_dict[i] = {'participant_data_ori_x': participant_values_x, 'participant_data_ori_y': participant_values_y, } # 'participant_index': participant_index
-
-display(participant_data_ori_y)
-# display(type(result_dict))
-# result_dict_df = pd.concat(result_dict)
-# display(result_dict_df)
-        
-# Print or use the result_dict as needed
-# for participant_id, values_dict in result_dict.items():
-#     print(f"Participant {participant_id}:")
-#     print("participant_data_ori_x:", values_dict['participant_data_ori_x'])
-#     print("participant_data_ori_y:", values_dict['participant_data_ori_y'])
-
-display(result_list_index)
-
-display(type(participant_values_y))
-display(type(participant_data_ori_y))
 
 # %%
 # Is this all conditions?
@@ -476,37 +279,40 @@ display(z_part_result)
 test = df['items_presented'].unique()
 display(test)
 
-# %%
-# Code by Dilara
+# # %%
 
-mean_differences = np.empty([len(good_partis),len(df['items_presented'].unique())])
+#  commented out for now because not working, check if this was used by me or is useful
 
-for j,load in enumerate(df['items_presented'].unique()):
+# # Code by Dilara
 
-    for i in good_partis: 
-        data = df[(df['subID'] == i) & (df['items_presented'] == load)]
-        differences = []
+# mean_differences = np.empty([len(good_partis),len(df['items_presented'].unique())])
 
-        # Define the pairs of orientations for subtraction
-        orientation_pairs = [(11.25, 348.75), (101.25, 78.75), (191.25, 168.75), (281.25, 258.75)]
+# for j,load in enumerate(df['items_presented'].unique()):
 
-        for ori_x, ori_y in orientation_pairs:
-            value_x = data.loc[data['object_cued_rot'] == ori_x, 'button_press_clockwise'].mean()
-            value_y = data.loc[data['object_cued_rot'] == ori_y, 'button_press_clockwise'].mean()
+#     for i in good_partis: 
+#         data = df[(df['subID'] == i) & (df['items_presented'] == load)]
+#         differences = []
 
-            # Calculate the difference and append to the list
-            difference =  value_x - value_y
+#         # Define the pairs of orientations for subtraction
+#         orientation_pairs = [(11.25, 348.75), (101.25, 78.75), (191.25, 168.75), (281.25, 258.75)]
+
+#         for ori_x, ori_y in orientation_pairs:
+#             value_x = data.loc[data['object_cued_rot'] == ori_x, 'button_press_clockwise'].mean()
+#             value_y = data.loc[data['object_cued_rot'] == ori_y, 'button_press_clockwise'].mean()
+
+#             # Calculate the difference and append to the list
+#             difference =  value_x - value_y
             
-            differences.append(difference)
-    display(mean_differences)
-    mean_differences[i,j] = np.mean(differences)
-    # mean_differences[i,j]
+#             differences.append(difference)
+#     display(mean_differences)
+#     mean_differences[i,j] = np.mean(differences)
+#     # mean_differences[i,j]
 
-# the ttest works on differences, but not on mean differences. Why?
-# since it seems to be an issue that there is no variance, maybe I need the full data per participant  
-rm_anova_results = pg.rm_anova(data=mean_differences)
-# print(f"T-Test results for Participant {i}:\n{ttest_results}")
-print(f"T-Test for each Participant:\n{ttest_results}")
+# # the ttest works on differences, but not on mean differences. Why?
+# # since it seems to be an issue that there is no variance, maybe I need the full data per participant  
+# rm_anova_results = pg.rm_anova(data=mean_differences)
+# # print(f"T-Test results for Participant {i}:\n{ttest_results}")
+# print(f"T-Test for each Participant:\n{ttest_results}")
 
 # %%
 type(mean_differences)
@@ -549,25 +355,4 @@ for x, y in paired_dataframes:
     print("DataFrame Y:")
     print(y)
     print("-----------")
-
-# %%
-# What is the difference between:
-data1 = df[df['subID'] == i].groupby(['stimuli_set'])['acc_trial_concrete_cued'].mean()
-print(data1)
-# and
-data2 = df.loc[df['subID'] == i, ['stimuli_set', 'acc_trial_concrete_cued']].mean()
-print(data2)
-
-# %%
-freqs = []
-
-for i in good_partis:
-
-
-    freqs2 = [i, 200]
-    freqs.append(freqs2)
-    freqs
-
-display(freqs)
-
 

@@ -117,6 +117,22 @@ grouped_data_stim_sets = df.groupby(['subID', 'stimuli_set'])['acc_trial_concret
 anova_result_acc_stimset2 = pg.anova(data=grouped_data_stim_sets, dv='acc_trial_concrete_cued', between='stimuli_set')
 display(anova_result_acc_stimset2)
 
+# Define the significance level (alpha)
+alpha = 0.05
+
+# Check if the p-value is less than alpha to determine significance
+if anova_result_acc_stimset2['p-unc'].values[0] < alpha:
+    print("The one-way ANOVA indicates a significant difference in accuracy among the three stimuli sets.\n")
+    tukey = pg.pairwise_tukey(dv='acc_trial_concrete_cued', between='stimuli_set', data=df)
+    display(tukey.round(4))
+    significant_pairs = tukey[tukey['p-tukey'] < 0.05]
+    for index, row in significant_pairs.iterrows():
+        print(f"There is a significant difference between groups {row['A']} and {row['B']}.")
+        print(f"Mean difference: {row['mean(A)'] - row['mean(B)']}")
+else:
+    print("The one-way ANOVA does not indicate a significant difference in accuracy among the three stimuli sets.")
+
+
 # Plot boxplots for each participant
 plt.figure(figsize=(10, 6))
 

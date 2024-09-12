@@ -17,8 +17,8 @@ mne.viz.set_browser_backend('matplotlib')
 # Creating a folder to save the epochs in 
 datafolder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data"
 folder_name = f"Epochs_test_onset"
-filepath = os.path.join(datafolder_path, folder_name)
-os.makedirs(filepath, exist_ok=True)
+epochs_folderpath = os.path.join(datafolder_path, folder_name)
+os.makedirs(epochs_folderpath, exist_ok=True)
 
 # %% 
 # Triggers used for onset of epoch
@@ -83,7 +83,7 @@ for i in good_partis:
     )
     # save epoch in fif format to a specified folder
     filename = f"{i}_test_onset-epo.fif"
-    filepath = os.path.join(folder_name, filename)
+    filepath = os.path.join(epochs_folderpath, filename)
     pupil_epochs.save(filepath, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
 
 # creating a dataframe with all subjects sampling frequency to later select differently sampled datafiles
@@ -91,10 +91,10 @@ freqs_df = pd.DataFrame(freqs, columns=['subID', 'frequency'])
 
 #creating a folder for all table and dataframes that are created in this project
 csv_foldername = f'csv_files'
-csv_path = os.path.join(data_folder, csv_foldername)
+csv_path = os.path.join(datafolder_path, csv_foldername)
 os.makedirs(csv_path, exist_ok=True)
 
-data_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/csv_files'
 freqs_df_name = f'freqs_df.csv'
-csv_filepath = os.path.join(data_folder, freqs_df_name)
+csv_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/csv_files'
+csv_filepath = os.path.join(csv_folder, freqs_df_name)
 freqs_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')

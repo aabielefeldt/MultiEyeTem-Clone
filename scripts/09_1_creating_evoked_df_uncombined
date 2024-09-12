@@ -17,13 +17,13 @@ mne.viz.set_browser_backend('matplotlib')
 # appending all epochs into one dataframe and combining both pupil channels
 evoked_df_uncombined = pd.DataFrame()
 
-evoked_df_pos1_interpol
+
 
 for i in good_partis:
     
     # reading epochs per participant
     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_pos1"
-    epoch_file = folder_path + "/" + i + "_pos1-epo.fif"
+    epoch_file = folder_path + "/" + i + "_pos1_interpol-epo.fif"
     pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
 
     # seperating per load condition

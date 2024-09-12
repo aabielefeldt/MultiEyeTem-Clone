@@ -21,7 +21,7 @@ for i in good_partis:
     
     # reading epochs per participant
     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_test_onset"
-    epoch_file = folder_path + "/" + i + "-epo.fif"
+    epoch_file = folder_path + "/" + i + "_test_onset-epo.fif"
     pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
     
     # combining channels

@@ -13,7 +13,13 @@ good_partis = df['subID'].unique()
 mne.viz.set_browser_backend('matplotlib')
 
 # %%
-# appending all epochs into one list and combining both pupil channels
+# appending all epochs into one list while:
+# combining both pupil channels
+# applying baseline
+# seperating by condition
+# cropping according to condition
+# averaging epochs
+
 
 evoked_df_pos1_interpol = pd.DataFrame()
 

@@ -5,21 +5,25 @@ import pandas as pd
 # %% Load Metadata
 
 df = pd.read_csv('../data/csv_files/df.csv')
-good_partis = df['subID'].unique()
+partis = df['subID'].unique()
 
 # %% 
 # Excluding Participants
 
 # %%
 # List of subject IDs to exclude
-
-# excluding OUG64 for performance (binomial test)
 # potentially excluding UCXTVD and D62XJG because they had the square mask
+results = pd.read_csv('../data/csv_files/binom_all_conditions_results.csv')
+subjects_to_exclude = []
+for i in partis:
+    # Get the data for the current participant and drop NaN values
+    # p_value = results.loc[results['subID'] == i, 'p-value'] > 0.05:
+    if results.loc[results['subID'] == i, 'p-value'].values[0] > 0.05:
+        subjects_to_exclude.append(i)
 
-# subjects_to_exclude = ['OUGX64', 'UCXTVD', 'D62XJG']
-subjects_to_exclude = ['OUGX64']
-
+# %%
 # Use boolean indexing to drop rows where 'subID' is in the exclusion list
 df = df[~df['subID'].isin(subjects_to_exclude)]
 
 good_partis = df['subID'].unique()
+# %%

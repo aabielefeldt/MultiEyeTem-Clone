@@ -29,28 +29,35 @@ for file_name in os.listdir(behav_data_path):
 # Concatenate all DataFrames in the list
 df = pd.concat(df_list, ignore_index=True)
 
+# %%
+
+# Changing content of accuracy column where it is 2 to nan
+# Note: Good idea??
+df['acc_trial_concrete_cued'].replace(2, np.nan, inplace=True)
+
 # %% 
 # Adding Columns for later use
 
+# %%
 # Adding Column for mask
 df['mask'] = 0
 df.loc[df['onset_mask'].notna() & (df['onset_mask'] > 0), 'mask'] = 1
 
+
 # %% 
 # Adding Column for Button Press
-# Note: There are no NANs in the button press column. What happens when no button was pressed? Probably they just get an inaccurate but this would not be seen in the data, without the trigger there would be no way of knowing whether it was inaccurate because no button was pressed or even though a button was pressed
-# Note: might be in the df already??
-# in the df there is the column "trigger_object_concrete" which has as its content 220 and 221 - the triggers indicating wether the probe object was tilted to the right or to the left from the cued ori
-# yes this column seems to map what I have done in my column "correct_rotation_response". A 220 reffering to a correct response of +8 degrees and a 221 referring to -8 degrees as a correct response
-# Calculate 'correct_rot_response'
+# could have also used the column "trigger_object_concrete" which has as its content 220 and 221 - the triggers indicating wether the probe object was tilted to the right or to the left from the cued ori
 df['correct_rot_response'] = df['object_cued_rot'] - df['object_test_rot_cued']
 
 # Adding the new column with 0 and 1 values based on conditions
 df['button_press_clockwise'] = 0  # Initialize with 0
 # if the correct response is clockwise and the person was correct -> clockwise button press
-df.loc[(df['correct_rot_response'] > 0) & (df['acc_trial_concrete_cued'] > 0), 'button_press_clockwise'] = 1
+df.loc[(df['correct_rot_response'] > 0) & (df['acc_trial_concrete_cued'] == 1), 'button_press_clockwise'] = 1
 # if the correct response is anticlockwise and the person was not correct -> clockwise button press
 df.loc[(df['correct_rot_response'] < 0) & (df['acc_trial_concrete_cued'] == 0), 'button_press_clockwise'] = 1
+# dealing with nan
+df.loc[pd.isna(df['acc_trial_concrete_cued']), 'button_press_clockwise'] = np.nan
+
 
 # %% 
 # Adding column for stimuli subset
@@ -89,10 +96,19 @@ orientation_bins = {
 # Create a new column with bin labels
 df['Orientation_Bin'] = df['object_cued_rot'].map(orientation_bins)
 
+# %%
+# Creating a column for cardinal vs oblique orientation category
+
+# orientations closest to the cardinal axes
+orientation_subset_cardinal = [348.75, 11.25, 78.75, 101.25, 168.75, 191.25, 258.75, 281.25]
+
+# Create a new column to indicate the categories
+df['Cardinal_Category'] = df['object_cued_rot'].apply(lambda x: 'Cardinal' if x in orientation_subset_cardinal else 'Oblique')
+
+
 # %% 
 # Creating folder structure and saving the dataframe
 
-# %%
 # create data folder
 multieyetem_folder = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem"
 data_foldername = f'data'
@@ -113,5 +129,3 @@ os.makedirs(csv_path, exist_ok=True)
 
 # Saving dataframe
 df.to_csv('../data/csv_files/df.csv', index=False)
-
-

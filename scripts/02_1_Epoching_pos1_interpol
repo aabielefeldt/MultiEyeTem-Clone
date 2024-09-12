@@ -62,9 +62,8 @@ os.makedirs(epochs_folderpath, exist_ok=True)
 # Creating epochs timelocked to pos1
 
 freqs = []
-onesubID = ['REUNMA']
 
-for i in onesubID:
+for i in good_partis:
         
         # read file per subID
         folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
@@ -129,7 +128,6 @@ for i in onesubID:
 
 # creating a dataframe with all subjects sampling frequency to later select differently sampled datafiles
 freqs_df = pd.DataFrame(freqs, columns=['subID', 'frequency'])
-
 
 # saving freqs df
 data_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/csv_files'
