@@ -1,0 +1,553 @@
+# %%
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+import numpy as np
+import scipy.io
+
+
+#%%
+# Load the .mat 
+avg_polarbias_n41_C1 = scipy.io.loadmat('/mnt/home/bielefeldt/AMD/Users/bielefeldt/avg_polarbias_n41_C1.mat')
+
+bb = avg_polarbias_n41_C1['bb']
+avg_Paramsr = avg_polarbias_n41_C1['avg_Paramsr']
+avg_aCueor = avg_polarbias_n41_C1['avg_aCueor']
+avg_bCueor = avg_polarbias_n41_C1['avg_bCueor']
+
+# %% 
+
+def deg2rad(degrees):
+    """Convert degrees to radians."""
+    return degrees * (np.pi / 180)
+
+def angdiff(angle1, angle2):
+    """Calculate the angular difference between two angles."""
+    return np.mod(angle1 - angle2 + np.pi, 2 * np.pi) - np.pi
+
+def sigmoid(x, s, b):
+    """Sigmoid function for computing probabilities."""
+    return 1 / (1 + np.exp(-s * (x - b)))
+
+def orivectors(n, testd):
+    """Generate orientation vectors for circles and squares.
+    
+    Args:
+        n (int): Number of equidistant rotations.
+        testd (float): Displacement of test stimuli in degrees.
+    
+    Returns:
+        oriC (ndarray): Circle orientation vectors.
+        oriP (ndarray): Positive test orientation vectors.
+        oriN (ndarray): Negative test orientation vectors.
+    """
+    # Generate orientation vectors
+    oriC = np.linspace(0, 2 * np.pi, n, endpoint=False)  # Circle orientations
+    oriP = deg2rad(np.linspace(0, 360, n))  # Positive test orientations
+    oriN = deg2rad(np.linspace(180, 360, n))  # Negative test orientations
+    return oriC, oriP, oriN
+
+def squircleBehave2(s, A, CardPrez, behB, makefig):
+    """Calculate accuracy and bias based on mixed orientations.
+    
+    Args:
+        s (float): Noise (in memory/decision-making).
+        A (float): Key parameter for mixing (squircle).
+        CardPrez (float): Reducing noise near cardinal by this factor.
+        behB (ndarray): Behavioral biases.
+        makefig (bool): Whether to create plots.
+    
+    Returns:
+        AccuMix (ndarray): Mixed accuracy values.
+        BiasMix (ndarray): Mixed bias values.
+    """
+    
+    # Settings/preparation
+    n = 16  # Number of equidistant rotations
+    testd = 6.43  # +/- displacement of test stimuli in degrees
+
+    # Get orientation vectors
+    oriC, oriP, oriN = orivectors(n, testd)
+
+    # Prepare categorical vectors
+    oriS1 = np.concatenate((np.full(4, 45), np.full(4, 135), np.full(4, 225), np.full(4, 315)))  # Cat
+    oriS1 = deg2rad(oriS1)
+    oriS2 = np.concatenate(([0, 0], np.full(4, 90), np.full(4, 180), np.full(4, 270), [360, 360]))  # Anti-cat
+    oriS2 = deg2rad(oriS2)
+
+    # Mix orientations directly
+    if A >= 0:
+        oriM = A * oriS1 + (1 - A) * oriC
+    else:
+        fA = -A  # Flip since it's negative
+        oriM = fA * oriS2 + (1 - fA) * oriC
+
+    # Calculate angular distances
+    dTp = angdiff(oriM, oriP)  # Distance to positive test orientations
+    dTn = angdiff(oriM, oriN)  # Distance to negative test orientations
+
+    # (optional) better precision at cardinal
+    sW = np.tile([CardPrez, 1, 1, CardPrez], 4)  # Weighting for cardinal presentations
+    sW /= np.mean(sW)  # Ensure the mean of the vector is 1
+    s *= sW  # Adjust noise by the weights
+
+    # Predict choices under either model
+    CP_P = sigmoid(dTp, s, 0)  # Probability of sensing "ccw" when test was "ccw" (correct)
+    CP_N = sigmoid(dTn, s, 0)  # Probability of sensing "ccw" when test was "cw" (error)
+
+    # Calculate accuracy and bias
+    AccuMix = (CP_P + (1 - CP_N)) / 2  # Mixed accuracy
+    BiasMix = (CP_P + CP_N) / 2  # Mixed bias
+
+    # Optional plots
+    if makefig:
+        # Plot accuracy
+        plt.figure(figsize=(10, 5))
+        plt.subplot(1, 2, 1)
+        plt.polar(oriC, AccuMix, marker='o', linestyle='-', label='Accuracy')
+        plt.title('Accuracy')
+        plt.legend()
+
+        # Plot bias
+        plt.subplot(1, 2, 2)
+        plt.polar(oriC, BiasMix, marker='o', linestyle='-', label='Bias')
+        plt.title('Bias')
+        plt.legend()
+
+        plt.suptitle(f'Squircle A={A}')
+        plt.show()
+
+    return AccuMix, BiasMix
+
+# Example usage (commented out, to be replaced with actual data)
+# AccuMix, BiasMix = squircleBehave2(s=0.2, A=0.2, CardPrez=0.6, behB=np.array([]), makefig=True)
+
+# %%
+oi=avg_bCueor
+# oiac never used again?
+oiac=avg_aCueor
+
+
+yourBias = []  # Initialize yourBias as an empty list
+yourAccu = []  # Initialize yourAccu as an empty list
+
+# Loop over the columns of oi
+for ppp in range(oi.shape[1]):  # ppp ranges from 0 to size(oi,2)-1 in Python
+    behB = oi[:, ppp]  # BheaviouralBias
+    behB = behB.flatten()  # Convert column vector to 1D array
+
+    s = avg_Paramsr[ppp, 0]  # noise (in memory/decision-making)
+    A = avg_Paramsr[ppp, 1]  # Key Parameter (squircle) 0: all circle; 1: all square
+    C = avg_Paramsr[ppp, 2]
+
+    makefig = 0
+    # Call the function and collect results
+    accu, bias = squircleBehave2(s, A, C, behB, makefig)
+    
+    # Append results to yourAccu and yourBias
+    yourAccu.append(accu)
+    yourBias.append(bias)
+
+# If you want yourAccu and yourBias to be arrays
+yourAccu = np.array(yourAccu).T  # Transpose to match MATLAB's column structure
+yourBias = np.array(yourBias).T  # Transpose to match MATLAB's column structure
+
+counter = 1
+# %%
+
+
+def quickplotcompBerrors(theta, uno, dos, titulo, legyes, Aave):
+    # Generate color map with 3 colors (for 2 datasets and 1 custom color)
+    # colores = plt.cm.summer(np.linspace(0, 1, 3))
+    
+    # # Add a custom color as the first color
+    # custom_color = [0.9, 0, 0.7]  # Custom color
+    # colores = np.vstack((custom_color, colores))  # Stack the custom color on top
+    
+    # Append the first value to close the polar plot
+    theta = np.concatenate((theta, [theta[0]]))
+    uno = np.vstack((uno, uno[0, :]))  # Append the first row
+    dos = np.vstack((dos, dos[0, :]))  # Append the first row
+
+    dat = [uno, dos]  # Store uno and dos in a list
+    #legcoun = 2
+    pl = []
+
+    for i in range(2):
+        ap = np.nanmean(dat[i], axis=1)  # Mean along the second axis
+        # chance = np.full_like(ap, 0.5)  # Set chance values
+        # sem = np.nanstd(dat[i], axis=1, ddof=1) / np.sqrt(dat[i].shape[1])  # Standard error
+        # uppererror = ap + sem
+        # lowerror = ap - sem
+
+        # Polar plot commands
+        # pl.append(plt.polar(theta, chance, linestyle='--', color='k', linewidth=2))
+        plt.polar(theta, ap, linestyle='-', linewidth=2.5)
+
+        # # Plot the mean behavior points
+        # pl.append(plt.polar(theta, ap, marker='o', markersize=8))
+
+        # legcoun += 1
+        # if legcoun != 3:
+        #     pl.append(plt.polar(theta, uppererror, linestyle='--', linewidth=2))
+        #     plt.polar(theta, lowerror, linestyle='--', linewidth=2)
+
+        # legcoun += 1
+
+    # Add legend if legyes is True
+    if legyes:
+        plt.legend([pl[0], pl[1], pl[3], pl[4]], 
+                   ['unbiased (B=0)', f'model (B={Aave})', 'mean behaviour', 'SEM behaviour'], 
+                   loc='lower center')
+
+    plt.ylim(0, 0.7)  # Set radial limits
+    plt.title(titulo)
+    plt.show()  # Show the plot
+
+# Example usage (commented out, to be replaced with actual data)
+# quickplotcompBerrors(theta, uno, dos, 'Title', True, 1.0)
+
+
+#%%
+# Plot with Juan's specification but my version of the data calculated from his data above, theta is in conventional format, data
+# is going anticlockwise with theta as would be correct
+
+# bb_circ= np.append(bb, bb[0])
+
+# counter = 1
+# plt.figure()
+
+# ax = plt.subplot(1, 3, 2, polar=True)
+
+# # Polar plot for specific values
+# ax.plot([0, np.pi], [1, 1], 'k-', linewidth=1)
+# ax.plot([np.pi / 2, np.pi * 1.5], [1, 1], 'k-', linewidth=1)
+
+# Aave = round(np.mean(avg_Paramsr[:, 1]), 3)
+# Astd = np.std(avg_Paramsr[:, 1], ddof=0)
+# ax.grid(alpha=0.25)
+
+# # quickplotcompBerrors(bb, yourBias, oi, '', 1, Aave)
+
+# ax.plot(bb_circ, mean_bps, 'k--')
+
+# plt.gca().tick_params(labelsize=20)
+
+# plt.show()
+
+# %%
+# Plot only from the function, here theta seems to be going anticlockwise (ticks) while the data is going clockwise
+
+# quickplotcompBerrors(bb, yourBias, oi, '', 0, Aave)
+
+
+
+# %%
+# bb_circ= np.append(bb, bb[0])
+
+counter = 1
+plt.figure()
+
+ax = plt.subplot(1, 3, 2, polar=True)
+
+# Polar plot for specific values
+ax.plot([0, np.pi], [1, 1], 'k-', linewidth=1)
+ax.plot([np.pi / 2, np.pi * 1.5], [1, 1], 'k-', linewidth=1)
+ax.plot(bb, oi[:,1], 'k--')
+Aave = round(np.mean(avg_Paramsr[:, 1]), 3)
+Astd = np.std(avg_Paramsr[:, 1], ddof=0)
+
+# replacing the yourBias wiht only 0.5s, doesnt change anything
+# noyourBias = np.full([16, 41], 0.5)
+# quickplotcompBerrors(bb, noyourBias, oi, '', 0, 1.0)
+
+quickplotcompBerrors(bb, yourBias, oi, '', 0, 1.0)
+
+
+ax.grid(alpha=0.25)
+
+# the following doesnt really work, creates a new plot but is probably meant to only affect font size anyway so should be fine
+# plt.gca().tick_params(labelsize=20)
+
+plt.show()
+# %%
+
+# plotting oi only 
+# when running through values of oi per participant (hopefully) with oi[:,4], the plots look kinda weird
+plt.figure()
+
+ax = plt.subplot(1, 3, 2, polar=True)
+
+ax.plot(bb, yourBias[:,4], 'k--')
+
+plt.show()
+
+# %%
+
+# trying to unpack the funtion bit by bit
+bb = avg_polarbias_n41_C1['bb']
+avg_Paramsr = avg_polarbias_n41_C1['avg_Paramsr']
+avg_aCueor = avg_polarbias_n41_C1['avg_aCueor']
+avg_bCueor = avg_polarbias_n41_C1['avg_bCueor']
+oi=avg_bCueor
+
+theta = bb
+uno = yourBias
+dos = oi
+
+# then the first of those values are appended for the full circle
+theta = np.concatenate((theta, [theta[0]]))
+uno = np.vstack((uno, uno[0, :]))  # Append the first row
+dos = np.vstack((dos, dos[0, :])) 
+colors = ['blue', 'green']
+# then uno and dos are stored together
+dat = [uno, dos]
+
+# and then within a loop both are plotted seperately with different colours
+for i in range(2):
+    ap = np.nanmean(dat[i], axis=1)
+    plt.polar(theta, ap, linestyle='-', linewidth=2.5, color=colors[i])
+
+# %%
+uno_mean = np.nanmean(uno, axis=1)
+print(uno_mean)
+plt.polar(theta, uno_mean, linestyle='-', linewidth=2.5, color='blue')
+# %%
+dos_mean = np.nanmean(dos, axis=1)
+print(dos_mean)
+plt.polar(theta, dos_mean, linestyle='-', linewidth=2.5, color='blue')
+# %%
+
+oi = avg_bCueor
+# to make it even more clear:
+
+# here I am plotting oi directly
+
+oi = np.vstack((oi, oi[0, :])) 
+
+oi_mean = np.nanmean(oi, axis=1)
+print(oi_mean)
+plt.polar(theta, oi_mean, linestyle='-', linewidth=2.5, color='blue')
+
+# %%
+# to make it even more clear:
+
+# here I am plotting oi directly
+oi = avg_bCueor
+oi = np.vstack((oi, oi[0, :])) 
+
+oi_mean = np.nanmean(oi, axis=1)
+print(oi_mean)
+plt.polar(theta, oi_mean, linestyle='-', linewidth=2.5, color='blue')
+
+# %%
+
+
+
+#####
+
+# how avg_bCueor is created potentially
+
+# trying to use datperitem.mat and findAbehavPerItem because there is the most in there about creating bCue and then bCueo and then bCueor and then avg_bCueor which is then used to plot
+
+datperitem = scipy.io.loadmat('/mnt/home/bielefeldt/AMD/Users/bielefeldt/datperitem.mat')
+
+# variables in here: !?! also bias_cue and bias_uncue as below .. the same?
+accrot_cu_uncue = datperitem['accrot_cu_uncue']
+bias_cue  = datperitem['bias_cue']
+bias_uncue = datperitem['bias_uncue']
+
+
+# translated code until %% Obtaining the best parameters
+
+# Assuming bias_cue and bias_uncue are numpy arrays with the same structure as in MATLAB:
+# Example shapes: bias_cue[0] is of shape (16, 2, N), where N is the number of subjects or trials.
+
+# Extract and squeeze the necessary dimensions
+bCue = {
+    (1, 1): np.squeeze(bias_cue[0][0][:, 0, :]),  # Bias for the 1st item, 1st test (shape: 16, 41)
+    (1, 2): np.squeeze(bias_uncue[0][0][:, 0, :]),  # Bias for the 1st item, 2nd test (shape: 16, 41)
+    (2, 1): np.squeeze(bias_cue[0][1][:, 0, :]),  # Bias for the 2nd item, 1st test (shape: 16, 41)
+    (2, 2): np.squeeze(bias_uncue[0][1][:, 0, :])  # Bias for the 2nd item, 2nd test (shape: 16, 41)
+}
+
+# # Calculate group average if needed
+# groupave = False  # Set to True if you want to calculate using the group average
+
+# # Create dictionaries for aCue and bCue
+# aCue = {}
+# bCue = bCue  # Using the already extracted bCue dictionary
+
+# if groupave:
+#     for item in range(1, 3):
+#         for test in range(1, 3):
+#             # Compute the mean across the last dimension (41 subjects/trials), preserving the shape (16, 1)
+#             aCue[(item, test)] = np.mean(aCue[(item, test)], axis=1, keepdims=True)
+#             bCue[(item, test)] = np.mean(bCue[(item, test)], axis=1, keepdims=True)
+
+# %%
+########################################################################################################################################################################
+########################################################################################################################################################################
+
+# Prepare orientation data and sort
+ao = np.deg2rad(accrot_cu_uncue[0][0][:, 2, 0])  # Extract 3rd of accuracy data to then extract the column containing the orientations and convert to radians
+# so basically ao is just the 16 orientations in radians
+ao2 = np.abs(2 * np.pi - ao)  # Move anticlockwise
+# 16 orientations but starting from 348.75 going down to 11.25
+ao3 = np.angle(np.exp(-1j * ao2) * np.exp(-1j * (-np.pi * 1.5))) + np.pi
+# 16 orientations starting at 101.25 going up (but not anti-clockwise anymore?)
+
+# Sort and get indices
+bb = np.sort(ao3)
+
+# ind gives the order of the smallest values in ao3 as indices??
+ind = np.argsort(ao3)
+# returns array([12, 13, 14, 15,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11])
+# meaning the smalles value was at index 12 in the ao3 array (remember it starts at 0) -which is 11.25 when transformed to degrees
+
+########################################################################################################################################################################
+########################################################################################################################################################################
+
+
+# Order the aCue and bCue data based on sorted indices
+#aCueo = {}
+
+# By using ind to index bCue[(item, test)], like this: bCue[(item, test)][ind, :], the data in bCue is reordered according to the sorted order specified by ind
+
+
+bCueo = {}
+for item in range(1, 3):
+    for test in range(1, 3):
+        # Reorder data based on the sorted indices
+        #aCueo[(item, test)] = aCue[(item, test)][ind, :]
+        bCueo[(item, test)] = bCue[(item, test)][ind, :]
+
+
+# simpler example:
+examplebiasdata = np.array([0.4, 0.7, 0.3, 0.5, 0.6, 0.7, 0.3, 0.3, 0.5, 0.6, 0.7, 0.4, 0.7, 0.3, 0.5, 0.6])
+newdata = examplebiasdata[ind]
+
+# the resulting data doesnt go anticlockwise I think
+# but in other scropts it is done differently again anyway
+########################################################################################################################################################################
+########################################################################################################################################################################
+# CONTINUE HERE:
+
+# not translated yet:
+# any changes in direction here?? 
+
+# Combine the arrays along the third dimension
+bCueor = np.stack([bCueo[(1, 1)], bCueo[(1, 2)], bCueo[(2, 1)], bCueo[(2, 2)]], axis=2)
+print(bCueor)
+# Calculate the mean along the third dimension (axis=2)
+avg_bCueor = np.mean(bCueor, axis=2)
+print(avg_bCueor)
+# %%
+
+# from findAbehavAllConditions, but that script is very messy
+bCue{1}=squeeze(bias_cue(:,1,:)); %Bias 1st Test
+
+bCueg = ((bCue{1}+bCue{2})./2)
+
+bCueo=bCueg(ind,:)
+bCueGo = ((bCue1o+bCue2o)./2)
+# %%
+datperitemandtrial = scipy.io.loadmat('/mnt/home/bielefeldt/AMD/Users/bielefeldt/datperitemandtrial.mat')
+cw_resp_cu_uncue = datperitemandtrial['cw_resp_cu_uncue']
+cw_test_cu_uncue = datperitemandtrial['cw_test_cu_uncue']
+# -> why are there only data for uncue in here? or labelled incorrectly?
+
+
+dat = scipy.io.loadmat('/mnt/home/bielefeldt/AMD/Users/bielefeldt/dat.mat')
+bias_cue = dat['bias_cue']
+bias_uncue = dat['bias_uncue']
+# -> can probably ignore bias uncue for now 
+# %%
+# Random notes from Juans code
+# within this data are participant responses (1 =CW and 0 = CCW)
+# "ccw" when test was "ccw" (correct)
+# "ccw" when test was "cw"  (error)
+# Bias should simply be the average of CPs (CW/CCW)
+# -> from squircleBaheve3
+
+# Selecting trials where the correct response for the test was CCW (and compare with CP_N
+# Selecting trials where the correct response for the test was CW (and compare with CP_P
+
+
+# from findAbehavPerItemTrials.m:
+
+# ao=deg2rad(cw_resp_cu_uncue{3}(:));
+# ao2=abs(2*pi-ao); %move anticlockwise -------- !!! ???
+# ao3=(angdiff(-ao2,-(ones(16,1).*pi*1.5)))+pi;
+
+# [bb ind]=sort(ao3);
+
+# for item=1:2
+#     for test=1:2
+#         aCueo{item,test}=aCue{item,test}(ind,:,:);
+#         tCueo{item,test}=tCue{item,test}(ind,:,:);
+
+#     end
+# end
+
+# from findAbehavAllConditions.m
+bCue{1}=squeeze(bias_cue(:,1,:)); #Bias 1st Test
+bCue{2}=squeeze(bias_uncue(:,1,:)); #Bias 2st Test
+
+# Averaging between 1st and 2nd test 
+aCueg = ((aCue{1}+aCue{2})./2)
+bCueg = ((bCue{1}+bCue{2})./2)
+
+# order the data in standard presentation
+bCueo=bCueg(ind,:)
+# from findAbehavPerItemTrials.m:
+# bCueor=cat(3,bCueo{1,1},bCueo{1,2},bCueo{2,1},bCueo{2,2});
+# avg_bCueor=mean(bCueor,3);
+
+
+
+
+# %%
+# trying to put the actual bias_cue data into a dataframe:
+
+
+bias_cue_array1 = bias_cue[0,0]
+
+bias_cue_array2 = bias_cue[0,1]
+
+bias_ori = {}
+
+# Loop through each of the 16 orientations and create dynamic variable names
+for i in range(16):
+    # Store the data in the dictionary with keys like 'bias_ori1', 'bias_ori2', etc.
+    bias_ori[f'bias_ori{i+1}'] = bias_cue_array1[i, :, :]
+# data = np.concatenate(
+#     [
+#         np.concatenate([bias_cue[0][item][rotation] for rotation in range(16)], axis=1)
+#         for item in range(2)
+#     ],
+#     axis=0
+# )
+
+# Create the DataFrame
+# bias_cue_df = pd.DataFrame(data)
+
+# # Display the first few rows of the DataFrame to verify the structure
+# display(bias_cue_df.head(20))
+# %%
+
+bias_cue_array1 = bias_cue[0,0]
+
+bias_cue_array2 = bias_cue[0,1]
+
+bias_oris = []
+
+
+# Loop through each of the 16 orientations and create dynamic variable names
+for i in range(16):
+    # Store the data in the dictionary with keys like 'bias_ori1', 'bias_ori2', etc.
+    ori
+    bias_ori = bias_cue_array1[i, :, :]
+    print(bias_ori)
+
+# %%

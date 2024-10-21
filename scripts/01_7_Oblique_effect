@@ -32,7 +32,7 @@ display(mean_per_category)
 
 grouped_data_list = []
 for i in good_partis:
-    data = df[df['subID'] == i].groupby(['Cardinal_Category'])['acc_trial_concrete_cued'].mean().reset_index()
+    data = df[df['subID'] == i].groupby(['Cardinal_Category', 'subID'])['acc_trial_concrete_cued'].mean().reset_index()
     grouped_data_list.append(data)
 
 # Concatenate the list of DataFrames into a single DataFrame
@@ -57,7 +57,7 @@ t_statistic = result_ttest_obli['T'].values
 alpha = 0.05
 
 if p_value < alpha:
-    print("The t-test indicates a significant difference between accuracy in oblique vs. cardinal orientations")
+    print("The t-test indicates a significant difference between accuracy in oblique vs. cardinal orientations, but check very low power")
 else:
     print("The t-test does not indicate a significant difference between accuracy in oblique vs. cardinal orientations")
 
@@ -76,6 +76,8 @@ plt.show()
 
 # %%
 # comparing load conditions:
+
+# Note: why are there Nans in this?
 
 all_p_obli_con = pd.DataFrame()
 
@@ -122,14 +124,31 @@ display(all_p_obli_con)
 # run it on the df or the all_p_obli_con
 # %%
 # Perform ANOVA
-result_anova_obli_con = pg.rm_anova(data=all_p_obli_con, dv='mean', within=['Cardinal_Category', 'items_presented'], subject='subID')
-display(result_anova_obli_con.round(4))
-p_value = result_anova_repeated['p-unc'].values
+# had to change the indexing to match the interaction in the p-unc lines but generally:
+# What do I want here? I think (but check again) that here I am using the absolute mean data (could also try the same on the general df, might be just the same) while
+# in the cardinal repulsion analysis I am using the subtracted index data, therefore removing the cardinal category factor
+result_anova_repeated = pg.rm_anova(data=all_p_obli_con, dv='mean', within=['Cardinal_Category', 'items_presented'], subject='subID')
+display(result_anova_repeated.round(4))
+p_value = result_anova_repeated.loc[2, 'p-unc'] # indexing the second column to only have the interaction p-value
 alpha = 0.05
 if p_value < alpha:
-    print("The ANOVA indicates a significant difference in the oblique effect depending on the laod condition.")
+    print("The ANOVA indicates a significant interaction in the oblique effect depending on the laod condition.")
 else:
-    print("The ANOVA does not indicate a significant difference in the oblique effect depending on the laod condition.")
+    print("The ANOVA does not indicate a significant interaction in the oblique effect depending on the laod condition.")
+
+# %%
+# based on the notes above, would the same analysis on the whole df have the same results? or only slight differences because the means would be calculated
+# directly and not like above on already meaned data? - if I didnt miss anything - yes this is exactly the same!
+
+try_again = pg.rm_anova(data=df, dv='acc_trial_concrete_cued', within=['Cardinal_Category', 'items_presented'], subject='subID')
+display(try_again.round(4))
+p_value = try_again.loc[2, 'p-unc'] # indexing the second column to only have the interaction p-value
+alpha = 0.05
+if p_value < alpha:
+    print("The ANOVA indicates a significant interaction in the oblique effect depending on the laod condition.")
+else:
+    print("The ANOVA does not indicate a significant interaction in the oblique effect depending on the laod condition.")
+
 
 # %%   
 # Box plot for all conditions for all participants
@@ -239,4 +258,142 @@ ax.plot(-spacing_circ, oriacc3_circ, 'ro-')
 plt.title('Oblique Effect on Polar Plot by Load Condition')
 plt.savefig(os.path.join(figures_save_dir, 'polar_plot_oblique_effect.png'))
 plt.show()
+
+#%% bar polar plot for accuracy per orientation (all conditions)
+
+# Get ordered list of unique target orientations
+rots = df['object_cued_rot'].unique()
+rots.sort()   
+
+fig = plt.figure()
+
+# Change the projection to 'polar'
+ax = fig.add_subplot(111, projection='polar')
+
+# Get outer ylim for plotting radial lines
+ylim = ax.get_ylim()
+
+# Plot a radial line for each target orientation - colour matched to its kde distribution
+# Then plot a radial line for the mean of each kde distribution
+for r in range(len(rots)):
+    theta = np.radians(rots[r])
+    mean_acc = (df[df['object_cued_rot']==rots[r]]['acc_trial_concrete_cued']).mean()
+    color = sns.hls_palette(16)[r]
+    # ax.plot([theta, theta], [0, mean_bp], 'o--', c=sns.hls_palette(16)[r], alpha = 0.5, markersize=10)
+    ax.bar([theta, theta], [0, mean_acc], color=color, alpha = 0.5, width = 0.3)
+    unbiased = 0.5
+    theta_circle = np.linspace(0, 2 * np.pi, 100)
+    r_circle = np.full_like(theta_circle, unbiased)
+    ax.plot(theta_circle, r_circle, color=color, alpha=0.3, linewidth=0.4)
+
+    #ax.plot(theta_circle, r_circle, color=color, alpha=0.5, linewidth=0.4)
+
+
+# Move r origin outwards to have a hollow circle in the middle for ~AesTHeTicS~
+rorigin = -0.5*ylim[1]
+ax.set_rorigin(rorigin)
+
+# Remove yticks
+ax.set_yticks([0.5])
+ax.set_yticklabels(['0.5'])
+
+# Note: ax.set_theta_offset(np.pi / 2) shifts the zero angle to the top of the plot (by 90°) (i.e., the positive y-axis).
+# Set the direction of the zero angle - means zero is at the top for this plot!!
+# "zero angle is the reference point from which angles are measured"
+# ax.set_theta_offset(np.pi/2)
+#ax.set_theta_direction(-1)
+plt.show()
+
+# %%
+
+# might be useless for oblique effect
+
+
+# Example function to calculate differences based on grouped DataFrame
+def calculate_differences(df, chosen_column, condition=None):
+    # Step 1: Group DataFrames according to the condition
+    if condition == 1:
+        df_grouped = df[df['items_presented'] == 1].groupby(['subID', 'object_cued_rot', 'Cardinal_Category']).agg({chosen_column: 'mean'}).reset_index()
+    elif condition == 2:
+        df_grouped = df[df['items_presented'] == 2].groupby(['subID', 'object_cued_rot', 'Cardinal_Category']).agg({chosen_column: 'mean'}).reset_index()
+    elif condition == 3:
+        df_grouped = df[df['items_presented'] == 3].groupby(['subID', 'object_cued_rot', 'Cardinal_Category']).agg({chosen_column: 'mean'}).reset_index()
+    else:
+        df_grouped = df.groupby(['subID', 'object_cued_rot', 'Cardinal_Category']).agg({chosen_column: 'mean'}).reset_index()
+
+    # Step 2: Initialize a list to store results
+    results = []
+
+    # Step 3: Process each subID separately
+    for sub_id, group in df_grouped.groupby('subID'):
+        group = group.sort_values('object_cued_rot').reset_index(drop=True)
+
+        # Calculate median subtracted orientations
+        group['median_subtracted_oris'] = group['object_cued_rot'].rolling(window=2).median().fillna(0)
+
+        # Calculate differences in the chosen column
+        group[f'{chosen_column}_difference'] = group[chosen_column].diff()
+
+        circular_diff = group[chosen_column].iloc[0] - group[chosen_column].iloc[-1]
+        group.loc[group.index[0], f'{chosen_column}_difference'] = circular_diff
+
+        results.append(group)
+
+    # Concatenate all results into a single DataFrame
+    df_with_diffs = pd.concat(results, ignore_index=True)
+
+    return df_with_diffs
+
+
+
+
+
+
+#%%
+
+df_with_diffs_all = calculate_differences(df, chosen_column='acc_trial_concrete_cued', condition=None)
+display(df_with_diffs_all)
+
+df_with_diffs_all['absolute_differences'] = df_with_diffs_all['acc_trial_concrete_cued_difference'].abs()
+display(df_with_diffs_all)
+
+# plotting difference scores: 
+
+# Get ordered list of unique target orientations
+rots = df_with_diffs_all['median_subtracted_oris'].unique()
+rots.sort()   
+
+fig = plt.figure()
+
+# Change the projection to 'polar'
+ax = fig.add_subplot(111, projection='polar')
+
+# Get outer ylim for plotting radial lines
+ylim = ax.get_ylim()
+
+# Plot a radial line for each target orientation - colour matched to its kde distribution
+# Then plot a radial line for the mean of each kde distribution
+for r in range(len(rots)):
+    theta = np.radians(rots[r])
+    mean_diff = (df_with_diffs_all[df_with_diffs_all['median_subtracted_oris']==rots[r]]['acc_trial_concrete_cued_difference']).mean()
+    color = sns.hls_palette(16)[r]
+    # ax.plot([theta, theta], [0, mean_bp], 'o--', c=sns.hls_palette(16)[r], alpha = 0.5, markersize=10)
+    ax.bar([theta, theta], [0, mean_diff], color=color, alpha = 0.5, width = 0.3)
+
+# Move r origin outwards to have a hollow circle in the middle for ~AesTHeTicS~
+# rorigin = -0.5*ylim[1]
+# ax.set_rorigin(rorigin)
+
+# Remove yticks
+# ax.set_yticks(ticks)
+# ax.set_yticklabels()
+
+# Note: ax.set_theta_offset(np.pi / 2) shifts the zero angle to the top of the plot (by 90°) (i.e., the positive y-axis).
+# Set the direction of the zero angle - means zero is at the top for this plot!!
+# "zero angle is the reference point from which angles are measured"
+# ax.set_theta_offset(np.pi/2)
+#ax.set_theta_direction(-1)
+plt.show()
+
+# %%
 

@@ -1,0 +1,192 @@
+# %%
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+import numpy as np
+
+# %%
+
+behav_data_path = "/mnt/home/bielefeldt/AMD/Data/AMDstudies/MemorEye/unattended/outputfiles"
+
+df_list = []
+for file_name in os.listdir(behav_data_path):
+    if file_name.endswith(".txt") and "pr.txt" not in file_name and not file_name.startswith("resultfile_pil"):  # Check if the file has .txt extension
+        file_path = os.path.join(behav_data_path, file_name)
+
+        # Read the file and determine whether to skip rows based on numerical content
+        data = pd.read_table(file_path, skipinitialspace=True)
+        has_numerical_content = data.map(lambda x: isinstance(x, (int, float))).any(axis=1)
+
+        # Exclude rows with no numerical content
+        data = data[has_numerical_content]
+
+        df_list.append(data)
+
+# Concatenate all DataFrames in the list
+Juan_df = pd.concat(df_list, ignore_index=True)
+
+# %% 
+# Convert all relevant columns to numeric, converting non-numeric values to NaN
+Juan_df['object_cued_rot'] = pd.to_numeric(Juan_df['object_cued_rot'], errors='coerce')
+Juan_df['object_test_rot_cued'] = pd.to_numeric(Juan_df['object_test_rot_cued'], errors='coerce')
+Juan_df['acc_trial_concrete_cued'] = pd.to_numeric(Juan_df['acc_trial_concrete_cued'], errors='coerce')
+Juan_df['acc_trial_concrete_uncued'] = pd.to_numeric(Juan_df['acc_trial_concrete_uncued'], errors='coerce')
+
+# %%
+# replacing 2s in accuracy data with nan
+# both this and the conversions above might not be 100% clean but work for visualisations
+Juan_df['acc_trial_concrete_cued'].replace(2, np.nan, inplace=True)
+Juan_df['acc_trial_concrete_uncued'].replace(2, np.nan, inplace=True)
+
+# %%
+# Adding Column for Button Press
+Juan_df['correct_rot_response'] = Juan_df['object_cued_rot'] - Juan_df['object_test_rot_cued']
+# Adding the new column with 0 and 1 values based on conditions
+Juan_df['button_press_clockwise'] = 0  # Initialize with 0
+# if the correct response is clockwise and the person was correct -> clockwise button press
+Juan_df.loc[(Juan_df['correct_rot_response'] > 0) & (Juan_df['acc_trial_concrete_cued'] == 1), 'button_press_clockwise'] = 1
+# if the correct response is anticlockwise and the person was not correct -> clockwise button press
+Juan_df.loc[(Juan_df['correct_rot_response'] < 0) & (Juan_df['acc_trial_concrete_cued'] == 0), 'button_press_clockwise'] = 1
+# dealing with nan
+Juan_df.loc[pd.isna(Juan_df['acc_trial_concrete_cued']), 'button_press_clockwise'] = np.nan
+
+# %%
+# Define paths for saving files
+csv_save_dir = '../data/csv_files'
+figures_save_dir = '../figures'
+
+# Button-press-data in df to visually inspect
+mbp_per_ori = Juan_df.groupby('object_cued_rot')['button_press_clockwise'].mean().reset_index()
+mbp_df = Juan_df.groupby(by=['object_cued_rot'])['button_press_clockwise'].mean().reset_index()
+mbp_per_ori_rounded_Juan = mbp_per_ori.round(4)
+mbp_per_ori_rounded_Juan.to_csv('../data/csv_files/mbp_per_ori_rounded_Juan.csv', index=False)
+
+# %%
+# Get ordered list of unique target orientations
+oris = Juan_df['object_cued_rot'].unique()
+oris.sort()
+oris = np.append(oris, oris[0])
+
+fig = plt.figure()
+
+# Change the projection to 'polar'
+ax = fig.add_subplot(111, projection='polar')
+
+# Get outer ylim for plotting radial lines
+ylim = ax.get_ylim()
+
+# Arrays to store the angles and mean button presses
+thetas = []
+mean_bps = []
+
+# Plot a radial line for each target orientation - colour matched to its kde distribution
+# Then plot a radial line for the mean of each kde distribution
+for i in range(len(oris)):
+    theta = np.radians(oris[i])
+    mean_bp = (Juan_df[Juan_df['object_cued_rot']==oris[i]]['button_press_clockwise']).mean()
+    thetas.append(theta)
+    mean_bps.append(mean_bp)
+
+    ax.plot(theta, (mean_bp), 'go')
+
+    text_positions = np.full(17, 0.55)[i]
+    label_offset = 0.0  # Adjust this value for label position
+    ax.text(theta, text_positions + label_offset, str(oris[i]), fontsize=9, ha='center', va='center', color='black')
+
+ax.plot(thetas, mean_bps, 'g-', linewidth=2)
+
+unbiased_assumption = np.full(17, 0.5)
+ax.plot(thetas, unbiased_assumption, 'k--')
+
+
+# Remove yticks
+# ax.set_yticklabels([])
+# ax.set_yticks([])
+
+# Set the direction of the zero angle and offset
+ax.set_theta_direction(-1)
+ax.set_theta_offset(1*np.pi/2)
+
+# Saving the plot
+plt.savefig(os.path.join(figures_save_dir, 'Juan_cardinal_with_set_theta_direction_minus_one_and_zero_upright.png'))
+
+plt.show()
+
+# %%
+# Get ordered list of unique target orientations
+oris = Juan_df['object_cued_rot'].unique()
+oris.sort()
+oris = np.append(oris, oris[0])
+
+fig = plt.figure()
+
+# Change the projection to 'polar'
+ax = fig.add_subplot(111, projection='polar')
+
+# Get outer ylim for plotting radial lines
+ylim = ax.get_ylim()
+
+# Arrays to store the angles and mean button presses
+thetas = []
+thetas_adjusted = []
+mean_bps = []
+
+# Plot the first point with a different color (e.g., red)
+theta_first = np.radians(oris[0])
+# Adjust theta for actual data to be plotted starting at an offset of 90° (+11.25) in anticlockwise direction
+theta_first_adjusted = -(theta_first + (np.pi / 2)) % (2 * np.pi)
+mean_bp_first = Juan_df[Juan_df['object_cued_rot'] == oris[0]]['button_press_clockwise'].mean()
+ax.plot(theta_first_adjusted, mean_bp_first, 'ro', markersize=14)
+
+# Store the first values
+thetas.append(theta_first)
+thetas_adjusted.append(theta_first_adjusted)
+mean_bps.append(mean_bp_first)
+
+# Plot the remaining points and labels
+for i in range(1, len(oris)):
+    theta = np.radians(oris[i])
+    theta_adjusted = -theta + (np.pi/2) % (2*np.pi)
+
+    # Optional to print out the adjusted theta in degees
+    # print(np.degrees(theta))
+    # theta_adjusted = (theta +(np.pi/2))
+    # print(np.degrees(theta_adjusted))
+    # theta_adjusted = theta_adjusted % (2 * np.pi)
+    # print(np.degrees(theta_adjusted))
+    # theta_adjusted = -theta_adjusted
+    # print(np.degrees(theta_adjusted))
+    # print('______')
+
+    mean_bp = Juan_df[Juan_df['object_cued_rot'] == oris[i]]['button_press_clockwise'].mean()
+    thetas.append(theta)
+    thetas_adjusted.append(theta_adjusted)
+    mean_bps.append(mean_bp)
+
+    # Plot the remaining points in blue
+    ax.plot(theta_adjusted, (mean_bp), 'go')
+
+    # Add text labels for each point
+    text_positions = np.full(17, 0.55)[i]
+    label_offset = 0.0  # Adjust this value for label position
+    ax.text(theta_adjusted, text_positions + label_offset, str(oris[i]), fontsize=9, ha='center', va='center', color='black')
+
+# Plot the line connecting all points
+ax.plot(thetas_adjusted, mean_bps, 'g-', linewidth=2)
+ax.plot(thetas_adjusted, unbiased_assumption, 'k--')
+
+# Saving the plot
+plt.savefig(os.path.join(figures_save_dir, 'Juan_cardinal_manual_theta_manipulation.png'))
+
+plt.show()
+
+
+# %%
+
+# check code from Bernhard from Frieda
+# difference between PsychoPy and Psychtoolbox (what did Juan use?)
+# "transforming the data": what does Bernhard consider correct (according to the plot he confirmed and also according to the scripts he has sent Frieda)
+# "transforming the data": what did Juan actually do?
+# options: "set_zero_direction", "set_theta_offset", -theta in plotting, -data (probably wrong anyway), 1-data
+# check where my ori-text-markers end up and if they are correct in eihter transformation
+#  

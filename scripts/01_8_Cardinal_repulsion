@@ -17,62 +17,89 @@ good_partis = df['subID'].unique()
 # %%
 # Cardinal Repulsion Polar Plot
 
-# Note: Check the following notes to make sure I did everything corret
-# Note: check that theta and direction are correct - check with Juan and check Juan's code
-# changing -theta_circ to theta_circ below doesnt only change the direction of the repulsion but completely flips the data upside down. The point where repulsion is 
-# close to zero (i.e button press of 0.5) is now next to 270° - which makes sense because it is going in the other direction starting at 0°
+# Define paths for saving files
+csv_save_dir = '../data/csv_files'
+figures_save_dir = '../figures'
 
-# spacing is what is usually called theta in the polar plots. not sure if this is correct or just a butched way that works, 
-# could also be coded using np.arange of divisions of pi, which is more common practice but harder to read
-theta = np.arange(11.25, 360, 22.5)
-theta_rad = np.radians(theta)
-
-# making it a full circle
-theta_circ = np.append(theta_rad, theta_rad[0])
-
-# seperate by con
-mbp_per_ori = df.groupby('object_cued_rot')['button_press_clockwise'].mean().reset_index()
+# Data
 mbp_df = df.groupby(by=['object_cued_rot', 'items_presented'])['button_press_clockwise'].mean().reset_index()
 
-mbp1 = mbp_df.loc[mbp_df['items_presented'] == 1, 'button_press_clockwise'].reset_index()
-mbp2 = mbp_df.loc[mbp_df['items_presented'] == 2, 'button_press_clockwise'].reset_index()
-mbp3 = mbp_df.loc[mbp_df['items_presented'] == 3, 'button_press_clockwise'].reset_index()
+mbp_all = df.groupby('object_cued_rot')['button_press_clockwise'].mean().reset_index()
+mbp_con1 = mbp_df[mbp_df['items_presented'] == 1]
+mbp_con2 = mbp_df[mbp_df['items_presented'] == 2]
+mbp_con3 = mbp_df[mbp_df['items_presented'] == 3]
 
-# Create the polar plot
-fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
+mbp_all_rounded = mbp_all.round(4)
+mbp_all_rounded.to_csv('../data/csv_files/mbp_all_rounded.csv', index=False)
 
-mbp_circ = pd.concat([mbp_per_ori, mbp_per_ori.loc[[0]]])
 
-mbp1_circ = pd.concat([mbp1, mbp1.loc[[0]]])
-mbp2_circ = pd.concat([mbp2, mbp2.loc[[0]]])
-mbp3_circ = pd.concat([mbp3, mbp3.loc[[0]]])
+# Polar Plot
+fig = plt.figure()
 
-# Plot the data for the general mbp
-ax.plot(-theta_circ, mbp_circ['button_press_clockwise'], 'ko--')
+# Change the projection to 'polar'
+ax = fig.add_subplot(111, projection='polar')
+
+# Get outer ylim for plotting radial lines
+ylim = ax.get_ylim()
+
+# to store values for plotting full circle lines at the end
+thetas = []
+con1s = []
+con2s = []
+con3s = []
+all_cons = []
+
+# Get ordered list of unique target orientations
+oris = df['object_cued_rot'].unique()
+oris.sort()   
+oris = np.append(oris, oris[0])
 
 unbiased_assumption = np.full(17, 0.5)
 
+for i in range(len(oris)):
+    theta = np.radians(oris[i])
+    
+    all_con = mbp_all[mbp_all['object_cued_rot']==oris[i]]['button_press_clockwise'].mean()
+    con1 = mbp_con1[mbp_con1['object_cued_rot']==oris[i]]['button_press_clockwise'].mean()
+    con2 = mbp_con2[mbp_con2['object_cued_rot']==oris[i]]['button_press_clockwise'].mean()
+    con3 = mbp_con3[mbp_con3['object_cued_rot']==oris[i]]['button_press_clockwise'].mean()
+    
+    thetas.append(theta)
+    all_cons.append(all_con)
+    con1s.append(con1)
+    con2s.append(con2)
+    con3s.append(con3)
 
-# Plot the data for the three conditions individually
-# at the moment using -spacing_rad to make the data go in the correct (anticlockwise direction)
-ax.plot(-theta_circ, unbiased_assumption, color='tab:pink', linestyle='dashed')
-ax.plot(-theta_circ, mbp1_circ['button_press_clockwise'], 'bo-')
-ax.plot(-theta_circ, mbp2_circ['button_press_clockwise'], 'go-')
-ax.plot(-theta_circ, mbp3_circ['button_press_clockwise'], 'ro-')
+    ax.plot(theta, all_con, 'k--')
+    ax.plot(theta, con1, 'bo-')
+    ax.plot(theta, con2, 'go-')
+    ax.plot(theta, con3, 'ro-')
+    
+    ax.set_theta_direction(-1)
+    offset=np.pi/2
+    ax.set_theta_offset(offset)
 
+# Plotting lines to connect dots
+ax.plot(thetas, all_cons, 'k--')
+ax.plot(thetas, con1s, 'b-')
+ax.plot(thetas, con2s, 'g-')
+ax.plot(thetas, con3s, 'r-')
 
-# Set plot attributes (-> labels and shit)
-plt.legend
-# Show the plot
+ax.plot(thetas, unbiased_assumption, color='tab:pink', linestyle='dashed')
+
+plt.legend()
+
+# Optional
+# # Remove yticks
+# ax.set_yticks()
+# ax.set_yticklabels()
+
 plt.show()
 
-# from ines 
-# for color but within a loop running over for i in range(len(oris)), so giving a new colour per ori
-# color=sns.hls_palette(17)[i]
-
 # %% 
+# Subtracting - manually without the function
 # Calculating clockwise button press proportion for the orientations of interest (closest to the cardinal axes)
-# Subtracting 
+
 # Grouping the data by the necessary keys and producing a mean for button press clockwise for every condition and orientation and subject ID
 
 df_grouped = df.groupby(by=['subID', 'items_presented', 'object_cued_rot'])['button_press_clockwise'].mean().reset_index()
@@ -204,6 +231,7 @@ plt.title('Stripplot of Cardinal Repulsion Indices for Different Conditions')
 plt.show()
 
 #%%
+# Polar bar plot of button press means
 
 # Get ordered list of unique target orientations
 rots = df['object_cued_rot'].unique()
@@ -246,8 +274,253 @@ ax.set_yticklabels(['0.5'])
 # "zero angle is the reference point from which angles are measured"
 # ax.set_theta_offset(np.pi/2)
 #ax.set_theta_direction(-1)
-plt.show()
+plt.show() 
+
 # %%
 
-# could also try and calculate a difference score for all orientations and then plot this on a pretty polar plot
-# this would be closer to the data I am using for statistics and also 
+# Example function to calculate differences based on grouped DataFrame
+def calculate_differences(df, chosen_column, condition=None):
+    # Step 1: Group DataFrames according to the condition
+    if condition == 1:
+        df_grouped = df[df['items_presented'] == 1].groupby(['subID', 'object_cued_rot', 'Cardinal_Category']).agg({chosen_column: 'mean'}).reset_index()
+    elif condition == 2:
+        df_grouped = df[df['items_presented'] == 2].groupby(['subID', 'object_cued_rot', 'Cardinal_Category']).agg({chosen_column: 'mean'}).reset_index()
+    elif condition == 3:
+        df_grouped = df[df['items_presented'] == 3].groupby(['subID', 'object_cued_rot', 'Cardinal_Category']).agg({chosen_column: 'mean'}).reset_index()
+    else:
+        df_grouped = df.groupby(['subID', 'object_cued_rot', 'Cardinal_Category']).agg({chosen_column: 'mean'}).reset_index()
+
+    # Step 2: Initialize a list to store results
+    results = []
+
+    # Step 3: Process each subID separately
+    for sub_id, group in df_grouped.groupby('subID'):
+        group = group.sort_values('object_cued_rot').reset_index(drop=True)
+
+        # Calculate median subtracted orientations
+        group['median_subtracted_oris'] = group['object_cued_rot'].rolling(window=2).median().fillna(0)
+
+        # Calculate differences in the chosen column
+        group[f'{chosen_column}_difference'] = group[chosen_column].diff()
+
+        circular_diff = group[chosen_column].iloc[0] - group[chosen_column].iloc[-1]
+        group.loc[group.index[0], f'{chosen_column}_difference'] = circular_diff
+
+        results.append(group)
+
+    # Concatenate all results into a single DataFrame
+    df_with_diffs = pd.concat(results, ignore_index=True)
+
+    return df_with_diffs
+
+# %%
+# mostly trying to figure out function?
+
+# trying to use the function i wrote to get to the same cardinal indexes as above, function differences might be irrelevant for oblique afterall because in the oblique I need differences between all cardinal and
+# all oblique not between neighbouring cardinal positions
+
+function_diffs_con1 = calculate_differences(df, chosen_column='button_press_clockwise', condition=1)
+function_diffs_all_con = calculate_differences(df, chosen_column='button_press_clockwise', condition=False)
+# display(function_diffs_con1)
+
+
+# trying to get the same index for one person as done above
+
+# trying to get to the same values as in the version above 
+# above I have only one value per participant per condition 
+# i calculated the mean per category (Cardinal vs Oblique) and subtracted them from each other to have the difference
+# since I now have a difference between every orientation and its neighbouring orientation, I do not have the ability to seperate
+# by Cardinal Category anymore right? since the resulting values are basically set in between the original orientations
+
+
+# this still gives me the same results as above so maybe still easier to do it like this
+# difference score might still be useless if I want one single value per person
+function_diffs_con1.groupby(['subID', 'Cardinal_Category'])['button_press_clockwise'].mean()
+#display(function_diffs_con1)
+
+function_diffs_con1_on_sub = function_diffs_con1[function_diffs_con1['subID']=='1L974Q']
+
+function_diffs_con1_on_sub_card_oris = function_diffs_con1_on_sub[function_diffs_con1_on_sub['median_subtracted_oris'].isin([0.0, 90.0, 180.0, 270])]
+#display(function_diffs_con1_on_sub_card_oris)
+mean = function_diffs_con1_on_sub_card_oris['button_press_clockwise_difference'].mean()
+#display(mean)
+# get only the cardinal positions and then the mean?
+
+# %%
+
+df_with_diffs_all = calculate_differences(df, chosen_column='button_press_clockwise', condition=None)
+df_with_diffs_all['absolute_differences'] = df_with_diffs_all['button_press_clockwise_difference'].abs()
+
+
+diffs_con1 = calculate_differences(df, chosen_column='button_press_clockwise', condition=1)
+diffs_con1['absolute_differences'] = diffs_con1['button_press_clockwise_difference'].abs()
+diffs_con2 = calculate_differences(df, chosen_column='button_press_clockwise', condition=2)
+diffs_con2['absolute_differences'] = diffs_con2['button_press_clockwise_difference'].abs()
+diffs_con3 = calculate_differences(df, chosen_column='button_press_clockwise', condition=3)
+diffs_con3['absolute_differences'] = diffs_con3['button_press_clockwise_difference'].abs()
+
+#%%
+# # plotting difference scores: 
+
+# Get ordered list of unique target orientations
+rots = df_with_diffs_all['median_subtracted_oris'].unique()
+rots.sort()   
+
+fig = plt.figure()
+
+# Change the projection to 'polar'
+ax = fig.add_subplot(111, projection='polar')
+
+# Get outer ylim for plotting radial lines
+ylim = ax.get_ylim()
+
+# Plot a radial line for each target orientation - colour matched to its kde distribution
+# Then plot a radial line for the mean of each kde distribution
+for r in range(len(rots)):
+    theta = np.radians(rots[r])
+    mean_diff_all = df_with_diffs_all[df_with_diffs_all['median_subtracted_oris']==rots[r]]['absolute_differences'].mean()
+    
+    mean_diff_con1 = diffs_con1[diffs_con1['median_subtracted_oris']==rots[r]]['absolute_differences'].mean()
+    mean_diff_con2 = diffs_con2[diffs_con2['median_subtracted_oris']==rots[r]]['absolute_differences'].mean()
+    mean_diff_con3 = diffs_con3[diffs_con3['median_subtracted_oris']==rots[r]]['absolute_differences'].mean()
+
+    # why is the mean for all conditions combined, coming from df_with_diffs_all (calculated with function using condition=None) different from the mean of the three other means???
+    mean_diff_all_con_manual = np.mean([mean_diff_con1, mean_diff_con2, mean_diff_con3])
+    print(rots[r], 'mean manual:', mean_diff_all_con_manual, 'mean_diff_all:', mean_diff_all)
+    #print(rots[r],mean_diff_all, mean_diff_con1, mean_diff_con2, mean_diff_con3 )
+    
+    
+    
+    color = sns.hls_palette(16)[r]
+    # mean as black border around the individual conditions
+    ax.bar([theta, theta], [0, mean_diff_all], edgecolor='black', facecolor='none', linewidth=1.5, width = 0.3)
+
+    # mean as another bar of the width of all individual bars together (hard to see anything)
+    # ax.bar([theta, theta], [0, mean_diff_all], color=color, alpha = 0.5, width = 0.3)
+
+    # mean all con as vertical line
+    # theta_range = np.linspace(theta - 0.15, theta + 0.15, 100)
+    # ax.plot(theta_range, [mean_diff_all] * len(theta_range), color='green', linewidth=2)
+
+    ax.bar([theta, (theta - 0.1)], [0, mean_diff_con1], color=color, alpha = 0.8, width = 0.1)
+    ax.bar([theta, theta], [0, mean_diff_con2], color=color, alpha = 0.5, width = 0.1)
+    ax.bar([theta, (theta + 0.1)], [0, mean_diff_con3], color=color, alpha = 0.2, width = 0.1)
+
+
+
+# # Remove yticks
+# ax.set_yticks()
+# ax.set_yticklabels()
+
+# Note: ax.set_theta_offset(np.pi / 2) shifts the zero angle to the top of the plot (by 90°) (i.e., the positive y-axis).
+# Set the direction of the zero angle - means zero is at the top for this plot!!
+# "zero angle is the reference point from which angles are measured"
+# ax.set_theta_offset(np.pi/2)
+#ax.set_theta_direction(-1)
+plt.show()
+
+# %%
+# trying to figure out why the mean is different for all compared to the mean of the individual conditions
+# TOTAL MEAN
+grouped_all = df_with_diffs_all.groupby('subID')['button_press_clockwise'].mean()
+grouped_con1 = diffs_con1.groupby('subID')['button_press_clockwise'].mean()
+grouped_con2 = diffs_con2.groupby('subID')['button_press_clockwise'].mean()
+grouped_con3 = diffs_con3.groupby('subID')['button_press_clockwise'].mean()
+
+# Concatenate the series along the columns (axis=1)
+comparing_means = pd.concat([grouped_all, grouped_con1, grouped_con2, grouped_con3], axis=1)
+
+# Rename the columns as needed
+comparing_means.columns = ['all', 'con1', 'con2', 'con3']
+
+comparing_means['manual_mean'] = comparing_means[['con1', 'con2', 'con3']].mean(axis=1)
+
+# -> means are the same if calculated manually from the total means
+# maybe the problem is therefore in the way I am using the orientations where I am interested in the mean??
+
+
+
+# %%
+
+# comparing the "DIFFERENCES"
+
+grouped_all = df_with_diffs_all.groupby('subID')['absolute_differences'].mean()
+grouped_con1 = diffs_con1.groupby('subID')['absolute_differences'].mean()
+grouped_con2 = diffs_con2.groupby('subID')['absolute_differences'].mean()
+grouped_con3 = diffs_con3.groupby('subID')['absolute_differences'].mean()
+
+# Concatenate the series along the columns (axis=1)
+comparing_means = pd.concat([grouped_all, grouped_con1, grouped_con2, grouped_con3], axis=1)
+
+# Rename the columns as needed
+comparing_means.columns = ['all', 'con1', 'con2', 'con3']
+
+comparing_means['manual_mean'] = comparing_means[['con1', 'con2', 'con3']].mean(axis=1)
+
+#display(comparing_means.round(4))
+
+# very different results between df_with_diffs_all.mean and manual mean when using absolute differences
+# while absolute differences are probably not very insightful when using all orientations, still - why is it different for the two?
+
+
+# %%
+
+# only using the oris of interest 
+ooi_all = df_with_diffs_all[df_with_diffs_all['median_subtracted_oris'].isin([0.0, 90.0, 180.0, 270])]
+ooi_con1 = diffs_con1[diffs_con1['median_subtracted_oris'].isin([0.0, 90.0, 180.0, 270])]
+ooi_con2 = diffs_con2[diffs_con2['median_subtracted_oris'].isin([0.0, 90.0, 180.0, 270])]
+ooi_con3 = diffs_con3[diffs_con3['median_subtracted_oris'].isin([0.0, 90.0, 180.0, 270])]
+
+
+grouped_all = ooi_all.groupby('subID')['button_press_clockwise_difference'].mean()
+grouped_con1 = ooi_con1.groupby('subID')['button_press_clockwise_difference'].mean()
+grouped_con2 = ooi_con2.groupby('subID')['button_press_clockwise_difference'].mean()
+grouped_con3 = ooi_con3.groupby('subID')['button_press_clockwise_difference'].mean()
+
+# Concatenate the series along the columns (axis=1)
+comparing_means = pd.concat([grouped_all, grouped_con1, grouped_con2, grouped_con3], axis=1)
+
+# Rename the columns as needed
+comparing_means.columns = ['all', 'con1', 'con2', 'con3']
+
+comparing_means['manual_mean'] = comparing_means[['con1', 'con2', 'con3']].mean(axis=1)
+
+#display(comparing_means.round(4))
+
+# --> using orientations of interest and the mean of all differences for those, the values are close to the same, 
+# the slight differences come from the fact that the all con mean takes 4 values into account (for the four cardinal position differences)
+# the manual mean takes three already mean values (con1, con2, con3)
+
+# %%
+
+# only using the oris of interest 
+ooi_all = df_with_diffs_all[df_with_diffs_all['median_subtracted_oris'].isin([0.0, 90.0, 180.0, 270])]
+ooi_con1 = diffs_con1[diffs_con1['median_subtracted_oris'].isin([0.0, 90.0, 180.0, 270])]
+ooi_con2 = diffs_con2[diffs_con2['median_subtracted_oris'].isin([0.0, 90.0, 180.0, 270])]
+ooi_con3 = diffs_con3[diffs_con3['median_subtracted_oris'].isin([0.0, 90.0, 180.0, 270])]
+
+
+grouped_all = ooi_all.groupby('subID')['absolute_differences'].mean()
+grouped_con1 = ooi_con1.groupby('subID')['absolute_differences'].mean()
+grouped_con2 = ooi_con2.groupby('subID')['absolute_differences'].mean()
+grouped_con3 = ooi_con3.groupby('subID')['absolute_differences'].mean()
+
+# Concatenate the series along the columns (axis=1)
+comparing_means = pd.concat([grouped_all, grouped_con1, grouped_con2, grouped_con3], axis=1)
+
+# Rename the columns as needed
+comparing_means.columns = ['all', 'con1', 'con2', 'con3']
+
+comparing_means['manual_mean'] = comparing_means[['con1', 'con2', 'con3']].mean(axis=1)
+
+#display(comparing_means.round(4))
+
+# -> still absolute differences seem to make the difference - why
+# I am filtering the data in the function so that I have 688 rows (16 oris * 43 participants)
+# I am then directly adding the column for absolute_differences (removing the sign) - this is done for all orientations, not just the ones 
+#   I am interested in
+# I am doing the same for the individual conditions, also adding the absolute differences for all oris and also 688 rows
+
+# I am then taking the orientations of interest and using either the signed or absolute difference for those and calculating the mean 
+# an absolute difference mean would now be larger than from the signed versions because 
+# %%
