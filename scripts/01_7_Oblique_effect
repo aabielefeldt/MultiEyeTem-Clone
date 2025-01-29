@@ -65,8 +65,10 @@ else:
 
 # Stripplot + Pointplot on mean accuracy for each participant
 plt.figure(figsize=(10, 6))
-sns.stripplot(x='Cardinal_Category', y='acc_trial_concrete_cued', data=final_grouped_data_obli)
-sns.pointplot(x='Cardinal_Category', y='acc_trial_concrete_cued', data=final_grouped_data_obli, linestyles='none')
+color = sns.color_palette("hls", 8)
+sns.stripplot(x='Cardinal_Category', y='acc_trial_concrete_cued', data=final_grouped_data_obli, color=color[5])
+sns.boxplot(x='Cardinal_Category', y='acc_trial_concrete_cued', data=final_grouped_data_obli, palette=color)
+# sns.pointplot(x='Cardinal_Category', y='acc_trial_concrete_cued', data=final_grouped_data_obli, linestyles='none', color=color[2])
 plt.title('Boxplot for Each Participant')
 plt.xlabel('Cardinal vs Oblique Orientation Category')
 plt.ylabel('Mean Accuracy')
@@ -91,7 +93,7 @@ for i in good_partis:
     # data = df[df['subID'] == i].groupby(['Cardinal_Category'])['acc_trial_concrete_cued'].mean()
     participant_data_obli_con = df.loc[df['subID'] == i, ['Cardinal_Category', 'acc_trial_concrete_cued', 'object_cued_rot', 'items_presented']]
     #participant_data1 = df.loc[(df['subID'] == i) & (df['items_presented'] == 1), 'acc_trial_concrete_cued']
-        # condition 1
+        # condition 1x
     #bp_con1 = participant_data.loc[participant_data['items_presented'] == 1].groupby('object_cued_rot')['button_press_clockwise'].agg(['mean', 'std']).reset_index()
     acc_obli_con1 = participant_data_obli_con.loc[participant_data_obli_con['items_presented'] == 1].groupby('Cardinal_Category')['acc_trial_concrete_cued'].agg(['mean', 'std']).reset_index()
     acc_obli_con1['subID'] = i
@@ -343,10 +345,6 @@ def calculate_differences(df, chosen_column, condition=None):
     df_with_diffs = pd.concat(results, ignore_index=True)
 
     return df_with_diffs
-
-
-
-
 
 
 #%%

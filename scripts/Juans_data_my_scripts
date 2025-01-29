@@ -134,9 +134,9 @@ mean_bps = []
 # Plot the first point with a different color (e.g., red)
 theta_first = np.radians(oris[0])
 # Adjust theta for actual data to be plotted starting at an offset of 90° (+11.25) in anticlockwise direction
-theta_first_adjusted = -(theta_first + (np.pi / 2)) % (2 * np.pi)
+theta_first_adjusted = -theta_first + ((np.pi / 2)*3) % (2 * np.pi)
 mean_bp_first = Juan_df[Juan_df['object_cued_rot'] == oris[0]]['button_press_clockwise'].mean()
-ax.plot(theta_first_adjusted, mean_bp_first, 'ro', markersize=14)
+ax.plot(theta_first_adjusted, (mean_bp_first), 'ro', markersize=14)
 
 # Store the first values
 thetas.append(theta_first)
@@ -146,7 +146,7 @@ mean_bps.append(mean_bp_first)
 # Plot the remaining points and labels
 for i in range(1, len(oris)):
     theta = np.radians(oris[i])
-    theta_adjusted = -theta + (np.pi/2) % (2*np.pi)
+    theta_adjusted = -theta + ((np.pi/2)*3) % (2*np.pi)
 
     # Optional to print out the adjusted theta in degees
     # print(np.degrees(theta))
@@ -161,7 +161,7 @@ for i in range(1, len(oris)):
     mean_bp = Juan_df[Juan_df['object_cued_rot'] == oris[i]]['button_press_clockwise'].mean()
     thetas.append(theta)
     thetas_adjusted.append(theta_adjusted)
-    mean_bps.append(mean_bp)
+    mean_bps.append((mean_bp))
 
     # Plot the remaining points in blue
     ax.plot(theta_adjusted, (mean_bp), 'go')
@@ -190,3 +190,5 @@ plt.show()
 # options: "set_zero_direction", "set_theta_offset", -theta in plotting, -data (probably wrong anyway), 1-data
 # check where my ori-text-markers end up and if they are correct in eihter transformation
 #  
+
+# %%
