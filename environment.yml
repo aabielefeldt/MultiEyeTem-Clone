@@ -1,4 +1,4 @@
-name: MultiEyeTemAnalysis
+name: multieyetemenv
 channels:
   - conda-forge
 dependencies:
@@ -12,3 +12,5 @@ dependencies:
   - seaborn
   - mne
   - pingouin
+  - statsmodels
+  - scipy

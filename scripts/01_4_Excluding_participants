@@ -26,4 +26,8 @@ for i in partis:
 df = df[~df['subID'].isin(subjects_to_exclude)]
 
 good_partis = df['subID'].unique()
+
+# need to save it like that?
 # %%
+df.to_csv('../data/csv_files/df.csv', index=False)
+

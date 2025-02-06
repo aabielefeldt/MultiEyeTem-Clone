@@ -10,9 +10,9 @@ good_partis = df['subID'].unique()
 
 # %%
 # if qt is used as backend the kernel crashes
-mne.viz.set_browser_backend('matplotlib')
+# mne.viz.set_browser_backend('matplotlib')
 
-# %%
+# %% n
 # appending all epochs into one list while:
 # combining both pupil channels
 # applying baseline

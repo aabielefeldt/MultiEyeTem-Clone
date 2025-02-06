@@ -6,11 +6,12 @@ This repository contains the analysis core for the MultiEyeTem project.
 
 To install a Python environment suitable to running this analysis code, please:
 
+ --- now miniforge?? 
 1. Download Miniconda for your system: https://docs.conda.io/en/latest/miniconda.html (this will provide you with the conda command)
 2. Use conda to install mamba: conda install mamba -n base -c conda-forge (for more information, see: https://github.com/mamba-org/mamba)
-3. Use the environment.yml file in this repository to create the MultiEyeTemAnalysis environment: mamba env create -f environment.yml
+3. Use the environment.yml file in this repository to create the "multieyetemenv" environment: mamba env create -f environment.yml
 
-You can now run conda activate MultiEyeTemAnalysis and should have all required packages installed for running the analyses.
+You can now run conda activate multieyetemenv and should have all required packages installed for running the analyses.
 
 ## Obtaining the Data
 

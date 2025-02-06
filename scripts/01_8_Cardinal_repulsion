@@ -9,7 +9,8 @@ from statsmodels.stats.multicomp import pairwise_tukeyhsd #(not in envirnoment y
 import seaborn as sns
 import pingouin as pg
 
-# %% Load Metadata
+# %% 
+# Load Metadata
 
 df = pd.read_csv('../data/csv_files/df.csv')
 good_partis = df['subID'].unique()
@@ -50,7 +51,8 @@ con2s = []
 con3s = []
 all_cons = []
 colors = sns.hls_palette(17)
-colors = sns.color_palette("mako", as_cmap=True)
+# colors = sns.color_palette("mako", as_cmap=True)
+
 # Get ordered list of unique target orientations
 oris = df['object_cued_rot'].unique()
 oris.sort()   
