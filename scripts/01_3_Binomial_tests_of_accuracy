@@ -31,6 +31,7 @@ results = []
 # Loop over each participant
 for i in partis:
     # Get the data for the current participant and drop NaN values
+    # Note: Why?
     participant_data = df.loc[df['subID'] == i, 'acc_trial_concrete_cued'].dropna()
 
     # Calculate the mean accuracy for the current participant

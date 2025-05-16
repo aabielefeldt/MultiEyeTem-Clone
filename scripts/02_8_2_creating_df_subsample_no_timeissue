@@ -84,3 +84,14 @@ evoked_df_no_time_partis = evoked_df_no_time_partis.reset_index()
 evoked_df_no_time_partis.to_csv('../data/csv_files/evoked_df_no_time_partis.csv', index=False)
 
 # %%
+# %%
+# Shifting
+
+# shifting the conditions so that the epochs that are epoched on pos1 are time-locked to the test onset
+evoked_df_no_time_partis_shifted = evoked_df_no_time_partis.copy()
+evoked_df_no_time_partis_shifted.loc[evoked_df_no_time_partis_shifted['Load']==1, 'time'] +=2
+evoked_df_no_time_partis_shifted.loc[evoked_df_no_time_partis_shifted['Load']==2, 'time'] +=1
+evoked_df_no_time_partis_shifted.loc[evoked_df_no_time_partis_shifted['Load']==3, 'time'] +=0
+
+evoked_df_no_time_partis_shifted.to_csv('../data/csv_files/evoked_df_no_time_partis_shifted.csv', index=False)
+# %%

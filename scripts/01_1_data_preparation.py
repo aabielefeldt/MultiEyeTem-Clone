@@ -103,8 +103,30 @@ df['Orientation_Bin'] = df['object_cued_rot'].map(orientation_bins)
 orientation_subset_cardinal = [348.75, 11.25, 78.75, 101.25, 168.75, 191.25, 258.75, 281.25]
 
 # Create a new column to indicate the categories
-df['Cardinal_Category'] = df['object_cued_rot'].apply(lambda x: 'Cardinal' if x in orientation_subset_cardinal else 'Oblique')
+df['cardinal_category'] = df['object_cued_rot'].apply(lambda x: 'cardinal' if x in orientation_subset_cardinal else 'oblique')
 
+
+# %%
+# Creating a column for cardinal vs oblique orientation category per shown item (encoding)
+
+# orientations closest to the cardinal axes
+orientation_subset_cardinal = [348.75, 11.25, 78.75, 101.25, 168.75, 191.25, 258.75, 281.25]
+
+# Create a new column to indicate the categories
+df['obj1_ori_cat'] = df['object_1_rot'].apply(lambda x: np.nan if pd.isna(x) else 'cardinal' if x in orientation_subset_cardinal else 'oblique')
+df['obj2_ori_cat'] = df['object_2_rot'].apply(lambda x: np.nan if pd.isna(x) else 'cardinal' if x in orientation_subset_cardinal else 'oblique')
+df['obj3_ori_cat'] = df['object_3_rot'].apply(lambda x: np.nan if pd.isna(x) else 'cardinal' if x in orientation_subset_cardinal else 'oblique')
+
+# %% Add column for defining trial based on how many stimuli were either cardinal or oblique
+# n for nans, c and o for cardinal and oblique (eg. in load 2: 'con')
+
+df['trial_ori_cat_combo'] = df.apply(
+    lambda row: ''.join(
+        val[0] if isinstance(val, str) else 'n'
+        for val in [row['obj1_ori_cat'], row['obj2_ori_cat'], row['obj3_ori_cat']]
+    ),
+    axis=1
+)
 
 # %% 
 # Creating folder structure and saving the dataframe

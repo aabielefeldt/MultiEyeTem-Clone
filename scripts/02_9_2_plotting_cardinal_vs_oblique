@@ -1,0 +1,104 @@
+# %%
+# Importsconda
+import mne
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# %% 
+# read evokes seperated by oblique vs cardinal
+evoked_df_only_Oblique_shifted = pd.read_csv('../data/csv_files/evoked_df_only_Oblique_shifted.csv')
+display(evoked_df_only_Oblique_shifted)
+
+# or only for nomaskpartis
+
+evoked_df_only_Oblique_shifted_nomaskpartis = pd.read_csv('../data/csv_files/evoked_df_only_Oblique_shifted-nomaskpartis.csv')
+# %% 
+
+with sns.plotting_context(context='paper', font_scale=1.5): 
+    
+    fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(12, 10), sharex=True, sharey=True)
+    # fig, ax = plt.subplots(figsize=(10,8))
+    categories = ['Cardinal', 'Oblique']
+    mask_group = ['mask', 'no_mask']
+    load_conditions = [1, 2, 3]
+
+    for i, load in enumerate(load_conditions):
+        for j, mask in enumerate(mask_group):
+            ax = axes[i, j]
+
+            subset = evoked_df_only_Oblique_shifted[(evoked_df_only_Oblique_shifted['Load']== load) & (evoked_df_only_Oblique_shifted['mask'] == mask)]
+
+            sns.lineplot(data=subset, x='time', y='pupils', palette='tab10', hue='Cardinal_Category', errorbar='se', ax=ax, legend='full')
+            # sns.lineplot(data=evoked_df_only_Oblique_shifted[evoked_df_only_Oblique_shifted['Cardinal_Category']==category and evoked_df_only_Oblique_shifted['Load']==3], x='time', y='pupils', palette='crest', hue='Load', errorbar='se', ax=ax, legend='full')
+            # evoked_df_only_Oblique_shifted.loc[evoked_df_only_Oblique_shifted['Load']==3
+            # sns.lineplot(data=evoked_df_only_Oblique_shifted[evoked_df_only_Oblique_shifted['Cardinal_Category']=='Oblique'], x='time', y='pupils', hue='Load', errorbar='se', ax=ax)
+            sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
+
+            if i == 0:
+                ax.set_title({mask})
+            if j == 0:
+                ax.set_ylabel(f"Load {load}")
+            else:
+                ax.set_ylabel("")
+        
+            
+            ax.axvline(0, color='black', alpha=0.33)
+            ax.axvline(1, color='black', alpha=0.66)
+            ax.axvline(2, color='black')  
+            ax.axvline(3, color='darkblue')  
+            ax.axvline(6.5, color='blue')  
+
+            # Define y-coordinate for labels (as a fraction of the plot height)
+            label_y = 1.05
+
+            # Add labels above the vertical lines
+            ax.text(0, ax.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+            ax.text(1, ax.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+            ax.text(2, ax.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+            ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+            ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+
+
+            # Highlighting the baseline window
+            baseline = (evoked_df_only_Oblique_shifted.at[0, 'baseline_start'], evoked_df_only_Oblique_shifted.at[0, 'baseline_end'])
+            baseline_str = '_'.join(map(str, baseline))
+            # Include window that was used for the baseline
+            # maybe remove here because misleading with shifted data
+            # ax.axvspan(baseline[0], baseline[1], ymin=0, ymax=1, color='blue', alpha=0.4)
+
+            # Set x-axis to show all whole numbers within range
+            x_ticks = np.arange(int(evoked_df_only_Oblique_shifted['time'].min()), int(evoked_df_only_Oblique_shifted['time'].max()) + 1, 1)
+            ax.set_xticks(x_ticks)
+            ax.set_xticklabels(x_ticks)
+
+            # Increase font size of x and y tick labels
+            ax.tick_params(axis='x', labelsize=14)
+            ax.tick_params(axis='y', labelsize=14)
+
+        
+
+        # Adding a legend
+        ax.legend(loc='best', fontsize=12)
+        # new_labels = ['Cardinal - Load 1', 'Cardinal - Load 2', 'Cardinal - Load 3', 'Oblique - Load 1', 'Oblique - Load 2', 'Oblique - Load 3']
+        # for t, l in zip(ax.get_legend().texts, new_labels):
+        #     t.set_text(l)
+        # ax.set_title(f'{mask}', y=1.2, fontsize=16)
+
+    # Adding a title
+    plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize = 20)
+    #plt.title(f'Applied baseline {baseline}', y=1.25, color='blue', alpha=0.4)
+    
+    
+
+    
+
+    # Save the figure
+    name=f"pupil_fig_pos1_interpol_shifted_bl{baseline_str}_seperated_by_cardinal_category.png"
+    figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures'
+    figure_filepath = os.path.join(figures_folder, name)
+
+    plt.savefig(figure_filepath, bbox_inches = 'tight')
+
+# %%

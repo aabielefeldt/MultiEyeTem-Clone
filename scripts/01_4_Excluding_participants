@@ -15,6 +15,7 @@ partis = df['subID'].unique()
 # potentially excluding UCXTVD and D62XJG because they had the square mask
 results = pd.read_csv('../data/csv_files/binom_all_conditions_results.csv')
 subjects_to_exclude = []
+# currently: ['OUGX64', '30K8XE']
 for i in partis:
     # Get the data for the current participant and drop NaN values
     # p_value = results.loc[results['subID'] == i, 'p-value'] > 0.05:

@@ -45,37 +45,66 @@ for i in good_partis:
     # seperating per load condition
     con1_epochs_pos1 = pupil_epochs_combined_bl["items_presented == 1"]
     con1_epochs_correct = con1_epochs_pos1['acc_trial_concrete_cued==1']
+    con1_epochs_incorrect = con1_epochs_pos1['acc_trial_concrete_cued==0']
     con2_epochs_pos1 = pupil_epochs_combined_bl["items_presented == 2"]
     con2_epochs_correct = con2_epochs_pos1['acc_trial_concrete_cued==1']
+    con2_epochs_incorrect = con2_epochs_pos1['acc_trial_concrete_cued==0']
     con3_epochs_pos1 = pupil_epochs_combined_bl["items_presented == 3"]
     con3_epochs_correct = con3_epochs_pos1['acc_trial_concrete_cued==1']
-
+    con3_epochs_incorrect = con3_epochs_pos1['acc_trial_concrete_cued==0']
 
     # shortening the epochs based on condition (crop defaults to inclduing tmax)
     con1_epochs_correct.crop(-0.1, 7)
     con2_epochs_correct.crop(-0.1, 8)
     con3_epochs_correct.crop(-0.1, 9)
+    con1_epochs_incorrect.crop(-0.1, 7)
+    con2_epochs_incorrect.crop(-0.1, 8)
+    con3_epochs_incorrect.crop(-0.1, 9)
 
     # averaging per load condition
-    con1_ave_pos1 = con1_epochs_correct.average()
-    con2_ave_pos1 = con2_epochs_correct.average()
-    con3_ave_pos1 = con3_epochs_correct.average()
+    con1_ave_correct = con1_epochs_correct.average()
+    con2_ave_correct = con2_epochs_correct.average()
+    con3_ave_correct = con3_epochs_correct.average()
+    con1_ave_incorrect = con1_epochs_incorrect.average()
+    con2_ave_incorrect = con2_epochs_incorrect.average()
+    con3_ave_incorrect = con3_epochs_incorrect.average()
 
     # adding individual averaged data to dataframe including load and subID
-    con1_ave_df_pos1 = con1_ave_pos1.to_data_frame()
-    con1_ave_df_pos1['Load'] = 1
-    con1_ave_df_pos1['subID'] = i
-    con2_ave_df_pos1 = con2_ave_pos1.to_data_frame()
-    con2_ave_df_pos1['Load'] = 2
-    con2_ave_df_pos1['subID'] = i
-    con3_ave_df_pos1 = con3_ave_pos1.to_data_frame()
-    con3_ave_df_pos1['Load'] = 3
-    con3_ave_df_pos1['subID'] = i
+    # Correct trials
+    con1_ave_df_correct = con1_ave_correct.to_data_frame()
+    con1_ave_df_correct['Load'] = 1
+    con1_ave_df_correct['subID'] = i
+    con1_ave_df_correct['acc'] = 1
+    con2_ave_df_correct = con2_ave_correct.to_data_frame()
+    con2_ave_df_correct['Load'] = 2
+    con2_ave_df_correct['subID'] = i
+    con2_ave_df_correct['acc'] = 1
+    con3_ave_df_correct = con3_ave_correct.to_data_frame()
+    con3_ave_df_correct['Load'] = 3
+    con3_ave_df_correct['subID'] = i
+    con3_ave_df_correct['acc'] = 1
+
+    # Incorrect trials
+    con1_ave_df_incorrect = con1_ave_incorrect.to_data_frame()
+    con1_ave_df_incorrect['Load'] = 1
+    con1_ave_df_incorrect['subID'] = i
+    con1_ave_df_incorrect['acc'] = 0
+    con2_ave_df_incorrect = con2_ave_incorrect.to_data_frame()
+    con2_ave_df_incorrect['Load'] = 2
+    con2_ave_df_incorrect['subID'] = i
+    con2_ave_df_incorrect['acc'] = 0
+    con3_ave_df_incorrect = con3_ave_incorrect.to_data_frame()
+    con3_ave_df_incorrect['Load'] = 3
+    con3_ave_df_incorrect['subID'] = i
+    con3_ave_df_incorrect['acc'] = 0
 
     # concatenating to evoked_df_only_correct
-    evoked_df_only_correct = pd.concat([evoked_df_only_correct, con1_ave_df_pos1])
-    evoked_df_only_correct = pd.concat([evoked_df_only_correct, con2_ave_df_pos1])
-    evoked_df_only_correct = pd.concat([evoked_df_only_correct, con3_ave_df_pos1])
+    evoked_df_only_correct = pd.concat([evoked_df_only_correct, con1_ave_df_correct])
+    evoked_df_only_correct = pd.concat([evoked_df_only_correct, con2_ave_df_correct])
+    evoked_df_only_correct = pd.concat([evoked_df_only_correct, con3_ave_df_correct])
+    evoked_df_only_correct = pd.concat([evoked_df_only_correct, con1_ave_df_incorrect])
+    evoked_df_only_correct = pd.concat([evoked_df_only_correct, con2_ave_df_incorrect])
+    evoked_df_only_correct = pd.concat([evoked_df_only_correct, con3_ave_df_incorrect])
     evoked_df_only_correct['baseline_start'] = baseline[0]
     evoked_df_only_correct['baseline_end'] = baseline[1]
 
@@ -83,4 +112,14 @@ evoked_df_only_correct = evoked_df_only_correct.reset_index()
 display(evoked_df_only_correct)
 evoked_df_only_correct.to_csv('../data/csv_files/evoked_df_only_correct.csv', index=False)
 
+# %%
+# Shifting
+
+# shifting the conditions so that the epochs that are epoched on pos1 are time-locked to the test onset
+evoked_df_only_correct_shifted = evoked_df_only_correct.copy()
+evoked_df_only_correct_shifted.loc[evoked_df_only_correct_shifted['Load']==1, 'time'] +=2
+evoked_df_only_correct_shifted.loc[evoked_df_only_correct_shifted['Load']==2, 'time'] +=1
+evoked_df_only_correct_shifted.loc[evoked_df_only_correct_shifted['Load']==3, 'time'] +=0
+
+evoked_df_only_correct_shifted.to_csv('../data/csv_files/evoked_df_only_correct_shifted.csv', index=False)
 # %%

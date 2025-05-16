@@ -287,13 +287,13 @@ plt.show()
 def calculate_differences(df, chosen_column, condition=None):
     # Step 1: Group DataFrames according to the condition
     if condition == 1:
-        df_grouped = df[df['items_presented'] == 1].groupby(['subID', 'object_cued_rot', 'Cardinal_Category']).agg({chosen_column: 'mean'}).reset_index()
+        df_grouped = df[df['items_presented'] == 1].groupby(['subID', 'object_cued_rot', 'cardinal_category']).agg({chosen_column: 'mean'}).reset_index()
     elif condition == 2:
-        df_grouped = df[df['items_presented'] == 2].groupby(['subID', 'object_cued_rot', 'Cardinal_Category']).agg({chosen_column: 'mean'}).reset_index()
+        df_grouped = df[df['items_presented'] == 2].groupby(['subID', 'object_cued_rot', 'cardinal_category']).agg({chosen_column: 'mean'}).reset_index()
     elif condition == 3:
-        df_grouped = df[df['items_presented'] == 3].groupby(['subID', 'object_cued_rot', 'Cardinal_Category']).agg({chosen_column: 'mean'}).reset_index()
+        df_grouped = df[df['items_presented'] == 3].groupby(['subID', 'object_cued_rot', 'cardinal_category']).agg({chosen_column: 'mean'}).reset_index()
     else:
-        df_grouped = df.groupby(['subID', 'object_cued_rot', 'Cardinal_Category']).agg({chosen_column: 'mean'}).reset_index()
+        df_grouped = df.groupby(['subID', 'object_cued_rot', 'cardinal_category']).agg({chosen_column: 'mean'}).reset_index()
 
     # Step 2: Initialize a list to store results
     results = []
@@ -340,7 +340,7 @@ function_diffs_all_con = calculate_differences(df, chosen_column='button_press_c
 
 # this still gives me the same results as above so maybe still easier to do it like this
 # difference score might still be useless if I want one single value per person
-function_diffs_con1.groupby(['subID', 'Cardinal_Category'])['button_press_clockwise'].mean()
+function_diffs_con1.groupby(['subID', 'cardinal_category'])['button_press_clockwise'].mean()
 #display(function_diffs_con1)
 
 function_diffs_con1_on_sub = function_diffs_con1[function_diffs_con1['subID']=='1L974Q']
@@ -699,7 +699,7 @@ def calculate_absolute_differences(df, chosen_column, condition=None):
         df_grouped = df
         
     # Group by required columns and calculate mean for each group
-    df_grouped = df_grouped.groupby(['subID', 'object_cued_rot', 'Cardinal_Category']).agg(
+    df_grouped = df_grouped.groupby(['subID', 'object_cued_rot', 'cardinal_category']).agg(
         {chosen_column: 'mean'}).reset_index()
 
     # List to store results
@@ -738,7 +738,7 @@ def calculate_differences_with_delayed_abs(df, chosen_column, condition=None):
         df_grouped = df
         
     # Group by required columns and calculate mean for each group
-    df_grouped = df_grouped.groupby(['subID', 'object_cued_rot', 'Cardinal_Category']).agg(
+    df_grouped = df_grouped.groupby(['subID', 'object_cued_rot', 'cardinal_category']).agg(
         {chosen_column: 'mean'}).reset_index()
 
     # List to store results
