@@ -61,6 +61,8 @@ os.makedirs(epochs_folderpath, exist_ok=True)
 #  %%
 # Creating epochs timelocked to pos1
 
+#  Note: check wether I might need to deal with missing data somewhere somehow
+
 freqs = []
 
 for i in good_partis:
@@ -134,3 +136,5 @@ data_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/cs
 freqs_df_name = f'freqs_df.csv'
 csv_filepath = os.path.join(data_folder, freqs_df_name)
 freqs_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
+
+

@@ -123,3 +123,6 @@ evoked_df_only_correct_shifted.loc[evoked_df_only_correct_shifted['Load']==3, 't
 
 evoked_df_only_correct_shifted.to_csv('../data/csv_files/evoked_df_only_correct_shifted.csv', index=False)
 # %%
+# adding mask to the evoked dataframe
+
+maskpartis = df['subID'].isin()

@@ -1,0 +1,148 @@
+# %%
+# Importsconda
+import mne
+import pandas as pd
+
+# %% Load Metadata
+
+df = pd.read_csv('../data/csv_files/df.csv')
+good_partis = df['subID'].unique()
+
+mask_partis = df[df['mask']==1]['subID'].unique().tolist()
+nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
+
+# %%
+# if qt is used as backend the kernel crashes
+# mne.viz.set_browser_backend('matplotlib')
+
+# %%
+# appending all epochs into one list while:
+# combining both pupil channels
+# applying baseline
+# seperating by condition
+# cropping according to condition
+# averaging epochs
+trial_ori_cat_combos = df['trial_ori_cat_combo'].unique()
+
+# I need to be able to sort the combos into combos of all of the same category (while ignoring n's, n's are always at the end)
+ori_cat_combo_allsame = ['onn',
+                        'cnn',
+                        'oon',
+                        'ccn',
+                        'ooo',
+                        'ccc']
+
+
+# also loop over mask condition (no, can do that while plotting based on subID)
+
+evoked_df_only_cardinal = pd.DataFrame()
+
+for i in good_partis:
+    
+    # reading epochs per participant
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_pos1"
+    epoch_file = folder_path + "/" + i + "_pos1_interpol-epo.fif"
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+    
+    # combining channels
+    pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
+    roi_dict = dict(pupils=pupil_ix)
+    pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method="mean")
+
+    # applying baseline
+    pupil_epochs_combined_bl = pupil_epochs_combined.apply_baseline(baseline=(-0.1, 0))
+    baseline = pupil_epochs_combined.baseline
+
+    # only using cardinal trials
+    # pupil_epochs_cardinal = pupil_epochs_combined_bl['acc_trial_concrete_cued==1']
+
+    # seperating per cardinal category condition
+    con1_epochs_pos1 = pupil_epochs_combined_bl["items_presented == 1"]
+    con1_epochs_cardinal = con1_epochs_pos1["trial_ori_cat_combo == 'cnn'"]
+    con1_epochs_oblique = con1_epochs_pos1["trial_ori_cat_combo =='onn'"]
+    con2_epochs_pos1 = pupil_epochs_combined_bl["items_presented == 2"]
+    con2_epochs_cardinal = con2_epochs_pos1["trial_ori_cat_combo =='ccn'"]
+    con2_epochs_oblique = con2_epochs_pos1["trial_ori_cat_combo =='oon'"]
+    con3_epochs_pos1 = pupil_epochs_combined_bl["items_presented == 3"]
+    con3_epochs_cardinal = con3_epochs_pos1["trial_ori_cat_combo =='ccc'"]
+    con3_epochs_oblique = con3_epochs_pos1["trial_ori_cat_combo =='ooo'"]
+
+    # shortening the epochs based on condition (crop defaults to inclduing tmax)
+    con1_epochs_cardinal.crop(-0.1, 7)
+    con2_epochs_cardinal.crop(-0.1, 8)
+    con3_epochs_cardinal.crop(-0.1, 9)
+    con1_epochs_oblique.crop(-0.1, 7)
+    con2_epochs_oblique.crop(-0.1, 8)
+    con3_epochs_oblique.crop(-0.1, 9)
+
+    # averaging per load condition
+    con1_ave_cardinal = con1_epochs_cardinal.average()
+    con2_ave_cardinal = con2_epochs_cardinal.average()
+    con3_ave_cardinal = con3_epochs_cardinal.average()
+    con1_ave_oblique = con1_epochs_oblique.average()
+    con2_ave_oblique = con2_epochs_oblique.average()
+    con3_ave_oblique = con3_epochs_oblique.average()
+
+    # adding individual averaged data to dataframe including load and subID
+    # Cardinal trials
+    con1_ave_df_cardinal = con1_ave_cardinal.to_data_frame()
+    con1_ave_df_cardinal['Load'] = 1
+    con1_ave_df_cardinal['subID'] = i
+    con1_ave_df_cardinal['cardinal_category'] = 'cnn'
+    con2_ave_df_cardinal = con2_ave_cardinal.to_data_frame()
+    con2_ave_df_cardinal['Load'] = 2
+    con2_ave_df_cardinal['subID'] = i
+    con2_ave_df_cardinal['cardinal_category'] = 'ccn'
+    con3_ave_df_cardinal = con3_ave_cardinal.to_data_frame()
+    con3_ave_df_cardinal['Load'] = 3
+    con3_ave_df_cardinal['subID'] = i
+    con3_ave_df_cardinal['cardinal_category'] = 'ccc'
+
+    # Oblique trials
+    con1_ave_df_oblique = con1_ave_oblique.to_data_frame()
+    con1_ave_df_oblique['Load'] = 1
+    con1_ave_df_oblique['subID'] = i
+    con1_ave_df_oblique['cardinal_category'] = 'onn'
+    con2_ave_df_oblique = con2_ave_oblique.to_data_frame()
+    con2_ave_df_oblique['Load'] = 2
+    con2_ave_df_oblique['subID'] = i
+    con2_ave_df_oblique['cardinal_category'] = 'oon'
+    con3_ave_df_oblique = con3_ave_oblique.to_data_frame()
+    con3_ave_df_oblique['Load'] = 3
+    con3_ave_df_oblique['subID'] = i
+    con3_ave_df_oblique['cardinal_category'] = 'ooo'
+
+    # concatenating to evoked_df_only_cardinal
+    evoked_df_only_cardinal = pd.concat([evoked_df_only_cardinal, con1_ave_df_cardinal])
+    evoked_df_only_cardinal = pd.concat([evoked_df_only_cardinal, con2_ave_df_cardinal])
+    evoked_df_only_cardinal = pd.concat([evoked_df_only_cardinal, con3_ave_df_cardinal])
+    evoked_df_only_cardinal = pd.concat([evoked_df_only_cardinal, con1_ave_df_oblique])
+    evoked_df_only_cardinal = pd.concat([evoked_df_only_cardinal, con2_ave_df_oblique])
+    evoked_df_only_cardinal = pd.concat([evoked_df_only_cardinal, con3_ave_df_oblique])
+    evoked_df_only_cardinal['baseline_start'] = baseline[0]
+    evoked_df_only_cardinal['baseline_end'] = baseline[1]
+
+evoked_df_only_cardinal = evoked_df_only_cardinal.reset_index()
+display(evoked_df_only_cardinal)
+evoked_df_only_cardinal.to_csv('../data/csv_files/evoked_df_only_cardinal.csv', index=False)
+
+# %%
+# Shifting
+
+# shifting the conditions so that the epochs that are epoched on pos1 are time-locked to the test onset
+evoked_df_only_cardinal_shifted = evoked_df_only_cardinal.copy()
+evoked_df_only_cardinal_shifted.loc[evoked_df_only_cardinal_shifted['Load']==1, 'time'] +=2
+evoked_df_only_cardinal_shifted.loc[evoked_df_only_cardinal_shifted['Load']==2, 'time'] +=1
+evoked_df_only_cardinal_shifted.loc[evoked_df_only_cardinal_shifted['Load']==3, 'time'] +=0
+
+# %%
+
+# Adding column for mask
+evoked_df_only_cardinal_shifted['mask'] = evoked_df_only_cardinal_shifted['subID'].apply(
+    lambda x: 1 if x in mask_partis else 0)
+
+display(evoked_df_only_cardinal_shifted)
+
+evoked_df_only_cardinal_shifted.to_csv('../data/csv_files/evoked_df_only_cardinal_shifted.csv', index=False)
+
+# %%
