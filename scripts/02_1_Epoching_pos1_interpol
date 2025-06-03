@@ -61,8 +61,6 @@ os.makedirs(epochs_folderpath, exist_ok=True)
 #  %%
 # Creating epochs timelocked to pos1
 
-#  Note: check wether I might need to deal with missing data somewhere somehow
-
 freqs = []
 
 for i in good_partis:
@@ -73,8 +71,8 @@ for i in good_partis:
         raw = mne.io.read_raw_eyelink(eyelink_file)
         metadata_pp = df.loc[(df['subID'] == i)]
 
-        # interpolate blinks
-        mne.preprocessing.eyetracking.interpolate_blinks(raw, buffer=0.05, match='BAD_blink', interpolate_gaze=False)
+        # interpolate blinks (adapted to buffer=[0.05, 0.2])
+        mne.preprocessing.eyetracking.interpolate_blinks(raw, buffer=[0.05, 0.2], match='BAD_blink', interpolate_gaze=False)
         
         # find sampling frequency of participant and add to list
         freq_pp = [i, (raw.info['sfreq'])]

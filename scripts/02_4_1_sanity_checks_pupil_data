@@ -4,6 +4,10 @@ import mne
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import itertools
+import numpy as np
+import os
+
 # %% Load Metadata
 
 df = pd.read_csv('../data/csv_files/df.csv')
@@ -12,7 +16,7 @@ good_partis = df['subID'].unique()
 evoked_df_pos1_interpol_shifted = pd.read_csv('../data/csv_files/evoked_df_pos1_interpol_shifted.csv')
 
 
-# %%
+#%%
 # if qt is used as backend the kernel crashes
 mne.viz.set_browser_backend('matplotlib')
 
@@ -33,7 +37,7 @@ for i in good_partis:
     roi_dict = dict(pupils=pupil_ix)
     pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method="mean")
 
-    # averaging per load condition
+    # averaging 
     ave = pupil_epochs_combined.average()
 
     # adding individual averaged data to dataframe including load and subID
@@ -47,9 +51,9 @@ for i in good_partis:
 ave_df_all = ave_df_all.reset_index()
 
 ave_df_all.to_csv('../data/csv_files/ave_df_all.csv', index=False)
-    # pupil_df = pupil_epoch.to_data_frame()
+#pupil_df = pupil_epoch.to_data_frame()
 
-    # sns.lineplot(data=pupil_epoch, x='time', y='pupils', hue='subID')
+#sns.lineplot(data=pupil_epoch, x='time', y='pupils', hue='subID')
 # %%
 # plot all participants averaged timelines on top of each other
 # plot before baseline, seems like there are no outliers
@@ -64,10 +68,12 @@ plt.show()
 
 
 #%%
+# reading epochs and saving as dataframe without averaging to check for all trials per subID
 # plot all trials per participant on top of each other to check 
 # for individual trial outliers
 
 # would need the number of epochs per participant (that is number of trials which I know)
+# this is still epochs and not evoked because I didn't average anything.
 epochs_all = pd.DataFrame()
 for i in good_partis:
     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_pos1"
@@ -88,10 +94,13 @@ for i in good_partis:
 
     epochs_all = pd.concat([epochs_all, epochs_df])
 
-# %%
 
 epochs_all = epochs_all.reset_index()
 
+# %%
+# plot all trials per subID on top of each other to check for outliers - this is from loading epochs potentially 
+# with the wrong buffer - so run all epochs again and then try again
+# now ran all epochs again with correct buffer.... seems to look the same?
 for i in good_partis:
     with sns.plotting_context(context='paper', font_scale=1.5): 
         
@@ -101,6 +110,38 @@ for i in good_partis:
     plt.title(f'SubID {i}')
     plt.show()
 
+
+# %%
+# plot all trials per subID on top of each other to check for outliers - this is from loading epochs potentially 
+# with the wrong buffer - so run all epochs again and then try again
+# now ran all epochs again with correct buffer.... seems to look the same?
+for i in good_partis:
+    with sns.plotting_context(context='paper', font_scale=1.5): 
+        
+        fig, ax = plt.subplots(figsize=(10,8))
+
+        sns.lineplot(data=epochs_all[epochs_all['subID']==i], x='time', y='pupils', hue='epoch', errorbar='se', ax=ax)
+    plt.title(f'SubID {i}')
+    plt.show()
+
+#################
+
+# %%
+# using a filtered version to plot so it doesnt take as long
+
+
+data = epochs_all[epochs_all['subID'] == 'REUNMA']
+
+data = data[data['epoch'].isin(range(430, 445))]
+
+with sns.plotting_context(context='paper', font_scale=1.5): 
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+# Plot, using a meaningful column for hue (if available, e.g., 'condition')
+    sns.lineplot(data=data, x='time', y='pupils', hue='epoch', errorbar='se', ax=ax)
+
+plt.title(f'SubID REUNMA - Epoch {i}')
+plt.show()
 
 
 
@@ -137,3 +178,224 @@ plt.show()
 # !!! Note: in my epoching file I have set the "buffer" to 0.05 but in one mne tutorial it says to set it like this:
 #  "We’ll pass (0.05, 0.2) to interpolate_blinks(), expanding the interpolation window 50 ms before and 200 ms after the blink,""
 # %%
+##################################
+#################################
+
+# run a single subIDs epochs new and save seperately - try with and without blink interpolation
+# do I need the custom mapping for my checks? - need subID..
+# lets try without
+
+# Trigger Dictionary
+# these were set in the original experiment script, additional pairs were also set in the experiment except for "fixation", "saccade", and "BAD_blink". 
+# Not sure if it is necessary to add them here because they are not relevant for what I am using the trigger_dict for 
+
+n_objects = ['obj1', 'obj2', 'obj3']
+n_positions = ['pos1', 'pos2', 'pos3']
+n_orientations = [f'ori{i}' for i in range(1, 17)]
+
+# Generate combinations of the three conditions
+combinations = itertools.product(n_positions, n_objects, n_orientations)
+
+# Create a dictionary to store the combinations
+trigger_dict = {}
+
+# Populate the dictionary with formatted combinations
+for idx, combo in enumerate(combinations, start=1):
+    trigger_dict['_'.join(combo)] = idx
+
+additional_pairs = {
+    "onset_concrete_cued_left": 220,
+    "onset_concrete_cued_right": 221,
+    "left_button_press": 241,
+    "right_button_press": 242,
+    "feedback_cued_item": 244,
+    "mask": 245,
+    "beginning/end_of_task": 246,
+    "fixation": 247,
+    "saccade": 248,
+    "BAD_blink": 249
+}
+
+trigger_dict.update(additional_pairs)
+
+# Extract values with "pos1" in the key, and key-value pairs
+values_with_pos1 = [trigger_dict[key] for key in trigger_dict if "pos1" in key]
+pos1_pairs = {key: trigger_dict[key] for key in trigger_dict if "pos1" in key}
+
+
+
+# creating folder for epochs
+datafolder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data"
+folder_name = f"Epochs_single_to_try_out"
+epochs_folderpath = os.path.join(datafolder_path, folder_name)
+os.makedirs(epochs_folderpath, exist_ok=True)
+
+for i in ['REUNMA']:
+        
+        # read file per subID
+        folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
+        eyelink_file = folder_path + "/" + i + ".asc"
+        raw = mne.io.read_raw_eyelink(eyelink_file)
+        metadata_pp = df.loc[(df['subID'] == i)]
+
+        # interpolate blinks
+        # ran it with buffer 0.05 and 0.02 instead of 0.2 before
+        mne.preprocessing.eyetracking.interpolate_blinks(raw, buffer=[0.05, 0.2], match='BAD_blink', interpolate_gaze=False)
+        
+        # Create Custom Mapping to map annotations found to event ids that match the triggers used
+        annotations = raw.annotations
+        custom_mapping = {}
+        # Generate mapping for annotations with integer descriptions
+        max_id = 0
+        for description in annotations.description:
+            if description.isdigit():
+                event_id = int(description)
+                custom_mapping[description] = event_id
+                if event_id > max_id:
+                    max_id = event_id
+        next_event_id = max_id + 1
+        # Add non-numeric descriptions with unique event IDs
+        for description in annotations.description:
+            if not description.isdigit():
+                if description not in custom_mapping:  # Ensure each description is only mapped once
+                    custom_mapping[description] = next_event_id
+                    next_event_id += 1
+        sorted_custom_mapping = dict(sorted(custom_mapping.items(), key=lambda item: int(item[0]) if item[0].isdigit() else float('inf')))
+
+        # Get events from annotations using the custom mapping 
+        events_from_annot, event_dict = mne.events_from_annotations(
+            raw, event_id=sorted_custom_mapping)
+
+        # necessary events per participant - these are only those events that are also present in the event_id=pos1_pairs
+        # this might be done better in the newest version of mne. 
+        events_pos1 = events_from_annot[np.isin(events_from_annot, [values_with_pos1])[:, -1]]
+
+        # Epoching
+        pupil_epochs_pos1 = mne.Epochs(
+            raw,
+            events_pos1,
+            event_id=pos1_pairs,
+            tmin=-0.1,
+            tmax=9,
+            baseline=None,
+            metadata=metadata_pp,
+            picks=['pupil_left', 'pupil_right'],
+            event_repeated='merge',
+            preload=True,
+            reject_by_annotation=False
+        )
+
+
+        # Save epoch in fif format to a specified folder
+        filename = f"{i}_single_try_out_blink_interpol.fif"
+        epochs_path = os.path.join(epochs_folderpath, filename)
+        pupil_epochs_pos1.save(epochs_path, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
+
+# %%
+epochs_single = pd.DataFrame()
+
+for i in ['REUNMA']:
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_single_to_try_out"
+    epoch_file = folder_path + "/" + i + "_single_try_out_blink_interpol.fif"
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+    # pupil_epoch.plot()
+
+    # combining channels
+    pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
+    roi_dict = dict(pupils=pupil_ix)
+    pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method="mean")
+
+    epochs_df = pupil_epochs_combined.to_data_frame()
+    epochs_df['subID'] = i
+    # can I plot on top of each other without transforming to dataframe first?
+    # there would have to be a way to use hue or something
+    # pupil_epochs_combined[j].average().plot()
+
+    epochs_single = pd.concat([epochs_single, epochs_df])
+
+
+epochs_single = epochs_single.reset_index()
+ # %%
+
+data = epochs_single[epochs_single['epoch'].isin(range(430, 445))]
+
+with sns.plotting_context(context='paper', font_scale=1.5): 
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+# Plot, using a meaningful column for hue (if available, e.g., 'condition')
+    sns.lineplot(data=data, x='time', y='pupils', hue='epoch', errorbar='se', ax=ax)
+
+plt.title(f'SubID REUNMA - Epochs 430 - 445 ')
+plt.show()
+# %%
+
+# how can I plot the epochs and show where blinks (blink or BAD_blink) are marked? Because they seem to be missing out on a lot of them
+np.unique(pupil_epoch.annotations.description)
+
+pupil_epoch.get_annotations_per_epoch()
+
+# %%
+
+#epochs_single.plot()
+
+# %%
+# Cropping raw makes it possible to plot using matplotlib
+# raw.plot(scalings=1e3, show=True, show_options=True, duration=9.1)
+
+# Make a copy so the original stays unchanged
+raw_copy = raw.copy()
+
+# Crop only the copy
+# can I also plot an area where no task was performed? are breaks included in the data?
+raw_copy.crop(tmin=6424, tmax=6444)
+
+# Filter annotations: keep only those with description "bad blink"
+blink_annot = raw.annotations[raw.annotations.description == "blink"]
+
+# Assign filtered annotations to the copied raw object
+raw_copy.set_annotations(blink_annot)
+
+raw_copy.plot(events=events_pos1, event_id=trigger_dict, scalings=1e3, show=False, show_options=True, duration=9.1, picks= ['pupil_left', 'pupil_right'])
+
+
+
+
+#events=events_pos1, 
+# %%
+pupil_epoch.plot(n_epochs=4, events=True, scalings=1e3, event_id=trigger_dict)
+
+
+# %%
+
+data, times = raw['pupil_right']
+
+plt.plot(times, data.T, label='pupils')
+
+# Add blink annotation spans
+for onset, duration, description in zip(raw.annotations.onset,
+                                        raw.annotations.duration,
+                                        raw.annotations.description):
+    if description == 'BAD_blink':
+        plt.axvspan(onset, onset + duration, color='red', alpha=0.3)
+
+plt.xlabel('Time (s)')
+plt.ylabel('Amplitude')
+plt.title('EOG Signal with BAD_blink Annotations')
+plt.legend()
+plt.show()
+
+
+
+
+
+
+# %%
+#############################################
+
+# %%
+
+# plotting that single persons epochs without blink interpolation to compare
+fig, ax = plt.subplots(figsize=(10,8))
+sns.lineplot(data=epochs_single[epochs_single['epoch']==222], x='time', y='pupils', errorbar='se', ax=ax)
+#sns.lineplot(data=epochs_single[epochs_single['epoch']==220], x='time', y='pupil_right', errorbar='se', ax=ax)
+plt.show()

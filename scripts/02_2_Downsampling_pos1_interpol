@@ -68,7 +68,7 @@ for i in wrong_partis:
     metadata_pp = df.loc[(df['subID'] == i)]
 
     # interpolate blinks
-    mne.preprocessing.eyetracking.interpolate_blinks(raw, buffer=0.05, match='BAD_blink', interpolate_gaze=False)
+    mne.preprocessing.eyetracking.interpolate_blinks(raw, buffer=[0.05, 0.2], match='BAD_blink', interpolate_gaze=False)
 
     # Filtering according to sampling frequency 
     current_sfreq = raw.info["sfreq"]
