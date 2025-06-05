@@ -16,8 +16,8 @@ evoked_df_only_Oblique_shifted = pd.read_csv('../data/csv_files/evoked_df_only_O
 
 evoked_df_only_Oblique_shifted_nomaskpartis = pd.read_csv('../data/csv_files/evoked_df_only_Oblique_shifted-nomaskpartis.csv')
 
-evoked_df_only_cardinal_shifted = pd.read_csv('../data/csv_files/evoked_df_only_cardinal_shifted.csv')
-evoked_df_only_cardinal_shifted
+evoked_df_only_cardinal_shifted = pd.read_csv('../data/csv_files/evoked_df_only_cardinal_shifted_new.csv')
+
 df = pd.read_csv('../data/csv_files/df.csv')
 good_partis = df['subID'].unique()
 
@@ -110,7 +110,7 @@ with sns.plotting_context(context='paper', font_scale=1.5):
     
 
     # Save the figure
-    name=f"pupil_fig_pos1_interpol_shifted_bl{baseline_str}_seperated_by_cardinal_category2.png"
+    name=f"pupil_fig_pos1_interpol_shifted_bl{baseline_str}_seperated_by_cardinal_category_new.png"
     figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures'
     figure_filepath = os.path.join(figures_folder, name)
 

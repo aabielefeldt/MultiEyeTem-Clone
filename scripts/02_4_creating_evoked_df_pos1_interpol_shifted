@@ -18,3 +18,17 @@ evoked_df_pos1_interpol_shifted.loc[evoked_df_pos1_interpol_shifted['Load']==2, 
 evoked_df_pos1_interpol_shifted.loc[evoked_df_pos1_interpol_shifted['Load']==3, 'time'] +=0
 
 evoked_df_pos1_interpol_shifted.to_csv('../data/csv_files/evoked_df_pos1_interpol_shifted.csv', index=False)
+
+# %%
+evoked_df_new = pd.read_csv('../data/csv_files/evoked_df_new.csv')
+
+# %%
+# shifting the conditions so that the epochs that are epoched on pos1 are time-locked to the test onset
+evoked_df_new_shifted = evoked_df_new.copy()
+evoked_df_new_shifted.loc[evoked_df_new_shifted['Load']==1, 'time'] +=2
+evoked_df_new_shifted.loc[evoked_df_new_shifted['Load']==2, 'time'] +=1
+evoked_df_new_shifted.loc[evoked_df_new_shifted['Load']==3, 'time'] +=0
+
+evoked_df_new_shifted.to_csv('../data/csv_files/evoked_df_new_shifted.csv', index=False)
+
+# %%

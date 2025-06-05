@@ -72,6 +72,6 @@ for i in good_partis:
     evoked_df_pos1_interpol['baseline_start'] = baseline[0]
     evoked_df_pos1_interpol['baseline_end'] = baseline[1]
 
-evoked_df_pos1_interpol = evoked_df_pos1_interpol.reset_index()
+evoked_df_new = evoked_df_pos1_interpol.reset_index()
 
-evoked_df_pos1_interpol.to_csv('../data/csv_files/evoked_df_pos1_interpol.csv', index=False)
+evoked_df_new.to_csv('../data/csv_files/evoked_df_new.csv', index=False)
