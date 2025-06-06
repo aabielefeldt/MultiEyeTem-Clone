@@ -129,21 +129,26 @@ for i in good_partis:
 # %%
 # using a filtered version to plot so it doesnt take as long
 
+#pupil_epochs_pos1_df = pupil_epochs_pos1.to_data_frame()
+# data = pupil_epochs_pos1_df[pupil_epochs_pos1_df['subID'] == '8H3YTN']
+#data = pupil_epochs_pos1_df[pupil_epochs_pos1_df['epoch'].isin(range(392, 408))]
+
 
 data = epochs_all[epochs_all['subID'] == '8H3YTN']
+data = data[data['epoch'].isin(range(390, 410))]
 
-data = data[data['epoch'].isin(range(392, 408))]
+
 
 with sns.plotting_context(context='paper', font_scale=1.5): 
-    #fig, ax = plt.subplots(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(10, 8))
 
 # Plot, using a meaningful column for hue (if available, e.g., 'condition')
     
-    #sns.lineplot(data=data, x='time', y='pupil_left', hue='epoch', errorbar='se', ax=ax)
-    #plt.show()
+    sns.lineplot(data=data, x='time', y='pupil_left', hue='epoch', errorbar='se', ax=ax)
+    plt.show()
 
     fig, ax = plt.subplots(figsize=(10, 8))
-    sns.lineplot(data=data, x='time', y='pupil_right', hue='epoch', errorbar='se', ax=ax)
+    sns.lineplot(data=data, x='time', y='pupil_right',  hue='epoch', errorbar='se', ax=ax, legend=True)
     plt.title(f'SubID 8H3YTN - Epoch 392-408 only right eye')
     plt.show()
 
@@ -244,7 +249,7 @@ for i in ['8H3YTN']:
 
         # interpolate blinks
         # ran it with buffer 0.05 and 0.02 instead of 0.2 before
-        mne.preprocessing.eyetracking.interpolate_blinks(raw, buffer=[0.05, 0.2], match='BAD_blink', interpolate_gaze=False)
+        # mne.preprocessing.eyetracking.interpolate_blinks(raw, buffer=[0.05, 0.2], match='BAD_blink', interpolate_gaze=False)
         
         # Create Custom Mapping to map annotations found to event ids that match the triggers used
         annotations = raw.annotations
@@ -290,7 +295,7 @@ for i in ['8H3YTN']:
             event_repeated='error',
             on_missing='raise',
             preload=True,
-            reject_by_annotation=True
+            reject_by_annotation=False
         )
 
 
@@ -302,7 +307,7 @@ for i in ['8H3YTN']:
 # %%
 epochs_single = pd.DataFrame()
 
-for i in ['REUNMA']:
+for i in ['8H3YTN']:
     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_single_to_try_out"
     epoch_file = folder_path + "/" + i + "_single_try_out_blink_interpol.fif"
     pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
@@ -342,9 +347,6 @@ np.unique(pupil_epoch.annotations.description)
 
 pupil_epoch.get_annotations_per_epoch()
 
-# %%
-
-#epochs_single.plot()
 
 # %%
 # Cropping raw makes it possible to plot using matplotlib
@@ -355,10 +357,10 @@ raw_copy = raw.copy()
 
 # Crop only the copy
 # can I also plot an area where no task was performed? are breaks included in the data?
-raw_copy.crop(tmin=4424, tmax=5700)
+raw_copy.crop(tmin=100, tmax=200)
 
 # Filter annotations: keep only those with description "bad blink"
-blink_annot = raw.annotations[raw.annotations.description == "blink"]
+blink_annot = raw.annotations[raw.annotations.description == "BAD_blink"]
 
 # Assign filtered annotations to the copied raw object
 raw_copy.set_annotations(blink_annot)
@@ -381,14 +383,12 @@ print(f"Epoch {epoch_index} starts at {epoch_time:.3f} seconds in raw data.")
 raw_copy2 = raw.copy()
 raw_copy2.crop(tmin=epoch_time-1, tmax=epoch_time+90)
 # Filter annotations: keep only those with description "bad blink"
-blink_annot = raw.annotations[raw.annotations.description == "blink"]
+blink_annot = raw.annotations[raw.annotations.description == "BAD_blink"]
 
 # Assign filtered annotations to the copied raw object
 raw_copy2.set_annotations(blink_annot)
 raw_copy2.plot(events=events_pos1, event_id=trigger_dict, scalings=1e3, show=False, show_options=True, duration=90, picks= ['pupil_left', 'pupil_right']) 
 
-
-#events=events_pos1, 
 # %%
 pupil_epoch.plot(n_epochs=4, events=True, scalings=1e3, event_id=trigger_dict)
 

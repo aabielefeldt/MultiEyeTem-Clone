@@ -80,7 +80,7 @@ for i in ['REUNMA']:
 
 histo_all = pd.DataFrame()
 
-for i in good_partis:
+for i in ['8H3YTN']:
     
     # reading epochs per participant
     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_pos1"
