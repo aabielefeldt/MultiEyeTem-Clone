@@ -30,6 +30,49 @@ os.makedirs(csv_path2, exist_ok=True)
 # mne code umrechnen der pupille?
 
 
+#%%
+# Histograms with new epochs (new interpolation and nan)
+histo_all = pd.DataFrame()
+
+for i in good_partis:
+    
+    # reading epochs per participant
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_improved_blink_interpolation"
+    epoch_file = folder_path + "/" + i + "_new_interpol_and_nan-epo.fif"
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+
+    # combining channels
+    pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
+    roi_dict = dict(pupils=pupil_ix)
+
+    pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method="mean")
+    pupil_epochs_combined_df = pupil_epochs_combined.to_data_frame()
+    pupil_epochs_combined_df['subID'] = i
+
+    histo_all = pd.concat([histo_all, pupil_epochs_combined_df])
+
+    pupil_epochs_df = pupil_epoch.to_data_frame()
+
+    plt.figure()
+    plt.title(f'SubID {i} - distribution of pupil size within epochs')
+    sns.histplot(data=pupil_epochs_df, bins=100, stat='density', x='pupils', legend=True)
+
+    # Set fixed axis limits
+    plt.xlim(0, 2e9)
+    plt.ylim(0, 6e-9)
+    plt.show()
+
+    # Save the figure
+    # name=f"pupil_size_histogram_{i}_new_blink_interpolation.png"
+    # figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures/pupil_size'
+    # figure_filepath = os.path.join(figures_folder, name)
+
+    # plt.savefig(figure_filepath, bbox_inches = 'tight')
+
+plt.figure()
+plt.title(f'distribution of pupil size within epochs all subIDs')
+sns.histplot(data=histo_all, bins=100, stat='density', x='pupils', legend=True)
+plt.show()
 
 # %%
 # Histogram pupil size
@@ -186,5 +229,295 @@ raw_copy.plot(scalings=1e3, show=False, show_options=True, duration=9.1, picks= 
 
 
 
+# %%
+###############################################
 
-# 
+# %% raw for 8H3YTN
+# raw for 8H3YTN
+
+n_objects = ['obj1', 'obj2', 'obj3']
+n_positions = ['pos1', 'pos2', 'pos3']
+n_orientations = [f'ori{i}' for i in range(1, 17)]
+
+# Generate combinations of the three conditions
+combinations = itertools.product(n_positions, n_objects, n_orientations)
+
+# Create a dictionary to store the combinations
+trigger_dict = {}
+
+# Populate the dictionary with formatted combinations
+for idx, combo in enumerate(combinations, start=1):
+    trigger_dict['_'.join(combo)] = idx
+
+additional_pairs = {
+    "onset_concrete_cued_left": 220,
+    "onset_concrete_cued_right": 221,
+    "left_button_press": 241,
+    "right_button_press": 242,
+    "feedback_cued_item": 244,
+    "mask": 245,
+    "beginning/end_of_task": 246,
+    "fixation": 247,
+    "saccade": 248,
+    "BAD_blink": 249
+}
+
+trigger_dict.update(additional_pairs)
+
+# Extract values with "pos1" in the key, and key-value pairs
+values_with_pos1 = [trigger_dict[key] for key in trigger_dict if "pos1" in key]
+pos1_pairs = {key: trigger_dict[key] for key in trigger_dict if "pos1" in key}
+
+for i in ['8H3YTN']:
+        
+    # read file per subID
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
+    eyelink_file = folder_path + "/" + i + ".asc"
+    raw = mne.io.read_raw_eyelink(eyelink_file)
+
+    
+    sfreq = raw.info['sfreq']
+    
+    # Drop gaze channels
+    # still a comma after the remaining channels in annotations
+    drop_chs = ['xpos_right', 'xpos_left', 'ypos_right', 'ypos_left']
+    raw.drop_channels(drop_chs)
+
+    metadata_pp = df.loc[(df['subID'] == i)]
+
+    # Get the original annotations
+    annot = raw.annotations
+
+    # Create new description list based on duration
+    # this overwrites descriptions where necessary and keeps all other old ones
+    new_descriptions = []
+
+    for onset, duration, description, ch_names in zip(annot.onset, annot.duration, annot.description, annot.ch_names):
+        if description == 'BAD_blink' and duration >= 1:
+            new_descriptions.append('BAD_long_blink')
+        else:
+            new_descriptions.append(description)
+
+    # Create a new Annotations object
+    new_annot = mne.Annotations(onset=annot.onset,
+                            duration=annot.duration,
+                            description=new_descriptions,
+                            ch_names=annot.ch_names)
+
+
+    # Replace annotations in raw
+    raw.set_annotations(new_annot)
+
+    #################
+    # Set NaN for BAD_long_blinks in pupil channels
+    # adding same buffer as in interpolation
+    buffer_before = 0.05  # seconds before onset
+    buffer_after = 0.2
+
+    for onset, duration, description, ch_names in zip(new_annot.onset, new_annot.duration, new_annot.description, new_annot.ch_names):
+        if description != 'BAD_long_blink':
+            continue
+
+        start_time = max(0, onset - buffer_before)  # avoids negative start time
+        stop_time = onset + duration + buffer_after
+
+        for ch in ch_names:
+            if ch.startswith('pupil_'):
+                ch_idx = raw.ch_names.index(ch)
+                start = int(start_time * sfreq)
+                stop = int(stop_time * sfreq)
+                raw._data[ch_idx, start:stop] = np.nan
+
+        
+    ####################
+    # Does the Custom Mapping intefer with the blink interpolations at all?
+    
+    # Create Custom Mapping to map annotations found to event ids that match the triggers used
+    # does this overwrite the new_annots? -> apparently not
+    annotations = raw.annotations
+    custom_mapping = {}
+    # Generate mapping for annotations with integer descriptions
+    max_id = 0
+    for description in annotations.description:
+        if description.isdigit():
+            event_id = int(description)
+            custom_mapping[description] = event_id
+            if event_id > max_id:
+                max_id = event_id
+    next_event_id = max_id + 1
+    # Add non-numeric descriptions with unique event IDs
+    for description in annotations.description:
+        if not description.isdigit():
+            if description not in custom_mapping:  # Ensure each description is only mapped once
+                custom_mapping[description] = next_event_id
+                next_event_id += 1
+    sorted_custom_mapping = dict(sorted(custom_mapping.items(), key=lambda item: int(item[0]) if item[0].isdigit() else float('inf')))
+
+    # Get events from annotations using the custom mapping 
+    events_from_annot, event_dict = mne.events_from_annotations(
+        raw, event_id=sorted_custom_mapping)
+
+    # necessary events per participant - these are only those events that are also present in the event_id=pos1_pairs
+    # this might be done better in the newest version of mne. 
+    events_pos1 = events_from_annot[np.isin(events_from_annot, [values_with_pos1])[:, -1]]
+
+    mne.preprocessing.eyetracking.interpolate_blinks(raw, buffer=[0.05, 0.2], match='BAD_blink', interpolate_gaze=False)
+    ########################
+# %%
+
+raw_copy = raw.copy()
+
+# Crop only the copy
+# can I also plot an area where no task was performed? are breaks included in the data?
+
+raw_copy.crop(tmin=2025, tmax=2775)
+# Filter annotations: keep only those with description "bad blink" and bad long blink
+blink_annot = raw.annotations[np.isin(raw.annotations.description, [ "BAD_long_blink"])] # "blink",
+
+# Assign filtered annotations to the copied raw object
+raw_copy.set_annotations(blink_annot)
+
+raw_copy.plot(events=events_pos1, event_id=trigger_dict, scalings=1e3, show=False, show_options=True, duration=200, picks= ['pupil_left', 'pupil_right'])
+
+# %%
+# need to inspect how the channels are combined... also distribution of pupil sizes for this person looks odd for the right eye. why
+
+for i in ['8H3YTN']:
+    
+    # reading epochs per participant
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_improved_blink_interpolation"
+    epoch_file = folder_path + "/" + i + "_new_interpol_and_nan-epo.fif"
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+
+for i in range(10, 580, 10):
+    i_before = i - 10
+    print(i_before)
+    print(i)
+    pupil_epoch[i_before:i].plot(scalings=1e3, n_epochs=6, events=events_pos1, event_id=trigger_dict)
+
+# %%
+# doing the same for the old epochs because the timing of the annotations seems weirdly off? - same in old epochs - so at least 
+# nothing to do with new epoching
+# "You seem to have overlapping epochs. Some event lines may be duplicated in the plot." ---- ???
+for i in ['8H3YTN']:
+    
+    # reading epochs per participant
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_pos1"
+    epoch_file = folder_path + "/" + i + "_pos1_interpol-epo.fif"
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+
+for i in range(10, 580, 10):
+    i_before = i - 10
+    print(i_before)
+    print(i)
+    pupil_epoch[i_before:i].plot(scalings=1e3, n_epochs=6, events=events_pos1, event_id=trigger_dict)
+
+
+# %%
+
+# trying to plot a few epochs at once, probably need to concatenate them somehow because x=time otherwise takes the mean of the specified epochs
+for i in range(10, 580, 10):
+    i_before = i - 10
+    print(i_before)
+    print(i)
+    pupil_epoch[i_before:i].plot(scalings=1e3, n_epochs=6, events=events_pos1, event_id=trigger_dict)
+
+# %%
+for i in range(10, 580, 10):
+    i_before = i - 10
+    data = pupil_epoch_df[pupil_epoch_df['epoch'].isin(range(i_before, i))]
+    data = data.reset_index()
+    plt.figure(figsize=(10,5))
+    plt.plot(data['index'], data['pupil_right'], label='pupil_right', color='blue')
+    plt.plot(data['index'], data['pupil_left'], label='pupil_left', color='orange')
+    plt.title(f'lineplot of epochs {i_before} to {i} for one subID')
+    plt.xlabel('Index')
+    plt.ylabel('Pupil Right')
+    plt.legend()
+    plt.show()
+
+# %%
+
+for i in range(10, 580, 10):
+    i_before = i - 10
+    data = pupil_epoch_df[pupil_epoch_df['epoch'].isin(range(i_before, i))]
+    data = data.reset_index()
+    plt.figure(figsize=(10,5))
+    sns.lineplot(data=data, x='time', y='pupil_right')
+    sns.lineplot(data=data, x='time', y='pupil_left')
+    plt.title(f'lineplot of epochs {i_before} to {i} for one subID')
+    plt.xlabel('Index')
+    plt.ylabel('Pupil Right')
+    plt.legend()
+    plt.show()
+
+# %%
+# plotting all epochs (taking the mean) and comparing matplotlib and sns to check how they handle nans if that might
+# be where the weird peak in the histogram might come from
+
+plt.figure(figsize=(10,5))
+sns.lineplot(data=pupil_epoch_df, x='time', y='pupil_right', errorbar='se')
+sns.lineplot(data=pupil_epoch_df, x='time', y='pupil_left', errorbar='se')
+plt.title(f'lineplot of epochs {i_before} to {i} for one subID')
+plt.xlabel('Index')
+plt.ylabel('Pupil Right')
+plt.legend()
+plt.show()
+#%%
+# Histogram with uncombined channels
+
+histo_all = pd.DataFrame()
+
+for i in ['8H3YTN']:
+    
+    # reading epochs per participant
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_improved_blink_interpolation"
+    epoch_file = folder_path + "/" + i + "_new_interpol_and_nan-epo.fif"
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+
+    # combining channels
+    # pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
+    # roi_dict = dict(pupils=pupil_ix)
+    # pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method="mean")
+
+    # pupil_epochs_combined_df = pupil_epochs_combined.to_data_frame()
+    # pupil_epochs_combined_df['subID'] = i
+
+    # histo_all = pd.concat([histo_all, pupil_epochs_combined_df])
+
+    pupil_epoch_df = pupil_epoch.to_data_frame()
+
+    plt.figure()
+    plt.title(f'SubID {i} - distribution of pupil size within epochs')
+    data_not_null_right = pupil_epoch_df[pupil_epoch_df['pupil_right'].notnull()]
+    data_not_null_left = pupil_epoch_df[pupil_epoch_df['pupil_left'].notnull()]
+    sns.histplot(data=data_not_null_right, bins=100, stat='density', x='pupil_right', legend=True)
+    sns.histplot(data=data_not_null_left, bins=100, stat='density', x='pupil_left', legend=True)
+
+    # Set fixed axis limits
+    # plt.xlim(0, 2e9)
+    # plt.ylim(0, 6e-9)
+    plt.show()
+    # Save the figure
+    # name=f"pupil_size_histogram_{i}_old_blink_interpolation.png"
+    # figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures/pupil_size'
+    # figure_filepath = os.path.join(figures_folder, name)
+
+    # plt.savefig(figure_filepath, bbox_inches = 'tight')
+
+# plt.figure()
+# plt.title(f'distribution of pupil size within epochs all subIDs')
+# sns.histplot(data=histo_all, bins=100, stat='density', x='pupils', legend=True)
+# plt.show()
+
+
+# %%
+
+#####################
+
+# try averaging with nan.mean
+
+# methodstr | callable()
+# How to combine the data. If “mean”/”median”, the mean/median are returned. Otherwise, must be a callable which, when passed an array of 
+# shape (n_epochs, n_channels, n_time) returns an array of shape (n_channels, n_time). Note that due to file type
+#  limitations, the kind for all these will be “average”. 
