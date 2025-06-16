@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 import itertools
 import numpy as np
 import os
-from pupil_utils import annotate_velocity_blinks, plot_pupil_and_velocity
+from pupil_utils import annotate_velocity_blinks, plot_pupil_and_velocity, interpolate_blinks, remove_missing_data
+from scipy.ndimage import gaussian_filter1d
 
 
 
@@ -35,21 +36,86 @@ for i in ['8H3YTN']:
     # read file per subID
     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
     eyelink_file = folder_path + "/" + i + ".asc"
-    raw = mne.io.read_raw_eyelink(eyelink_file)
+    raw_8H3YTN = mne.io.read_raw_eyelink(eyelink_file)
+
+
+# %%
+######################
+
+# Plotting pupil trace section and associated smoothed pupil trace and associated velocity plot
+
+# === Parameters ===
+ch_name = 'pupil_right'
+sigma = 4  # Gaussian smoothing factor
+t_start = 890
+t_end = t_start + 20  # seconds
+
+# === Get data and smooth ===
+data = raw_8H3YTN.copy().pick(ch_name).get_data()[0]
+times = raw_8H3YTN.times
+sfreq = raw_8H3YTN.info['sfreq']
+
+# Smooth the data
+smoothed = gaussian_filter1d(data, sigma=sigma)
+
+# Compute velocity (derivative of smoothed data)
+velocity = np.gradient(smoothed) * sfreq
+velocity_smoothed = gaussian_filter1d(velocity, sigma=3)
+
+# === Crop to time window ===
+mask = (times >= t_start) & (times <= t_end)
+times_crop = times[mask]
+data_crop = data[mask]
+smoothed_crop = smoothed[mask]
+velocity_crop = velocity_smoothed[mask]
+
+# === Plot ===
+fig, axs = plt.subplots(2, 1, figsize=(12, 6), sharex=True, gridspec_kw={'height_ratios': [2, 1]})
+
+# Pupil trace
+axs[0].plot(times_crop, data_crop, label='Raw Pupil Data', alpha=0.4, color='gray')
+axs[0].plot(times_crop, smoothed_crop, label=f'Smoothed (σ={sigma})', color='blue')
+axs[0].set_ylabel('Pupil Size')
+axs[0].legend()
+axs[0].grid(True)
+axs[0].set_title(f'{ch_name} — Pupil Trace and Velocity (Time: {t_start}-{t_end}s)')
+
+# Velocity trace
+axs[1].plot(times_crop, velocity_crop, label='Smoothed Velocity', color='green')
+axs[1].axhline(0, color='black', linestyle='--', linewidth=0.8)
+axs[1].set_xlabel('Time (s)')
+axs[1].set_ylabel('Velocity')
+axs[1].legend()
+axs[1].grid(True)
+
+plt.tight_layout()
+plt.show()
+
+
+
+
+
 
 # %%
 # annotating velocity blinks also as BAD_blink
-raw_interpol = raw.copy()
+raw_8H3YTN_copy = raw_8H3YTN.copy()
+#
 raw_anno = annotate_velocity_blinks(
-    raw_interpol,
+    raw_8H3YTN_copy,
     channel_names=('pupil_left', 'pupil_right'),
-    velocity_thresh=None,
     velocity_percentile=99.5,
     margin_before=0.05,
-    margin_after=0.05,
-    description='BAD_velo_blink',
-    sfreq=None
-)
+    margin_after=0.1,
+    max_duration=0.5,
+    description='BAD_blink_precise',
+    sfreq=None,
+    sigma=4)
+
+# %% 
+raw_anno_copy2 = raw_anno.copy()
+
+raw_interpol2 = interpolate_blinks(raw_anno_copy2, buffer=[0.05, 0.05], match="BAD_blink_precise", interpolate_gaze=False, method="MonotonicCubicSpline")
+
 # %%
 # interpolatiing over all BAD_blinks
 # using copies to not crop the actual raw
@@ -58,12 +124,12 @@ mne.preprocessing.eyetracking.interpolate_blinks(raw_interpol, buffer=[0.05, 0.2
 
 # %%
 # plotting cropped version
-raw_interpol1 = raw_interpol.copy()
-blink_annot = raw_interpol1.annotations[np.isin(raw_interpol1.annotations.description,  ['blink', 'BAD_velo_blink', 'velo_blink'])] 
+raw_interpol = raw_interpol2.copy()
+blink_annot = raw_interpol2.annotations[np.isin(raw_interpol2.annotations.description,  ['blink_precise_interp', 'BAD_blink_precise','blink', 'BAD_velo_blink', 'velo_blink'])] 
 # Assign filtered annotations to the copied raw object
-raw_interpol1.set_annotations(blink_annot)
-raw_interpol1.crop(tmin=692, tmax=698)
-raw_interpol1.plot(scalings=1e3, duration=1000.1, picks= ['pupil_left', 'pupil_right'])
+raw_interpol.set_annotations(blink_annot)
+raw_interpol.crop(tmin=990, tmax=1010)
+raw_interpol.plot(scalings=1e3, duration=1000.1, picks= ['pupil_left', 'pupil_right'])
 
 #############################################
 
@@ -90,8 +156,8 @@ plot_pupil_and_velocity(raw_copy, pupil_channel="pupil_right")
 plot_pupil_and_velocity(raw_copy_anno, pupil_channel="pupil_right")
 
 # %%
-raw_anno_copy = raw_anno.copy()
-blink_annot = raw_anno_copy.annotations[np.isin(raw_anno_copy.annotations.description, ['BAD_blink', "BAD_velo_blink"])] #
+raw_anno_copy = raw_anno_new_precise.copy()
+blink_annot = raw_anno_copy.annotations[np.isin(raw_anno_copy.annotations.description, ['BAD_blink_precise', "BAD_velo_blink"])] #
 # Assign filtered annotations to the copied raw object
 raw_anno_copy.set_annotations(blink_annot)
 raw_anno_copy.crop(tmin=790, tmax=810)

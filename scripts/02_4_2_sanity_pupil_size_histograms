@@ -34,7 +34,7 @@ os.makedirs(csv_path2, exist_ok=True)
 # Histograms with new epochs (new interpolation and nan)
 histo_all = pd.DataFrame()
 
-for i in good_partis:
+for i in ['8H3YTN']:
     
     # reading epochs per participant
     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_improved_blink_interpolation"
@@ -55,7 +55,7 @@ for i in good_partis:
 
     plt.figure()
     plt.title(f'SubID {i} - distribution of pupil size within epochs')
-    sns.histplot(data=pupil_epochs_df, bins=100, stat='density', x='pupils', legend=True)
+    sns.histplot(data=pupil_epochs_df, bins=100, stat='density', x='pupil_right', legend=True)
 
     # Set fixed axis limits
     plt.xlim(0, 2e9)
