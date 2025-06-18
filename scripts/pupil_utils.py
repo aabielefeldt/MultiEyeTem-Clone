@@ -11,15 +11,16 @@ from mne._fiff.constants import FIFF
 from mne.utils import logger, _check_preload, _validate_type, warn # pylint: disable=no-name-in-module
 from mne.io import BaseRaw # pylint: disable=no-name-in-module
 from mne.io.eyelink.eyelink import RawEyelink
+from scipy.signal import welch
 
 def annotate_velocity_blinks(
     raw,
     channel_names=('pupil_left', 'pupil_right'),
     velocity_percentile=99.5,
-    margin_before=0.05,
-    margin_after=0.1,
-    max_duration=0.8,
-    description='BAD_blink_precise',
+    margin_before=0.01,
+    margin_after=0.01,
+    max_duration=0.5,
+    description='BAD_velo_blink',
     sfreq=None,
     sigma=4
 ):
@@ -124,6 +125,7 @@ def annotate_velocity_blinks(
     return raw
 
 def remove_missing_data(raw, channel_names=('pupil_left', 'pupil_right'), buffer=[0.05, 0.05]):
+    raw = raw.copy()  
     sfreq = raw.info['sfreq']
     pre_buffer_samples = int(buffer[0] * sfreq)
     post_buffer_samples = int(buffer[1] * sfreq)
@@ -147,6 +149,7 @@ def remove_missing_data(raw, channel_names=('pupil_left', 'pupil_right'), buffer
 
         # Set the masked region to NaN
         data[mask] = np.nan
+    return raw
 
 
 
@@ -351,3 +354,4 @@ def _interp_1d(x, xp, fp):
     """wrapper for scipy interpolation classes"""
     Interp = sp.interpolate.interp1d(xp, fp)
     return Interp(x)
+

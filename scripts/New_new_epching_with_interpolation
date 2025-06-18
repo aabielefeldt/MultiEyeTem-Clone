@@ -69,9 +69,10 @@ os.makedirs(epochs_folderpath, exist_ok=True)
 # Creating epochs timelocked to pos1
 
 freqs = []
-blink_stats_all = []
+in_epochs_annots_df_all = pd.DataFrame()
+per_epochs_annots_df = pd.DataFrame()
 
-for i in ['8H3YTN']:
+for i in good_partis:
         
     # read file per subID
     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
@@ -80,7 +81,7 @@ for i in ['8H3YTN']:
     sfreq = raw.info['sfreq']
     freq_pp = [i, sfreq]
     freqs.append(freq_pp)
-    
+
     # Drop gaze channels
     # still a comma after the remaining channels in annotations
     drop_chs = ['xpos_right', 'xpos_left', 'ypos_right', 'ypos_left']
@@ -95,6 +96,7 @@ for i in ['8H3YTN']:
     # Create Custom Mapping to map annotations found to event ids that match the triggers used
     # does this overwrite the new_annots? -> apparently not
     annotations = raw.annotations
+
     custom_mapping = {}
     # Generate mapping for annotations with integer descriptions
     max_id = 0
@@ -128,37 +130,26 @@ for i in ['8H3YTN']:
         raw,
         channel_names=('pupil_left', 'pupil_right'),
         velocity_percentile=99.5,
-        margin_before=0.05,
-        margin_after=0.05,
+        margin_before=0.01,
+        margin_after=0.01,
         max_duration=0.5,
         description='BAD_velo_blink',
         sfreq=None,
         sigma=4)
 
+    #############
+    # interpolating with custom function
+
     raw = interpolate_blinks(raw, buffer=[0.05, 0.05], match="BAD_velo_blink", interpolate_gaze=False, method="MonotonicCubicSpline")
 
     #################
-    # is the order correct here?
-    # do I need to do the custom mapping first and then interpolate?
-    # do I need to add annotations to each other instead of overwriting (am I overwriting at the moment?)
-    # Set NaN for remaining zeros in data
-
-    # ????? still adding same buffer as in interpolation?
-
-    raw = remove_missing_data(raw)
-    # buffer_before = 0.05  # seconds before onset
-    # buffer_after = 0.2
-
-    # ch_names = ['pupil_left', 'pupil_right']
-    # for ch in ch_names:
-    #     if ch.startswith('pupil_'):
-    #         ch_idx = raw.ch_names.index(ch)
-    #         data = raw._data[ch_idx]
-    #         raw._data[ch_idx][data == 0] = np.nan
+    # replacing zeros with nans and annotating
+    raw = remove_missing_data(raw, channel_names=('pupil_left', 'pupil_right'), buffer=[0.05, 0.05])
+    nan_annot = mne.preprocessing.annotate_nan(raw)
+    raw.set_annotations(raw.annotations + nan_annot)
 
         
     #########################
-
 
     # Epoching
     pupil_epochs_pos1 = mne.Epochs(
@@ -175,88 +166,34 @@ for i in ['8H3YTN']:
         reject_by_annotation=False
     )
     
+
     # --- Counting blink stats ---
+    in_epochs_annots_df = pupil_epochs_pos1.annotations.to_data_frame()
+    in_epochs_annots_df['subID'] = i
+    in_epochs_annots_df_all = pd.concat([in_epochs_annots_df_all, in_epochs_annots_df])
 
-    new_annot = raw.annotations
-
-    epoch_starts = pupil_epochs_pos1.events[:, 0] / sfreq
-    epoch_duration = pupil_epochs_pos1.tmax - pupil_epochs_pos1.tmin
-
-    def intervals_overlap(s1, e1, s2, e2):
-        return max(s1, s2) < min(e1, e2)
-
-    num_long_blinks_in_epoch = 0
-    num_long_blinks_out_epoch = 0
-    num_blinks_in_epoch = 0
-    num_blinks_out_epoch = 0
-
-    total_long_blink_duration_in = 0
-    total_long_blink_duration_out = 0
-    total_blink_duration_in = 0
-    total_blink_duration_out = 0
-
-    for onset, duration, description in zip(new_annot.onset, new_annot.duration, new_annot.description):
-        blink_start = onset
-        blink_end = onset + duration
-        in_epoch = False
-        for epoch_start in epoch_starts:
-            epoch_end = epoch_start + epoch_duration
-            if intervals_overlap(blink_start, blink_end, epoch_start, epoch_end):
-                in_epoch = True
-                break
-        if description == 'BAD_long_blink':
-            if in_epoch:
-                num_long_blinks_in_epoch += 1
-                total_long_blink_duration_in += duration
-            else:
-                num_long_blinks_out_epoch += 1
-                total_long_blink_duration_out += duration
-        elif description == 'BAD_blink':
-            if in_epoch:
-                num_blinks_in_epoch += 1
-                total_blink_duration_in += duration
-            else:
-                num_blinks_out_epoch += 1
-                total_blink_duration_out += duration
-
-
-    # Count total number and duration of all BAD_long_blink annotations (where data set to NaN)
-    total_long_blinks = sum(1 for d in new_annot.description if d == 'BAD_long_blink')
-    total_long_blink_duration = sum(d for d, desc in zip(new_annot.duration, new_annot.description) if desc == 'BAD_long_blink')
-    m, total_long_blink_duration_min = divmod(total_long_blink_duration, 60)
-    m, total_long_blink_duration_in_min = divmod(total_long_blink_duration_in, 60)
-    m, total_long_blink_duration_out_min = divmod(total_long_blink_duration_out, 60)
-
-
-    # Store subject stats
-    blink_stats = {
-        'subID': i,
-        'total_long_blinks': total_long_blinks,
-        'total_long_blink_duration': total_long_blink_duration,
-        'total_long_blink_duration_min': total_long_blink_duration_min,
-        'long_blinks_in_epoch': num_long_blinks_in_epoch,
-        'long_blinks_out_epoch': num_long_blinks_out_epoch,
-        'long_blink_duration_in_epoch': total_long_blink_duration_in,
-        'long_blink_duration_in_epoch_min': total_long_blink_duration_in_min,
-        'long_blink_duration_out_epoch': total_long_blink_duration_out,
-        'long_blink_duration_out_epoch_min': total_long_blink_duration_out_min,
-        'blinks_in_epoch': num_blinks_in_epoch,
-        'blinks_out_epoch': num_blinks_out_epoch,
-        'blink_duration_in_epoch': total_blink_duration_in,
-        'blink_duration_out_epoch': total_blink_duration_out,
-    }
-
+# m<be change epoch index to not be an index but the actual epoch number from the metadata
+# currently appending the load does not work -> probably because I am setting the whole column to one single load number
+    
     for load in [1, 2, 3]:
         epochs_load = pupil_epochs_pos1[f'items_presented == {load}']
-        annotations_per_epoch = epochs_load.get_annotations_per_epoch()
-        blink_counts = [
-            sum(1 for annot in epoch_annots if annot[2] == 'blink')
-            for epoch_annots in annotations_per_epoch
-        ]
-        mean_blinks = np.mean(blink_counts) if blink_counts else 0
-        blink_stats[f'mean_n_blinks_load{load}'] = mean_blinks
+        epoch_number = pupil_epochs_pos1[f'items_presented == {load}'].metadata['trial']
+        one_load_epoch_annots_df = pd.DataFrame([
+        {
+            "epoch_index": epoch_number.iat[i],
+            "onset": a[0],
+            "duration": a[1],
+            "description": a[2],
+        }
+        for i, annots in enumerate(epochs_load.get_annotations_per_epoch())
+        for a in annots if len(a) >= 3
+        ])
+        one_load_epoch_annots_df['load'] = load
+        one_load_epoch_annots_df['subID'] = i
+        per_epochs_annots_df = pd.concat([per_epochs_annots_df, one_load_epoch_annots_df])
+    
+    
 
-    blink_stats_all.append(blink_stats)
 
     # Save epoch in fif format to a specified folder
     filename = f"{i}_very_new-epo.fif"
@@ -265,19 +202,22 @@ for i in ['8H3YTN']:
 
 # creating a dataframe with all subjects sampling frequency to later select differently sampled datafiles
 freqs_df = pd.DataFrame(freqs, columns=['subID', 'frequency'])
-blink_stats_df = pd.DataFrame(blink_stats_all)
-# display(blink_stats_df)
+
 
 # saving dfs
 data_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/csv_files'
 
-freqs_df_name = f'freqs_df.csv'
+freqs_df_name = f'freqs_df_newnew.csv'
 csv_filepath = os.path.join(data_folder, freqs_df_name)
-#freqs_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
+freqs_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
 
-blinks_df_name = f'blinks_stats_df.csv'
-csv_filepath = os.path.join(data_folder, blinks_df_name)
-#blink_stats_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
+in_epochs_annots_df_name = f'in_epochs_annots_df.csv'
+csv_filepath = os.path.join(data_folder, in_epochs_annots_df_name)
+in_epochs_annots_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
+
+per_epochs_annots_df_name = f'per_epochs_annots_df.csv'
+csv_filepath = os.path.join(data_folder, per_epochs_annots_df_name)
+per_epochs_annots_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
 
 
 # %%

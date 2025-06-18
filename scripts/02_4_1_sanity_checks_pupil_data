@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import itertools
 import numpy as np
 import os
-from pupil_utils import annotate_velocity_blinks, plot_pupil_and_velocity, interpolate_blinks, remove_missing_data
+from pupil_utils import annotate_velocity_blinks, plot_pupil_and_velocity, interpolate_blinks, remove_missing_data, annotate_high_frequency_noise
 from scipy.ndimage import gaussian_filter1d
 
 
