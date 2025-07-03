@@ -126,11 +126,11 @@ histo_all = pd.DataFrame()
 for i in ['8H3YTN']:
     
     # reading epochs per participant
-    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_pos1"
-    epoch_file = folder_path + "/" + i + "_pos1_interpol-epo.fif"
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_very_new"
+    epoch_file = folder_path + "/" + i + "_very_new-epo.fif"
     pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
 
-    # combining channels
+    # combining channels - NAN COMBINE
     pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
     roi_dict = dict(pupils=pupil_ix)
     pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method="mean")
@@ -149,11 +149,11 @@ for i in ['8H3YTN']:
     plt.ylim(0, 6e-9)
 
     # Save the figure
-    name=f"pupil_size_histogram_{i}.png"
-    figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures/pupil_size'
-    figure_filepath = os.path.join(figures_folder, name)
+    # name=f"pupil_size_histogram_{i}.png"
+    # figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures/pupil_size'
+    # figure_filepath = os.path.join(figures_folder, name)
 
-    plt.savefig(figure_filepath, bbox_inches = 'tight')
+    # plt.savefig(figure_filepath, bbox_inches = 'tight')
 
 plt.figure()
 plt.title(f'distribution of pupil size within epochs all subIDs')
@@ -162,7 +162,7 @@ sns.histplot(data=histo_all, bins=100, stat='density', x='pupils', legend=True)
 # %%
 # Histogram of pupil sizes per subID per timepoint during baseline period
 # do I just plot the size averaged per baseline period per trial?
-for i in ['1UVQEK']:
+for i in ['8H3YTN']:
     
     # reading epochs per participant
     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_pos1"
@@ -468,7 +468,7 @@ plt.show()
 
 histo_all = pd.DataFrame()
 
-for i in ['8H3YTN']:
+for i in ['Z632AK']:
     
     # reading epochs per participant
     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_improved_blink_interpolation"

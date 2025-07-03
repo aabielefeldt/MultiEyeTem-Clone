@@ -4,7 +4,7 @@ from mne import Annotations
 from scipy.ndimage import gaussian_filter1d
 import scipy as sp
 import pandas as pd
-
+import matplotlib.pyplot as plt
 from mne.annotations import Annotations, _annotations_starts_stops
 from mne.preprocessing.artifact_detection import _annotations_from_mask
 from mne._fiff.constants import FIFF
@@ -12,6 +12,10 @@ from mne.utils import logger, _check_preload, _validate_type, warn # pylint: dis
 from mne.io import BaseRaw # pylint: disable=no-name-in-module
 from mne.io.eyelink.eyelink import RawEyelink
 from scipy.signal import welch
+from scipy.stats import mstats
+from scipy.ndimage import gaussian_filter1d
+from scipy.interpolate import interp1d
+
 
 def annotate_velocity_blinks(
     raw,
@@ -66,11 +70,21 @@ def annotate_velocity_blinks(
             raise ValueError(f"Channel '{ch_name}' not found in raw.")
 
         data = raw.copy().pick(ch_name).get_data()[0]
-        smoothed = gaussian_filter1d(data, sigma=sigma)
-        velocity = np.gradient(smoothed) * sfreq
 
-        vt_start = np.percentile(np.abs(velocity), velocity_percentile)
-        vt_end = vt_start / 2
+        if sigma>0:
+            smoothed = gaussian_filter1d(data, sigma=sigma)
+            velocity = np.gradient(smoothed) * sfreq
+        else:
+            velocity = np.gradient(data) * sfreq
+        # smoothed = gaussian_filter1d(data, sigma=sigma)
+        # velocity = np.gradient(smoothed) * sfreq
+
+        # clipping the top 1 percent of data to not have outliers influence the threshold
+        velocity_clipped = mstats.winsorize(velocity, limits=[0.01, 0.01])  # clip top and bottom 1%
+        abs_velocity = np.abs(velocity_clipped.data)
+
+        vt_start = np.percentile(abs_velocity, velocity_percentile)
+        vt_end = vt_start
 
         i = 0
         while i < len(velocity) - 1:
@@ -87,7 +101,7 @@ def annotate_velocity_blinks(
 
                 # Stabilization: velocity drops close to zero
                 post_dilate_zone = velocity[imid:]
-                low_v_thresh = np.nanstd(velocity) / 100
+                low_v_thresh = np.nanstd(velocity) / 20
                 try:
                     iend = np.where(np.abs(post_dilate_zone) < low_v_thresh)[0][0] + imid
                 except IndexError:
@@ -124,7 +138,10 @@ def annotate_velocity_blinks(
 
     return raw
 
-def remove_missing_data(raw, channel_names=('pupil_left', 'pupil_right'), buffer=[0.05, 0.05]):
+#######################
+#######################
+
+def remove_missing_data(raw, channel_names=('pupil_left', 'pupil_right'), buffer=[0.15, 0.15]):
     raw = raw.copy()  
     sfreq = raw.info['sfreq']
     pre_buffer_samples = int(buffer[0] * sfreq)
@@ -151,43 +168,90 @@ def remove_missing_data(raw, channel_names=('pupil_left', 'pupil_right'), buffer
         data[mask] = np.nan
     return raw
 
+###########################
+###########################
 
 
-def plot_pupil_and_velocity(raw, pupil_channel, sfreq=None):
+def plot_pupil_trace_and_velocity(raw, ch_name='pupil_right', sigma=4, t_start=890, window_duration=20, velocity_percentile=99.5):
     """
-    Plot raw pupil data and its velocity (1st derivative) for inspection.
+    Plot raw and smoothed pupil data along with velocity for a given time window.
 
-    Parameters
-    ----------
-    raw : mne.io.Raw
-        Raw object with pupil data.
-    pupil_channel : str
-        Name of the channel (e.g., 'pupil_right').
-    sfreq : float or None
-        Sampling frequency. If None, uses raw.info["sfreq"].
+    Parameters:
+    - raw: mne.io.Raw
+        The raw MNE object containing pupil data.
+    - ch_name: str
+        Name of the pupil data channel.
+    - sigma: float
+        Gaussian smoothing factor.
+    - t_start: float
+        Start time in seconds.
+    - window_duration: float
+        Duration of the time window in seconds.
     """
-    import matplotlib.pyplot as plt
 
-    if sfreq is None:
-        sfreq = raw.info["sfreq"]
 
-    data = raw.copy().pick(pupil_channel).get_data()[0]
+    t_end = t_start + window_duration
+
+    # === Get data and smooth ===
+    data = raw.copy().pick(ch_name).get_data()[0]
     times = raw.times
-    velocity = np.gradient(data) * sfreq
+    sfreq = raw.info['sfreq']
+    filename = raw.filenames
 
-    fig, axs = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
-    axs[0].plot(times, data, label="Pupil size")
-    axs[0].set_ylabel("Pupil size")
+    # Compute velocity
+    if sigma>0:
+        smoothed = gaussian_filter1d(data, sigma=sigma)
+        velocity = np.gradient(smoothed) * sfreq
+    else:
+        velocity = np.gradient(data) * sfreq
+
+
+    velocity_clipped = mstats.winsorize(velocity, limits=[0.01, 0.01])  # clip top and bottom 1%
+    abs_velocity = np.abs(velocity_clipped)
+    #abs_velocity = np.abs(velocity)
+    
+    vt_start = np.nanpercentile(abs_velocity, velocity_percentile)
+    vt_end = vt_start
+
+    # === Crop to time window ===
+    mask = (times >= t_start) & (times <= t_end)
+    times_crop = times[mask]
+    data_crop = data[mask]
+    if sigma > 0:
+        smoothed_crop = smoothed[mask]
+    else:
+        smoothed_crop = data[mask]
+    velocity_crop = velocity[mask]
+
+    # === Plot ===
+    fig, axs = plt.subplots(2, 1, figsize=(12, 9), sharex=True, gridspec_kw={'height_ratios': [2, 1]})
+
+    # Pupil trace
+    axs[0].plot(times_crop, data_crop, label='Raw Pupil Data', alpha=0.4, color='gray')
+    axs[0].plot(times_crop, smoothed_crop, label=f'Smoothed (σ={sigma})', color='blue')
+    axs[0].set_ylabel('Pupil Size')
     axs[0].legend()
+    axs[0].grid(True)
+    axs[0].set_title(f'{ch_name} — Pupil Trace and Velocity (Time: {t_start}-{t_end}s)')
+    
 
-    axs[1].plot(times, velocity, label="Velocity", color="orange")
-    axs[1].axhline(y=0, color="grey", linestyle="--", linewidth=0.5)
-    axs[1].set_ylabel("Velocity")
-    axs[1].set_xlabel("Time (s)")
+    # Velocity trace
+    axs[1].plot(times_crop, velocity_crop, label='Smoothed Velocity', color='green')
+    # axs[1].axhline(0, color='black', linestyle='--', linewidth=0.8)
+    axs[1].axhline(vt_end, color='red', linestyle='--', linewidth=1.5, label=f'+Threshold = {vt_end:.1f}')
+    axs[1].axhline(-vt_start, color='red', linestyle='--', linewidth=1.5, label=f'-Threshold = {-vt_start:.1f}')
+    axs[1].set_xlabel('Time (s)')
+    axs[1].set_ylabel('Velocity')
     axs[1].legend()
+    axs[1].grid(True)
 
+    fig.suptitle(f'{filename}')
     plt.tight_layout()
     plt.show()
+
+    print(f'v_percentile: {velocity_percentile}, vt_start: {vt_start:.3f}, vt_end: {vt_end:.3f}')
+
+
 
 
 
@@ -355,3 +419,125 @@ def _interp_1d(x, xp, fp):
     Interp = sp.interpolate.interp1d(xp, fp)
     return Interp(x)
 
+
+
+# %%
+def merge_and_rename_annotations(
+    raw,
+    match=["BAD_velo_blink"],
+    min_gap_sec=0.1,
+    new_description="BAD_merged_blink",
+    rename_original_to="blink_used_for_merged",
+    channel_names=['pupil_right', 'pupil_left']
+):
+    """
+    Merge close annotations per channel and rename originals used in merge.
+
+    Parameters
+    ----------
+    raw : mne.io.Raw
+        The raw object with annotations.
+    match : list of str
+        Descriptions of annotations to consider for merging.
+    min_gap_sec : float
+        Maximum time between annotations to allow merging.
+    new_description : str
+        Description for newly merged annotations.
+    rename_original_to : str
+        New description for original annotations used in merges.
+    channel_names : list of str
+        Names of channels to process separately.
+
+    Returns
+    -------
+    raw : mne.io.Raw
+        Raw object with updated annotations.
+    """
+
+    original = raw.annotations
+    all_new_annots = []
+    rename_indices = []
+
+    for ch in channel_names:
+        # Filter annotations by channel name and matching descriptions
+        relevant_idxs = [
+            i for i, ann in enumerate(original)
+            if ann["description"] in match and (ann["ch_names"] is not None and ch in ann["ch_names"])
+        ]
+
+        if not relevant_idxs:
+            continue
+
+        # Sort by onset
+        sorted_idxs = sorted(relevant_idxs, key=lambda i: original.onset[i])
+
+        # Group close annotations
+        groups = []
+        current = []
+
+        for idx in sorted_idxs:
+            if not current:
+                current = [idx]
+                continue
+
+            last = current[-1]
+            last_end = original.onset[last] + original.duration[last]
+            this_start = original.onset[idx]
+
+            if this_start - last_end <= min_gap_sec:
+                current.append(idx)
+            else:
+                groups.append(current)
+                current = [idx]
+
+        if current:
+            groups.append(current)
+
+        # Process groups (only those with more than 1 annotation)
+        for group in groups:
+            if len(group) < 2:
+                continue  # skip groups with only one annotation
+
+            group_onsets = original.onset[group]
+            group_durations = original.duration[group]
+            start = np.min(group_onsets)
+            end = np.max(group_onsets + group_durations)
+
+            all_new_annots.append({
+                "onset": start,
+                "duration": end - start,
+                "description": new_description,
+                "ch_names": [ch]
+            })
+
+            rename_indices.extend(group)
+
+    # Rename original annotations used in merges
+    all_old_descriptions = list(raw.annotations.description)
+    all_ch_names = list(raw.annotations.ch_names)
+    if rename_indices:
+        for i in rename_indices:
+            all_old_descriptions[i] = rename_original_to
+    
+    rename_annots = mne.Annotations(
+        onset=raw.annotations.onset,
+        duration=raw.annotations.duration,
+        description=all_old_descriptions,
+        orig_time=raw.annotations.orig_time,
+        ch_names=all_ch_names # probably unnecessary change
+        )
+    raw.set_annotations(rename_annots)
+
+    # Add merged annotations
+    if all_new_annots:
+        merged = mne.Annotations(
+            onset=[a["onset"] for a in all_new_annots],
+            duration=[a["duration"] for a in all_new_annots],
+            description=[a["description"] for a in all_new_annots],
+            ch_names=[a["ch_names"] for a in all_new_annots],
+            orig_time=original.orig_time
+        )
+        raw.set_annotations(raw.annotations + merged)
+
+    return raw
+# %%

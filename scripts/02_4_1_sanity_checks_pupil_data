@@ -7,10 +7,9 @@ import matplotlib.pyplot as plt
 import itertools
 import numpy as np
 import os
-from pupil_utils import annotate_velocity_blinks, plot_pupil_and_velocity, interpolate_blinks, remove_missing_data, annotate_high_frequency_noise
+from pupil_utils import annotate_velocity_blinks, remove_missing_data, plot_pupil_trace_and_velocity, interpolate_blinks, merge_and_rename_annotations
 from scipy.ndimage import gaussian_filter1d
-
-
+from scipy.interpolate import interp1d
 
 # %% Load Metadata
 
@@ -19,245 +18,21 @@ good_partis = df['subID'].unique()
 
 evoked_df_pos1_interpol_shifted = pd.read_csv('../data/csv_files/evoked_df_pos1_interpol_shifted.csv')
 
-
 #%%
 # if qt is used as backend the kernel crashes
 mne.viz.set_browser_backend('matplotlib')
 
-
 # %%
-# Cropping raw makes it possible to plot using matplotlib
-# raw.plot(scalings=1e3, show=True, show_options=True, duration=9.1)
-
-######################################
-# currently working pipeline
-for i in ['8H3YTN']:
-        
-    # read file per subID
-    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
-    eyelink_file = folder_path + "/" + i + ".asc"
-    raw_8H3YTN = mne.io.read_raw_eyelink(eyelink_file)
-
-
-# %%
-######################
-
-# Plotting pupil trace section and associated smoothed pupil trace and associated velocity plot
-
-# === Parameters ===
-ch_name = 'pupil_right'
-sigma = 4  # Gaussian smoothing factor
-t_start = 890
-t_end = t_start + 20  # seconds
-
-# === Get data and smooth ===
-data = raw_8H3YTN.copy().pick(ch_name).get_data()[0]
-times = raw_8H3YTN.times
-sfreq = raw_8H3YTN.info['sfreq']
-
-# Smooth the data
-smoothed = gaussian_filter1d(data, sigma=sigma)
-
-# Compute velocity (derivative of smoothed data)
-velocity = np.gradient(smoothed) * sfreq
-velocity_smoothed = gaussian_filter1d(velocity, sigma=3)
-
-# === Crop to time window ===
-mask = (times >= t_start) & (times <= t_end)
-times_crop = times[mask]
-data_crop = data[mask]
-smoothed_crop = smoothed[mask]
-velocity_crop = velocity_smoothed[mask]
-
-# === Plot ===
-fig, axs = plt.subplots(2, 1, figsize=(12, 6), sharex=True, gridspec_kw={'height_ratios': [2, 1]})
-
-# Pupil trace
-axs[0].plot(times_crop, data_crop, label='Raw Pupil Data', alpha=0.4, color='gray')
-axs[0].plot(times_crop, smoothed_crop, label=f'Smoothed (σ={sigma})', color='blue')
-axs[0].set_ylabel('Pupil Size')
-axs[0].legend()
-axs[0].grid(True)
-axs[0].set_title(f'{ch_name} — Pupil Trace and Velocity (Time: {t_start}-{t_end}s)')
-
-# Velocity trace
-axs[1].plot(times_crop, velocity_crop, label='Smoothed Velocity', color='green')
-axs[1].axhline(0, color='black', linestyle='--', linewidth=0.8)
-axs[1].set_xlabel('Time (s)')
-axs[1].set_ylabel('Velocity')
-axs[1].legend()
-axs[1].grid(True)
-
-plt.tight_layout()
-plt.show()
-
-
-
-
-
-
-# %%
-# annotating velocity blinks also as BAD_blink
-raw_8H3YTN_copy = raw_8H3YTN.copy()
-#
-raw_anno = annotate_velocity_blinks(
-    raw_8H3YTN_copy,
-    channel_names=('pupil_left', 'pupil_right'),
-    velocity_percentile=99.5,
-    margin_before=0.05,
-    margin_after=0.1,
-    max_duration=0.5,
-    description='BAD_blink_precise',
-    sfreq=None,
-    sigma=4)
-
-# %% 
-raw_anno_copy2 = raw_anno.copy()
-
-raw_interpol2 = interpolate_blinks(raw_anno_copy2, buffer=[0.05, 0.05], match="BAD_blink_precise", interpolate_gaze=False, method="MonotonicCubicSpline")
-
-# %%
-# interpolatiing over all BAD_blinks
-# using copies to not crop the actual raw
-raw_interpol = raw.copy()
-mne.preprocessing.eyetracking.interpolate_blinks(raw_interpol, buffer=[0.05, 0.2], match=['BAD_blink'], interpolate_gaze=False)
-
-# %%
-# plotting cropped version
-raw_interpol = raw_interpol2.copy()
-blink_annot = raw_interpol2.annotations[np.isin(raw_interpol2.annotations.description,  ['blink_precise_interp', 'BAD_blink_precise','blink', 'BAD_velo_blink', 'velo_blink'])] 
-# Assign filtered annotations to the copied raw object
-raw_interpol.set_annotations(blink_annot)
-raw_interpol.crop(tmin=990, tmax=1010)
-raw_interpol.plot(scalings=1e3, duration=1000.1, picks= ['pupil_left', 'pupil_right'])
-
-#############################################
-
-# %%
-# trying out my new annotation function
-
-# Optionally plot first
-# Make a copy so the original stays unchanged
-
-raw_anno = annotate_velocity_blinks(
-    raw,
-    channel_names=('pupil_left', 'pupil_right'),
-    velocity_thresh=None,
-    velocity_percentile=99.5,
-    margin_before=0.05,
-    margin_after=0.05,
-    description='BAD_velo_blink',
-    sfreq=None
-)
-
-# %%
-
-plot_pupil_and_velocity(raw_copy, pupil_channel="pupil_right")
-plot_pupil_and_velocity(raw_copy_anno, pupil_channel="pupil_right")
-
-# %%
-raw_anno_copy = raw_anno_new_precise.copy()
-blink_annot = raw_anno_copy.annotations[np.isin(raw_anno_copy.annotations.description, ['BAD_blink_precise', "BAD_velo_blink"])] #
-# Assign filtered annotations to the copied raw object
-raw_anno_copy.set_annotations(blink_annot)
-raw_anno_copy.crop(tmin=790, tmax=810)
-raw_anno_copy.plot(scalings=1e3, duration=1000.1, picks= ['pupil_left', 'pupil_right'])
-
-#%%
-#%%
-
-
-
-
-# %%
-raw_copy_interpol = raw_anno.copy()
-mne.preprocessing.eyetracking.interpolate_blinks(raw_copy_interpol, buffer=[0.05, 0.2], match=['BAD_blink'], interpolate_gaze=False)
-raw_interpol2 = raw_copy_interpol.copy()
-blink_annot = raw_interpol2.annotations[np.isin(raw_interpol2.annotations.description, ['BAD_blink', 'blink', 'BAD_velo_blink', 'velo_blink'])] 
-# Assign filtered annotations to the copied raw object
-raw_interpol2.set_annotations(blink_annot)
-raw_interpol2.crop(tmin=790, tmax=800)
-raw_interpol2.plot(scalings=1e3, duration=1000.1, picks= ['pupil_left', 'pupil_right'])
-
-#%%
-raw_anno_interpol = raw_anno.copy()
-mne.preprocessing.eyetracking.interpolate_blinks(raw_anno_interpol, buffer=[0.05, 0.2], match=["BAD_velo_blink"], interpolate_gaze=False)
-# raw_copy.plot(events=events_pos1, event_id=trigger_dict, scalings=1e3, show=False, show_options=True, duration=90.1, picks= ['pupil_left', 'pupil_right'])
-
-# %%
-raw_anno_copy2 = raw_anno_interpol.copy()
-raw_anno_copy2 = raw_anno_copy2.crop(tmin=790, tmax=810)
-blink_annot = raw_anno_copy2.annotations[np.isin(raw_anno_copy2.annotations.description, ['BAD_blink','blink', "velo_blink"])] #
-# Assign filtered annotations to the copied raw object
-raw_anno_copy2.set_annotations(blink_annot)
-raw_anno_copy2.plot(scalings=1e3, duration=1000.1, picks= ['pupil_left', 'pupil_right'])
-
-
-# %%
-# creating evokeds without baseline and no seperation by load
-ave_df_all = pd.DataFrame()
-
-for i in good_partis:
-    
-    # reading epochs per participant
-    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_pos1"
-    epoch_file = folder_path + "/" + i + "_pos1_interpol-epo.fif"
-    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
-    # pupil_epoch.plot()
-
-    # combining channels
-    pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
-    roi_dict = dict(pupils=pupil_ix)
-    pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method="mean")
-
-    # averaging 
-    ave = pupil_epochs_combined.average()
-
-    # adding individual averaged data to dataframe including load and subID
-    ave_df = ave.to_data_frame()
-    ave_df['subID'] = i
-
-    # concatenating to evoked_df_pos1_interpol
-    ave_df_all = pd.concat([ave_df_all, ave_df])
-
-
-ave_df_all = ave_df_all.reset_index()
-
-ave_df_all.to_csv('../data/csv_files/ave_df_all.csv', index=False)
-#pupil_df = pupil_epoch.to_data_frame()
-
-#sns.lineplot(data=pupil_epoch, x='time', y='pupils', hue='subID')
-# %%
-# plot all participants averaged timelines on top of each other
-# plot before baseline, seems like there are no outliers
-with sns.plotting_context(context='paper', font_scale=1.5): 
-    
-    fig, ax = plt.subplots(figsize=(10,8))
-
-    sns.lineplot(data=ave_df_all, x='time', y='pupils', hue='subID', errorbar='se', ax=ax)
-plt.show()
-
-
-
-
-#%%
+# Newest epochs (uncombined)
 # reading epochs and saving as dataframe without averaging to check for all trials per subID
 # plot all trials per participant on top of each other to check 
 # for individual trial outliers
 
-# would need the number of epochs per participant (that is number of trials which I know)
-# this is still epochs and not evoked because I didn't average anything.
-epochs_all = pd.DataFrame()
+epochs_all_uncombined_even_newer = pd.DataFrame()
 for i in good_partis:
-    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_improved_blink_interpolation"
-    epoch_file = folder_path + "/" + i + "_new_interpol_and_nan-epo.fif"
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+    epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
     pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
-    # pupil_epoch.plot()
-
-    # combining channels
-    # pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
-    # roi_dict = dict(pupils=pupil_ix)
-    # pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method="mean")
 
     epochs_df = pupil_epoch.to_data_frame()
     epochs_df['subID'] = i
@@ -265,47 +40,22 @@ for i in good_partis:
     # there would have to be a way to use hue or something
     # pupil_epochs_combined[j].average().plot()
 
-    epochs_all = pd.concat([epochs_all, epochs_df])
+    epochs_all_uncombined_even_newer = pd.concat([epochs_all_uncombined_even_newer, epochs_df])
 
 
-epochs_all = epochs_all.reset_index()
-
-# %%
-# epochs combined (but with normal mean which probably leads to problems with nan)
-epochs_combined_all = pd.DataFrame()
-for i in ['8H3YTN']:
-    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_improved_blink_interpolation"
-    epoch_file = folder_path + "/" + i + "_new_interpol_and_nan-epo.fif"
-    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
-    # pupil_epoch.plot()
-
-    # combining channels
-    pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
-    roi_dict = dict(pupils=pupil_ix)
-    pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method="mean")
-
-    epochs_combined_df = pupil_epochs_combined.to_data_frame()
-    epochs_combined_df['subID'] = i
-    # can I plot on top of each other without transforming to dataframe first?
-    # there would have to be a way to use hue or something
-    # pupil_epochs_combined[j].average().plot()
-
-    epochs_combined_all = pd.concat([epochs_combined_all, epochs_combined_df])
-
-
-epochs_combined_all = epochs_combined_all.reset_index()
+epochs_all_uncombined_even_newer = epochs_all_uncombined_even_newer.reset_index()
 
 # %%
-# epochs combined with nan.mean
-epochs_combined_nan_all = pd.DataFrame()
-for i in ['8H3YTN']:
-    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_improved_blink_interpolation"
-    epoch_file = folder_path + "/" + i + "_new_interpol_and_nan-epo.fif"
+# Newest epochs (combined)
+# using nanmean!
+# epochs all new with the newest epochs -> need nan mean to combine
+epochs_all_combined_nan_even_newer = pd.DataFrame()
+for i in good_partis:
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+    epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
     pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
-    # pupil_epoch.plot()
 
     # combining channels
-
     pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
     roi_dict = dict(pupils=pupil_ix)
     combine_nanmean = lambda data: np.nanmean(data, axis=1)
@@ -317,86 +67,65 @@ for i in ['8H3YTN']:
     # there would have to be a way to use hue or something
     # pupil_epochs_combined[j].average().plot()
 
-    epochs_combined_nan_all = pd.concat([epochs_combined_nan_all, epochs_combined_nan_df])
+    epochs_all_combined_nan_even_newer = pd.concat([epochs_all_combined_nan_even_newer, epochs_combined_nan_df])
 
-
-epochs_combined_nan_all = epochs_combined_nan_all.reset_index()
-
-# %%
-# plot all trials per subID on top of each other to check for outliers - this is from loading epochs potentially 
-# with the wrong buffer - so run all epochs again and then try again
-# now ran all epochs again with correct buffer.... seems to look the same?
-for i in good_partis[0:6]:
-    with sns.plotting_context(context='paper', font_scale=1.5): 
-        
-        fig, ax = plt.subplots(figsize=(10,8))
-
-        sns.lineplot(data=epochs_all[epochs_all['subID']==i], x='time', y='pupil_right', hue='epoch', errorbar='se', ax=ax)
-        # sns.lineplot(data=epochs_all[epochs_all['subID']==i], x='time', y='pupil_left', hue='epoch', errorbar='se', ax=ax)
-    plt.title(f'SubID {i}')
-    plt.show()
+epochs_all_combined_nan_even_newer = epochs_all_combined_nan_even_newer.reset_index()
 
 
 # %%
+# plotting all trials per subID in a plt plot for uncombined pupils
 
-# comparing seaborn plots (right and left eye) with matplotlib plot (right and left eye)
+# first with epochs_all_uncombined_new
+# then with epochs_all_uncombined_even_newer
 
-for i in good_partis[0:6]:
-        
-    data = epochs_all[epochs_all['subID']==i]
-
-    fig, axs = plt.subplots(2, 2, layout='constrained', figsize=(12, 10))
-
-    sns.lineplot(data=data, x='time', y='pupil_right', hue='epoch', errorbar='se', ax=axs[0, 0])
-    axs[0, 0].set_title('Pupil Right with seaborn')
-    axs[0, 0].set_xlabel('Time')
-    axs[0, 0].set_ylabel('Pupil Size')
-    sns.lineplot(data=data, x='time', y='pupil_left', hue='epoch', errorbar='se', ax=axs[0,1])
-    axs[0, 1].set_title('Pupil Left with seaborn')
-    axs[0, 1].set_xlabel('Time')
-    axs[0, 1].set_ylabel('Pupil Size')
+for i in good_partis: 
+    data = epochs_all_uncombined_even_newer[epochs_all_uncombined_even_newer['subID'] == i]
+    fig, axs = plt.subplots(1, 2, layout='constrained', figsize=(12, 5))
 
     epochs = data['epoch'].unique()
     for epoch in epochs:
         data_epoch = data[data['epoch'] == epoch]
-        axs[1, 0].plot(data_epoch['time'], data_epoch['pupil_right'], alpha=0.5)
-    axs[1, 0].set_title('Pupil Right raw by Epoch')
-    axs[1, 0].set_xlabel('Time')
-    axs[1, 0].set_ylabel('Pupil Size')
+        axs[0].plot(data_epoch['time'], data_epoch['pupil_left'], label='pupil_left', alpha=0.6)
+    axs[0].set_xlabel('Time')
+    axs[0].set_ylabel('Pupil Size')
+    axs[0].set_title('Pupil Left with plt')
 
-    epochs = data['epoch'].unique()
-    # Bottom-right: pupil_left raw lines for each epoch (no error bars)
     for epoch in epochs:
         data_epoch = data[data['epoch'] == epoch]
-        axs[1, 1].plot(data_epoch['time'], data_epoch['pupil_left'], alpha=0.5)
-    axs[1, 1].set_title('Pupil Left raw by Epoch')
-    axs[1, 1].set_xlabel('Time')
-    axs[1, 1].set_ylabel('Pupil Size')
-    
-    fig.suptitle(f'SubID {i}', fontsize=16)
+        axs[1].plot(data_epoch['time'], data_epoch['pupil_right'], label='pupil_right', alpha=0.6)
+    axs[1].set_title('Pupil Right with plt')
+    axs[1].set_xlabel('Time')
+    axs[1].set_ylabel('Pupil Size')
+
+    plt.suptitle(f'lineplot of all epochs for one subID {i}')
     plt.show()
 
- # %%
 
-for i in good_partis[0:1]:
+
+# %%
+# plotting all trials per subID in a plt plot for combined pupils
+for i in good_partis:
+    data = epochs_all_combined_nan_even_newer[epochs_all_combined_nan_even_newer['subID'] == i]
     fig, ax = plt.subplots(figsize=(10, 8))
-    data = epochs_all[epochs_all['subID'] == i]
 
     epochs = data['epoch'].unique()
     for idx, epoch in enumerate(epochs):
             data_epoch = data[data['epoch'] == epoch]
-            plt.plot(data_epoch['time'], data_epoch['pupil_right'], label='pupil_right', alpha=0.5)
+            ax.plot(data_epoch['time'], data_epoch['pupils'], label='pupils', alpha=0.5)
     ax.set_title(f'SubID {i}')
     ax.set_xlabel('Time')
     ax.set_ylabel('Pupil Size')
+    plt.title(f'lineplot of all epochs of combined pupils for one subID {i}')
     plt.show()
 
 # %%
 # improved plt plot for uncombined pupils
 # looking at a couple of epochs at a time
-for p in ['8H3YTN']: # good_partis[1:2]
-    for i in range(10, 590, 10):
-        data = epochs_all[epochs_all['subID'] == p]
+# RP15M5, REUNMA
+
+for p in ['GJL7U8']: # good_partis[1:2]
+    for i in range(220, 240, 20): #(10, 590, 10) -> for starting at 10 up to 590 in steps of 10
+        data = epochs_all_uncombined_even_newer[epochs_all_uncombined_even_newer['subID'] == p]
         i_before = i - 10
         data = data[data['epoch'].isin(range(i_before, i))]
 
@@ -406,15 +135,15 @@ for p in ['8H3YTN']: # good_partis[1:2]
 
         for epoch in epochs:
             data_epoch = data[data['epoch'] == epoch]
-            axs[0].plot(data_epoch['time'], data_epoch['pupil_right'], label='pupil_right', alpha=0.6)
+            axs[0].plot(data_epoch['time'], data_epoch['pupil_left'], label='pupil_left', alpha=0.6)
         axs[0].set_xlabel('Time')
         axs[0].set_ylabel('Pupil Size')
-        axs[0].set_title('Pupil Right with plt')
+        axs[0].set_title('Pupil Left with plt')
 
         for epoch in epochs:
             data_epoch = data[data['epoch'] == epoch]
-            axs[1].plot(data_epoch['time'], data_epoch['pupil_left'], label='pupil_left', alpha=0.6)
-        axs[1].set_title('Pupil Left with plt')
+            axs[1].plot(data_epoch['time'], data_epoch['pupil_right'], label='pupil_right', alpha=0.6)
+        axs[1].set_title('Pupil Right with plt')
         axs[1].set_xlabel('Time')
         axs[1].set_ylabel('Pupil Size')
 
@@ -424,8 +153,8 @@ for p in ['8H3YTN']: # good_partis[1:2]
 # improved plt plot for combined pupils
 # looking at a couple of epochs at a time
 for p in ['8H3YTN']: # good_partis[1:2]
-    for i in range(250, 270, 10): #(10, 590, 10)
-        data = epochs_combined_nan_all[epochs_combined_nan_all['subID'] == p]
+    for i in range(10, 590, 10): #(10, 590, 10) -> for starting at 10 up to 590 in steps of 10
+        data = epochs_all_combined_nan_even_newer[epochs_all_combined_nan_even_newer['subID'] == p]
         i_before = i - 10
         data = data[data['epoch'].isin(range(i_before, i))]
 
@@ -442,96 +171,9 @@ for p in ['8H3YTN']: # good_partis[1:2]
 
         plt.title(f'lineplot of epochs {i_before} to {i} for one subID {p}')
         plt.show()
-# %%
-# looking at a couple of epochs at a time
-
-for i in range(10, 590, 10):
-    i_before = i - 10
-    data = epochs_all[epochs_all['subID']=='D62XJG']
-    data = data[data['epoch'].isin(range(i_before, i))]
-    data = data.reset_index()
-    plt.figure(figsize=(10,5))
-    plt.plot(data['time'], data['pupil_right'], label='pupil_right', color='blue')
-    plt.plot(data['time'], data['pupil_left'], label='pupil_left', color='orange')
-    plt.title(f'lineplot of epochs {i_before} to {i} for one subID')
-    plt.xlabel('Index')
-    plt.ylabel('Pupil Right')
-    plt.legend()
-    plt.show()
-
 
 # %%
-# %%
-for i in range(10, 590, 10):
-    i_before = i - 10
-    data = epochs_all[epochs_all['subID']=='D62XJG']
-    data = data[data['epoch'].isin(range(i_before, i))]
-    data = data.reset_index()
-    plt.figure(figsize=(10,5))
-    # plt.plot(data['time'], data['pupil_right'], label='pupil_right', color='blue')
-    # plt.plot(data['time'], data['pupil_left'], label='pupil_left', color='orange')
-    sns.lineplot(data=data, x='time', y='pupil_left', hue='epoch', errorbar='se')
-    sns.lineplot(data=data, x='time', y='pupil_right', hue='epoch', errorbar='se')
-    plt.title(f'lineplot of epochs {i_before} to {i} for one subID')
-    plt.xlabel('Index')
-    plt.ylabel('Pupil Right')
-    plt.legend()
-    plt.show()
-
-
-# %%
-# plot all trials per subID on top of each other to check for outliers - this is from loading epochs potentially 
-# with the wrong buffer - so run all epochs again and then try again
-# now ran all epochs again with correct buffer.... seems to look the same?
-for i in good_partis:
-    with sns.plotting_context(context='paper', font_scale=1.5): 
-        
-        fig, ax = plt.subplots(figsize=(10,8))
-
-        sns.lineplot(data=epochs_all[epochs_all['subID']==i], x='time', y='pupils', hue='epoch', errorbar='se', ax=ax)
-    plt.title(f'SubID {i}')
-    plt.show()
-
-#################
-
-# %%
-# using a filtered version to plot so it doesnt take as long
-
-#pupil_epochs_pos1_df = pupil_epochs_pos1.to_data_frame()
-# data = pupil_epochs_pos1_df[pupil_epochs_pos1_df['subID'] == '8H3YTN']
-#data = pupil_epochs_pos1_df[pupil_epochs_pos1_df['epoch'].isin(range(392, 408))]
-
-
-data = epochs_all[epochs_all['subID'] == '8H3YTN']
-data = data[data['epoch'].isin(range(390, 410))]
-
-
-
-with sns.plotting_context(context='paper', font_scale=1.5): 
-    fig, ax = plt.subplots(figsize=(10, 8))
-
-# Plot, using a meaningful column for hue (if available, e.g., 'condition')
-    
-    sns.lineplot(data=data, x='time', y='pupil_left', hue='epoch', errorbar='se', ax=ax)
-    plt.show()
-
-    fig, ax = plt.subplots(figsize=(10, 8))
-    sns.lineplot(data=data, x='time', y='pupil_right',  hue='epoch', errorbar='se', ax=ax, legend=True)
-    plt.title(f'SubID 8H3YTN - Epoch 392-408 only right eye')
-    plt.show()
-
-
-
-#%%
-# why does this one take so long?
-with sns.plotting_context(context='paper', font_scale=1.5): 
-    
-    fig, ax = plt.subplots(figsize=(10,8))
-
-    sns.lineplot(data=evoked_df_pos1_interpol_shifted, x='time', y='pupils', hue='subID', errorbar='se', ax=ax)
-plt.show()
-
-# %%
+# Note: Probably delete or make a version without sns
 loads = [1, 2, 3]
 for i in loads:
     with sns.plotting_context(context='paper', font_scale=1.5): 
@@ -540,201 +182,9 @@ for i in loads:
 
         sns.lineplot(data=evoked_df_pos1_interpol_shifted[evoked_df_pos1_interpol_shifted['Load']==i], x='time', y='pupils', hue='subID', errorbar='se', ax=ax)
 plt.show()
-# %%
-
-# there seem to be quite a few trials in many subIDs that have moments that seem off. could be normal
-# could be something to do with missing data?
-
-# like this for example:
-fig, ax = plt.subplots(figsize=(10,8))
-sns.lineplot(data=epochs_all[(epochs_all['subID']=='GJL7U8') & (epochs_all['epoch']==220)], x='time', y='pupils', errorbar='se', ax=ax)
-plt.show()
-
-# kinda looks like blink interpolation (applied during epoching) didnt fully work
-
-# !!! Note: in my epoching file I have set the "buffer" to 0.05 but in one mne tutorial it says to set it like this:
-#  "We’ll pass (0.05, 0.2) to interpolate_blinks(), expanding the interpolation window 50 ms before and 200 ms after the blink,""
-# %%
-##################################
-#################################
-
-# run a single subIDs epochs new and save seperately - try with and without blink interpolation
-# do I need the custom mapping for my checks? - need subID..
-# lets try without
-
-# Trigger Dictionary
-# these were set in the original experiment script, additional pairs were also set in the experiment except for "fixation", "saccade", and "BAD_blink". 
-# Not sure if it is necessary to add them here because they are not relevant for what I am using the trigger_dict for 
-
-n_objects = ['obj1', 'obj2', 'obj3']
-n_positions = ['pos1', 'pos2', 'pos3']
-n_orientations = [f'ori{i}' for i in range(1, 17)]
-
-# Generate combinations of the three conditions
-combinations = itertools.product(n_positions, n_objects, n_orientations)
-
-# Create a dictionary to store the combinations
-trigger_dict = {}
-
-# Populate the dictionary with formatted combinations
-for idx, combo in enumerate(combinations, start=1):
-    trigger_dict['_'.join(combo)] = idx
-
-additional_pairs = {
-    "onset_concrete_cued_left": 220,
-    "onset_concrete_cued_right": 221,
-    "left_button_press": 241,
-    "right_button_press": 242,
-    "feedback_cued_item": 244,
-    "mask": 245,
-    "beginning/end_of_task": 246,
-    "fixation": 247,
-    "saccade": 248,
-    "BAD_blink": 249
-}
-
-trigger_dict.update(additional_pairs)
-
-# Extract values with "pos1" in the key, and key-value pairs
-values_with_pos1 = [trigger_dict[key] for key in trigger_dict if "pos1" in key]
-pos1_pairs = {key: trigger_dict[key] for key in trigger_dict if "pos1" in key}
-
-
-
-# creating folder for epochs
-datafolder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data"
-folder_name = f"Epochs_single_to_try_out"
-epochs_folderpath = os.path.join(datafolder_path, folder_name)
-os.makedirs(epochs_folderpath, exist_ok=True)
-
-for i in ['8H3YTN']:
-        
-        # read file per subID
-        folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
-        eyelink_file = folder_path + "/" + i + ".asc"
-        raw = mne.io.read_raw_eyelink(eyelink_file)
-        metadata_pp = df.loc[(df['subID'] == i)]
-
-        # interpolate blinks
-        # ran it with buffer 0.05 and 0.02 instead of 0.2 before
-        # mne.preprocessing.eyetracking.interpolate_blinks(raw, buffer=[0.05, 0.2], match='BAD_blink', interpolate_gaze=False)
-        
-        # Create Custom Mapping to map annotations found to event ids that match the triggers used
-        annotations = raw.annotations
-        custom_mapping = {}
-        # Generate mapping for annotations with integer descriptions
-        max_id = 0
-        for description in annotations.description:
-            if description.isdigit():
-                event_id = int(description)
-                custom_mapping[description] = event_id
-                if event_id > max_id:
-                    max_id = event_id
-        next_event_id = max_id + 1
-        # Add non-numeric descriptions with unique event IDs
-        for description in annotations.description:
-            if not description.isdigit():
-                if description not in custom_mapping:  # Ensure each description is only mapped once
-                    custom_mapping[description] = next_event_id
-                    next_event_id += 1
-        sorted_custom_mapping = dict(sorted(custom_mapping.items(), key=lambda item: int(item[0]) if item[0].isdigit() else float('inf')))
-
-        # Get events from annotations using the custom mapping 
-        events_from_annot, event_dict = mne.events_from_annotations(
-            raw, event_id=sorted_custom_mapping)
-
-        # necessary events per participant - these are only those events that are also present in the event_id=pos1_pairs
-        # this might be done better in the newest version of mne. 
-        events_pos1 = events_from_annot[np.isin(events_from_annot, [values_with_pos1])[:, -1]]
-
-        # Epoching
-        # changed/ added event_repeated='error', since I don't fully understand what this does maybe better to not just merge events
-        # on_missing='raise', nothing raised but maybe good to keep?
-        # reject_by_annotation=True -> if blinks are interpolated no bad annotations are left and therefore nothing excluded
-        pupil_epochs_pos1 = mne.Epochs(
-            raw,
-            events_pos1,
-            event_id=pos1_pairs,
-            tmin=-0.1,
-            tmax=9,
-            baseline=None,
-            metadata=metadata_pp,
-            picks=['pupil_left', 'pupil_right'],
-            event_repeated='error',
-            on_missing='raise',
-            preload=True,
-            reject_by_annotation=False
-        )
-
-
-        # Save epoch in fif format to a specified folder
-        filename = f"{i}_single_try_out_blink_interpol.fif"
-        epochs_path = os.path.join(epochs_folderpath, filename)
-        pupil_epochs_pos1.save(epochs_path, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
 
 # %%
-epochs_single = pd.DataFrame()
-
-for i in ['8H3YTN']:
-    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_single_to_try_out"
-    epoch_file = folder_path + "/" + i + "_single_try_out_blink_interpol.fif"
-    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
-    # pupil_epoch.plot()
-
-    # combining channels
-    pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
-    roi_dict = dict(pupils=pupil_ix)
-    pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method="mean")
-
-    epochs_df = pupil_epochs_combined.to_data_frame()
-    epochs_df['subID'] = i
-    # can I plot on top of each other without transforming to dataframe first?
-    # there would have to be a way to use hue or something
-    # pupil_epochs_combined[j].average().plot()
-
-    epochs_single = pd.concat([epochs_single, epochs_df])
-
-
-epochs_single = epochs_single.reset_index()
- # %%
-
-data = epochs_single[epochs_single['epoch'].isin(range(430, 445))]
-
-with sns.plotting_context(context='paper', font_scale=1.5): 
-    fig, ax = plt.subplots(figsize=(10, 8))
-
-# Plot, using a meaningful column for hue (if available, e.g., 'condition')
-    sns.lineplot(data=data, x='time', y='pupils', hue='epoch', errorbar='se', ax=ax)
-
-plt.title(f'SubID REUNMA - Epochs 430 - 445 ')
-plt.show()
-# %%
-
-# how can I plot the epochs and show where blinks (blink or BAD_blink) are marked? Because they seem to be missing out on a lot of them
-np.unique(pupil_epoch.annotations.description)
-
-pupil_epoch.get_annotations_per_epoch()
-
-
-
-#%%
-
-# Make a copy so the original stays unchanged
-raw_copy = raw.copy()
-
-# Crop only the copy
-# can I also plot an area where no task was performed? are breaks included in the data?
-raw_copy.crop(tmin=1990, tmax=2000)
-
-# Filter annotations: keep only those with description "bad blink"
-blink_annot = raw.annotations[raw.annotations.description == "BAD_blink"]
-
-# Assign filtered annotations to the copied raw object
-raw_copy.set_annotations(blink_annot)
-mne.preprocessing.eyetracking.interpolate_blinks(raw_copy, buffer=[0.05, 0.2], match='BAD_blink', interpolate_gaze=False)
-# raw_copy.plot(events=events_pos1, event_id=trigger_dict, scalings=1e3, show=False, show_options=True, duration=90.1, picks= ['pupil_left', 'pupil_right'])
-raw_copy.plot(scalings=1e3, duration=1000.1, picks= ['pupil_left', 'pupil_right'])
-# %%
+# DID ANY OF THIS BELOW WORK? OTHERWISE DELETE
 # figureing out when an epoch happened to check that time out in the raw
 
 epoch_index = 392
@@ -746,32 +196,21 @@ event_sample = pupil_epoch.events[epoch_index, 0]
 epoch_time = event_sample / raw.info['sfreq']
 
 print(f"Epoch {epoch_index} starts at {epoch_time:.3f} seconds in raw data.")
-# %%
-raw_copy2 = raw.copy()
-raw_copy2.crop(tmin=epoch_time-1, tmax=epoch_time+90)
-# Filter annotations: keep only those with description "bad blink"
-blink_annot = raw.annotations[raw.annotations.description == "BAD_blink"]
 
-# Assign filtered annotations to the copied raw object
-raw_copy2.set_annotations(blink_annot)
-raw_copy2.plot(events=events_pos1, event_id=trigger_dict, scalings=1e3, show=False, show_options=True, duration=90, picks= ['pupil_left', 'pupil_right']) 
-
-# %%
 pupil_epoch.plot(n_epochs=4, events=True, scalings=1e3, event_id=trigger_dict)
 
-
-# %%
-
-data, times = raw['pupil_right']
+#%%
+raw_copy2 = raw.copy().crop(tmin=390, tmax=410)
+data, times = raw_copy['pupil_right']
 
 plt.plot(times, data.T, label='pupils')
 
 # Add blink annotation spans
-for onset, duration, description in zip(raw.annotations.onset,
-                                        raw.annotations.duration,
-                                        raw.annotations.description):
-    if description == 'BAD_blink':
-        plt.axvspan(onset, onset + duration, color='red', alpha=0.3)
+for onset, duration, description in zip(raw_copy2.annotations.onset,
+                                        raw_copy2.annotations.duration,
+                                        raw_copy2.annotations.description):
+    if description == 'merged_blink_interp':
+        plt.axvspan(onset-390, (onset + duration)-390, color='red', alpha=0.3)
 
 plt.xlabel('Time (s)')
 plt.ylabel('Amplitude')
@@ -781,16 +220,306 @@ plt.show()
 
 
 
+# %%
+# Need a way to visually inspect multiple raw datasets with different annotations settings
+# reading all raws into a folder to more easily work with them
+
+save_dir = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/raw_cache"
+raw_cache = {}
+
+for i in ['RP15M5']:
+    save_path = os.path.join(save_dir, f"{i}_raw.fif")
+
+    # # Skip if already saved
+    # if os.path.exists(save_path):
+    #     print(f"Skipping {i} — already cached.")
+    #     continue
+
+    eyelink_file = f"/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink/{i}.asc"
+    print(f"Loading and saving {i}...")
+    raw = mne.io.read_raw_eyelink(eyelink_file)
+    raw.save(save_path, overwrite=True)
+    raw_cache[i] = raw
+
+#%%
+# loading a few raws from folder to use
+
+save_dir = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/raw_cache"
+raw_cache = {}
+for i in good_partis:
+    path = os.path.join(save_dir, f"{i}_raw.fif")
+    if os.path.exists(path):
+        raw_cache[i] = mne.io.read_raw_fif(path, preload=True)
+
+# %%
+# loading a few annotated raws from folder to use
+
+save_dir = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/raw_cache/raw_annots"
+raw_cache_annot = {}
+for i in good_partis[0:10]:
+    path = os.path.join(save_dir, f"{i}_annot_raw.fif")
+    if os.path.exists(path):
+        raw_cache_annot[i] = mne.io.read_raw_fif(path, preload=True)
+
+# %%
+
+# loading a few annotated and merged raws from folder to use
+
+
+
+save_dir = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/raw_cache/raw_annots"
+raw_cache_renamed = {}
+for i in good_partis[0:10]:
+    path = os.path.join(save_dir, f"{i}_annots_renamed_raw.fif")
+    if os.path.exists(path):
+        raw_cache_renamed[i] = mne.io.read_raw_fif(path, preload=True)
+
+
+# %%
+# loading interpolated raws from folder
+
+save_dir = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/raw_cache/raw_interpols"
+raw_cache_interpol = {}
+for i in good_partis[0:10]:
+    path = os.path.join(save_dir, f"{i}_interpol_merged_and_velo_raw.fif")
+    if os.path.exists(path):
+        raw_cache_interpol[i] = mne.io.read_raw_fif(path, preload=True)
+
+# %%
+# making annotated raws - loading raws from raw_cache annotating and saving in folder
+# this takes 32 minutes for 10 participants :(
+
+save_dir = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/raw_cache/raw_annots"
+raw_cache_annot = {}
+velocity_percentile = 99.5
+for i in good_partis[0:10]:
+        
+    raw = raw_cache[i]
+
+    raw_copy = raw.copy()
+    
+    raw_copy_annot = annotate_velocity_blinks(
+        raw_copy,
+        channel_names=('pupil_left', 'pupil_right'),
+        velocity_percentile=99.5,
+        margin_before=0.01,
+        margin_after=0.01,
+        max_duration=0.5,
+        description='BAD_velo_blink',
+        sfreq=None,
+        sigma=4)
+    save_path = os.path.join(save_dir, f"{i}_annot_raw.fif")
+    raw_copy_annot.save(save_path, overwrite=True)
+    
+    raw_cache_annot[i] = raw_copy_annot
+
+
+# %%
+# renaming and merging annotations of consecutive blinks
+save_dir = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/raw_cache/raw_annots"
+raw_cache_renamed = {}
+for i in good_partis[0:10]:
+        
+    raw = raw_cache_annot[i]
+
+    raw_copy2 = raw.copy()
+
+    raw_copy_renamed = merge_and_rename_annotations(
+        raw_copy2,
+        match=["BAD_velo_blink"],
+        min_gap_sec=0.1,
+        new_description="BAD_merged_blink",
+        rename_original_to="blink_used_for_merged",
+        channel_names=['pupil_right', 'pupil_left']
+    )
+    save_path = os.path.join(save_dir, f"{i}_annots_renamed_raw.fif")
+    raw_copy_renamed.save(save_path, overwrite=True)
+    
+    raw_cache_renamed[i] = raw_copy_renamed
+# %%
+# interpolating from raw_cache and saving in folder
+raw_cache_interpol = {}
+save_dir = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/raw_cache/raw_interpols"
+for i in good_partis[0:10]:
+        
+    raw = raw_cache_renamed[i]
+
+    raw_copy = raw.copy()
+    raw_copy_interpol = interpolate_blinks(raw_copy, buffer=[0.05, 0.05], match=["BAD_velo_blink", 'BAD_merged_blink'], interpolate_gaze=False, method="MonotonicCubicSpline")
+
+    raw_cache_interpol[i] = raw_copy_interpol
+    save_path = os.path.join(save_dir, f"{i}_interpol_merged_and_velo_raw.fif")
+    raw_copy_interpol.save(save_path, overwrite=True)
+
+#%%
+# removing missing data
+
+raw_cache_removed_missing = {}
+save_dir = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/raw_cache/raw_removed_missing"
+os.makedirs(save_dir, exist_ok=True)
+for i in good_partis[0:10]:
+        
+    raw = raw_cache_interpol[i]
+
+    raw_copy4 = raw.copy()
+    raw_copy_removed = remove_missing_data(raw_copy4, channel_names=('pupil_left', 'pupil_right'), buffer=[0.15, 0.15])
+
+    nan_annot = mne.preprocessing.annotate_nan(raw_copy_removed)
+    raw_copy_removed.set_annotations(raw_copy_removed.annotations + nan_annot)
+    raw_cache_removed_missing[i] = raw_copy_removed
+
+    save_path = os.path.join(save_dir, f"{i}_removed_missing0.15_raw.fif")
+    raw_copy_removed.save(save_path, overwrite=True)
 
 
 
 # %%
-#############################################
-
+# plotting part of raw
+for i in good_partis[0:10]:
+    tmin = 3890
+    tmax = tmin + 20
+    
+    raw = raw_cache_removed_missing[i]
+    print(raw.filenames)
+    print(tmin)
+    raw_copy2 = raw.copy()
+    raw_copy3 = raw_copy2.copy().crop(tmin=tmin, tmax=tmax)
+    blink_annot = raw_copy2.annotations[np.isin(raw_copy2.annotations.description,  ['velo_blink_interp', 'blink_used_for_merge', 'merged_blink_interp', 'BAD_merged_blink', 'BAD_velo_blink', 'BAD_NAN'])] 
+    # Assign filtered annotations to the copied raw object
+    raw_copy3.set_annotations(blink_annot)
+    raw_copy3.plot(scalings=1e3, duration=1000.1, picks= ['pupil_left', 'pupil_right'],  title=None, show=True) #
 # %%
 
-# plotting that single persons epochs without blink interpolation to compare
-fig, ax = plt.subplots(figsize=(10,8))
-sns.lineplot(data=epochs_single[epochs_single['epoch']==222], x='time', y='pupils', errorbar='se', ax=ax)
-#sns.lineplot(data=epochs_single[epochs_single['epoch']==220], x='time', y='pupil_right', errorbar='se', ax=ax)
-plt.show()
+# %%
+save_dir = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/raw_cache/raw_interpols"
+os.makedirs(save_dir, exist_ok=True)
+
+for i in good_partis[0:10]:  # e.g., save 4th to 6th
+    save_path = os.path.join(save_dir, f"{i}_interpol_raw.fif")
+    raw = raw_cache_interpol[i]
+    raw.save(save_path, overwrite=True)
+# %%
+for i in ['JMUA97']:
+        
+    raw = raw_cache_annot[i]
+
+    raw_copy = raw.copy()
+    plot_pupil_trace_and_velocity(raw, ch_name='pupil_right', sigma=4, t_start=890, window_duration=20, velocity_percentile=95.5)
+
+# %%
+# loading only one raw and trying stuff with parameters but also with vt_start and vt_end within the annotate functions
+# and try to remove missing data before annotating - does that work?
+
+raw = raw_cache['Z632AK']
+raw_copy = raw.copy()
+
+raw_copy = annotate_velocity_blinks(
+        raw_copy,
+        channel_names=('pupil_left', 'pupil_right'),
+        velocity_percentile=99.5,
+        margin_before=0.01,
+        margin_after=0.01,
+        max_duration=0.8,
+        description='BAD_velo_blink',
+        sfreq=None,
+        sigma=4)
+
+# raw_copy = remove_missing_data(raw_copy, channel_names=('pupil_left', 'pupil_right'), buffer=[0.15, 0.15])
+# nan_annot = mne.preprocessing.annotate_nan(raw_copy)
+# raw_copy.set_annotations(raw_copy.annotations + nan_annot)
+# print(np.unique(raw_copy.annotations.description))
+
+#print(np.unique(raw_copy.annotations.description))
+#%%
+tmin = 4590
+tmax = tmin + 20
+raw_copy2 = raw_copy_annot.copy().crop(tmin=tmin, tmax=tmax)
+blink_annot = raw_copy_annot.annotations[np.isin(raw_copy_annot.annotations.description,  ['BAD_velo_blink', "BAD_merged_blink", "blink_used_for_merged", 'velo_blink_interp', 'blink_merged_interp'])] # 'velo_blink_interp', 'BAD_velo_blink', "BAD_merged_blink", "blink_used_for_merged"
+# Assign filtered annotations to the copied raw object
+raw_copy2.set_annotations(blink_annot)
+raw_copy2.plot(scalings=1e3, duration=1000.1, picks= ['pupil_left', 'pupil_right'],  title=None, show=True)
+print(np.unique(raw_copy.annotations.description))
+#%%
+plot_pupil_trace_and_velocity(raw_copy, ch_name='pupil_left', sigma=4, t_start=3890, window_duration=20, velocity_percentile=99.5)
+#%%
+
+
+
+
+# %%
+# trying to implement a renaming of annotations
+
+# One participant full rundown
+save_dir = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/raw_cache"
+raw_cache = {}
+for i in ['GJL7U8']:
+    path = os.path.join(save_dir, f"{i}_raw.fif")
+    if os.path.exists(path):
+        raw_cache[i] = mne.io.read_raw_fif(path, preload=True)
+
+i = 'GJL7U8'
+
+raw = raw_cache[i]
+
+raw_copy = raw.copy()
+
+raw_copy_annot = annotate_velocity_blinks(
+    raw_copy,
+    channel_names=('pupil_left', 'pupil_right'),
+    velocity_percentile=99.5,
+    margin_before=0.01,
+    margin_after=0.01,
+    max_duration=0.5,
+    description='BAD_velo_blink',
+    sfreq=None,
+    sigma=5)
+
+#%%
+
+raw_copy_annot_renamed = merge_and_rename_annotations(
+    raw_copy_annot,
+    match=["BAD_velo_blink"],
+    min_gap_sec=0.1,
+    new_description="BAD_merged_blink",
+    rename_original_to="blink_used_for_merged",
+    channel_names=['pupil_right', 'pupil_left']
+)
+
+#%%
+channel = 'pupil_left'
+exclude_labels = ['saccade', 'fixation', 'BAD_blink', 'blink_used_for_merged'] # 'BAD_merged_blink', , 'BAD_velo_blink'
+
+raw_to_use = raw_copy_annot.copy()
+
+# Filter annotations for the specific channel and not excluded
+ch_specific_annots = [
+    ann for ann in raw_to_use.annotations
+    if (
+        (ann['ch_names'] is not None and channel in ann['ch_names']) and
+        (ann['description'] not in exclude_labels)
+    )
+]
+
+# Create new Annotations object
+filtered_annot = mne.Annotations(
+    onset=[a['onset'] for a in ch_specific_annots],
+    duration=[a['duration'] for a in ch_specific_annots],
+    description=[a['description'] for a in ch_specific_annots],
+    orig_time=raw_to_use.annotations.orig_time,
+    ch_names=[a['ch_names'] for a in ch_specific_annots]
+)
+tmin = 5790
+tmax = tmin + 20
+# Crop and apply annotations
+raw_copy_plot = raw_to_use.copy().crop(tmin=tmin, tmax=tmax)
+raw_copy_plot.set_annotations(filtered_annot)
+
+# Plot
+raw_copy_plot.plot(
+    scalings=1e3,
+    duration=1000.1,
+    picks=[channel],
+    title=f"Annotations for {channel} (excluding saccades/fixation)"
+)
+
+# %%

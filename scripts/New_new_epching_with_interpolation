@@ -7,7 +7,7 @@ import itertools
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
-from pupil_utils import annotate_velocity_blinks, plot_pupil_and_velocity, interpolate_blinks, remove_missing_data
+from pupil_utils import annotate_velocity_blinks, remove_missing_data, plot_pupil_trace_and_velocity, interpolate_blinks, merge_and_rename_annotations
 from scipy.ndimage import gaussian_filter1d
 
 
@@ -61,7 +61,7 @@ pos1_pairs = {key: trigger_dict[key] for key in trigger_dict if "pos1" in key}
 # %% 
 # creating folder for epochs
 datafolder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data"
-folder_name = f"Epochs_very_new"
+folder_name = f"Epochs_even_newer"
 epochs_folderpath = os.path.join(datafolder_path, folder_name)
 os.makedirs(epochs_folderpath, exist_ok=True)
 
@@ -137,14 +137,27 @@ for i in good_partis:
         sfreq=None,
         sigma=4)
 
+
+    #################
+    # merging and renaming consecutive blinks
+
+    raw = merge_and_rename_annotations(
+        raw,
+        match=["BAD_velo_blink"],
+        min_gap_sec=0.1,
+        new_description="BAD_merged_blink",
+        rename_original_to="blink_used_for_merged",
+        channel_names=['pupil_right', 'pupil_left']
+    )
+
     #############
     # interpolating with custom function
 
-    raw = interpolate_blinks(raw, buffer=[0.05, 0.05], match="BAD_velo_blink", interpolate_gaze=False, method="MonotonicCubicSpline")
+    raw = interpolate_blinks(raw, buffer=[0.05, 0.05], match=["BAD_velo_blink", "BAD_merged_blink"], interpolate_gaze=False, method="MonotonicCubicSpline")
 
     #################
     # replacing zeros with nans and annotating
-    raw = remove_missing_data(raw, channel_names=('pupil_left', 'pupil_right'), buffer=[0.05, 0.05])
+    raw = remove_missing_data(raw, channel_names=('pupil_left', 'pupil_right'), buffer=[0.15, 0.15])
     nan_annot = mne.preprocessing.annotate_nan(raw)
     raw.set_annotations(raw.annotations + nan_annot)
 
@@ -172,7 +185,7 @@ for i in good_partis:
     in_epochs_annots_df['subID'] = i
     in_epochs_annots_df_all = pd.concat([in_epochs_annots_df_all, in_epochs_annots_df])
 
-# m<be change epoch index to not be an index but the actual epoch number from the metadata
+# maybe change epoch index to not be an index but the actual epoch number from the metadata
 # currently appending the load does not work -> probably because I am setting the whole column to one single load number
     
     for load in [1, 2, 3]:
@@ -196,7 +209,7 @@ for i in good_partis:
 
 
     # Save epoch in fif format to a specified folder
-    filename = f"{i}_very_new-epo.fif"
+    filename = f"{i}_even_newer-epo.fif"
     epochs_path = os.path.join(epochs_folderpath, filename)
     pupil_epochs_pos1.save(epochs_path, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
 
@@ -207,15 +220,15 @@ freqs_df = pd.DataFrame(freqs, columns=['subID', 'frequency'])
 # saving dfs
 data_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/csv_files'
 
-freqs_df_name = f'freqs_df_newnew.csv'
+freqs_df_name = f'freqs_df_evennewer.csv'
 csv_filepath = os.path.join(data_folder, freqs_df_name)
 freqs_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
 
-in_epochs_annots_df_name = f'in_epochs_annots_df.csv'
+in_epochs_annots_df_name = f'in_epochs_annots_df_even_newer.csv'
 csv_filepath = os.path.join(data_folder, in_epochs_annots_df_name)
 in_epochs_annots_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
 
-per_epochs_annots_df_name = f'per_epochs_annots_df.csv'
+per_epochs_annots_df_name = f'per_epochs_annots_df_even_newer.csv'
 csv_filepath = os.path.join(data_folder, per_epochs_annots_df_name)
 per_epochs_annots_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
 

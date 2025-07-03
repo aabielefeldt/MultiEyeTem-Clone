@@ -1,0 +1,4 @@
+"files.watcherExclude": {
+    "**/figures/**": true,
+    "**/csv_files/**": true
+  }
