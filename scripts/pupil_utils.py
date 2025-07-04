@@ -20,13 +20,15 @@ from scipy.interpolate import interp1d
 def annotate_velocity_blinks(
     raw,
     channel_names=('pupil_left', 'pupil_right'),
-    velocity_percentile=99.5,
     margin_before=0.01,
     margin_after=0.01,
     max_duration=0.5,
     description='BAD_velo_blink',
     sfreq=None,
-    sigma=4
+    sigma=4,
+    vt_start_multiplyer = 6,
+    vt_end_multiplyer = 6,
+    low_v_thresh_devider = 4
 ):
     """
     Annotate blinks based on pupil velocity profile:
@@ -83,15 +85,23 @@ def annotate_velocity_blinks(
         velocity_clipped = mstats.winsorize(velocity, limits=[0.01, 0.01])  # clip top and bottom 1%
         abs_velocity = np.abs(velocity_clipped.data)
 
-        vt_start = np.percentile(abs_velocity, velocity_percentile)
-        vt_end = vt_start
+        # now using median absolute deviation
+        med = np.nanmedian(abs_velocity)
+        # median absolute deviation
+        mad = np.nanmedian(np.abs(abs_velocity - med))
+
+        vt_start = med + vt_start_multiplyer * mad
+        vt_end = med + vt_end_multiplyer * mad
+
+        above, below, close_zero = [], [], []
 
         i = 0
         while i < len(velocity) - 1:
+            
             # Blink onset: rapid constriction
             if velocity[i] < -vt_start:
                 istart = i
-
+                
                 # Dilation: search after constriction
                 dilation_zone = velocity[istart:]
                 try:
@@ -101,9 +111,10 @@ def annotate_velocity_blinks(
 
                 # Stabilization: velocity drops close to zero
                 post_dilate_zone = velocity[imid:]
-                low_v_thresh = np.nanstd(velocity) / 20
+                low_v_thresh = mad / low_v_thresh_devider
                 try:
                     iend = np.where(np.abs(post_dilate_zone) < low_v_thresh)[0][0] + imid
+                    
                 except IndexError:
                     break  # No low-velocity end found
 
@@ -118,11 +129,14 @@ def annotate_velocity_blinks(
                     durations.append(total_duration)
                     descriptions.append(description)
                     ch_names_list.append([ch_name])
-
-                # Move index to end of blink to avoid overlapping blinks
-                i = iend + 1
+                    i = iend + 1
+                else:
+                    i+=1
             else:
                 i += 1
+            
+    print(f"{ch_name}: med={med:.2f}, mad={mad:.2f}, vt_start={vt_start:.2f}, vt_end={vt_end:.2f}, low_v_thresh={low_v_thresh:.2f}")
+
 
     if onsets:
         new_annotations = Annotations(
@@ -172,84 +186,144 @@ def remove_missing_data(raw, channel_names=('pupil_left', 'pupil_right'), buffer
 ###########################
 
 
-def plot_pupil_trace_and_velocity(raw, ch_name='pupil_right', sigma=4, t_start=890, window_duration=20, velocity_percentile=99.5):
+def plot_pupil_trace_and_velocity_mad(
+    raw,
+    ch_name='pupil_left',
+    sigma=4,
+    t_start=0,
+    window_duration=20,
+    mad_start_mult=6,
+    mad_end_mult=6,
+    low_v_thresh_devider=0.175,
+    max_duration=0.5
+):
     """
-    Plot raw and smoothed pupil data along with velocity for a given time window.
-
-    Parameters:
-    - raw: mne.io.Raw
-        The raw MNE object containing pupil data.
-    - ch_name: str
-        Name of the pupil data channel.
-    - sigma: float
-        Gaussian smoothing factor.
-    - t_start: float
-        Start time in seconds.
-    - window_duration: float
-        Duration of the time window in seconds.
+    Plot pupil trace and velocity using Median + MAD thresholding.
+    Highlights blink onsets, dilation peaks, and stabilization.
     """
-
-
     t_end = t_start + window_duration
-
-    # === Get data and smooth ===
-    data = raw.copy().pick(ch_name).get_data()[0]
-    times = raw.times
     sfreq = raw.info['sfreq']
+    times = raw.times
+    data = raw.copy().pick(ch_name).get_data()[0]
     filename = raw.filenames
 
-    # Compute velocity
-    if sigma>0:
+    # === Smooth and compute velocity ===
+    if sigma > 0:
         smoothed = gaussian_filter1d(data, sigma=sigma)
         velocity = np.gradient(smoothed) * sfreq
     else:
+        smoothed = data
         velocity = np.gradient(data) * sfreq
 
-
-    velocity_clipped = mstats.winsorize(velocity, limits=[0.01, 0.01])  # clip top and bottom 1%
+    # === Compute thresholds ===
+    velocity_clipped = mstats.winsorize(velocity, limits=[0.01, 0.01])
     abs_velocity = np.abs(velocity_clipped)
-    #abs_velocity = np.abs(velocity)
-    
-    vt_start = np.nanpercentile(abs_velocity, velocity_percentile)
-    vt_end = vt_start
+
+    med = np.nanmedian(abs_velocity)
+    mad = np.nanmedian(np.abs(abs_velocity - med))
+
+    vt_start = med + mad_start_mult * mad
+    vt_end = med + mad_end_mult * mad
+
+    # === Detect blink-related events ===
+    above = np.zeros_like(velocity, dtype=bool)
+    below = np.zeros_like(velocity, dtype=bool)
+    close_zero = []
+
+    i = 0
+    while i < len(velocity) - 1:
+        if velocity[i] < -vt_start:
+            istart = i
+
+            dilation_zone = velocity[istart:]
+            try:
+                imid = np.where(dilation_zone > vt_end)[0][0] + istart
+            except IndexError:
+                break
+
+            post_dilate_zone = velocity[imid:]
+            low_v_thresh = mad / low_v_thresh_devider
+            try:
+                iend = np.where(np.abs(post_dilate_zone) < low_v_thresh)[0][0] + imid
+            except IndexError:
+                break
+
+            duration_sec = (iend - istart) / sfreq
+            if duration_sec <= max_duration:
+                above[istart] = True
+                below[imid] = True
+                close_zero.append(iend)
+
+                i = iend + 1
+            else:
+                i+=1
+        else:
+            i += 1
 
     # === Crop to time window ===
     mask = (times >= t_start) & (times <= t_end)
     times_crop = times[mask]
-    data_crop = data[mask]
-    if sigma > 0:
-        smoothed_crop = smoothed[mask]
-    else:
-        smoothed_crop = data[mask]
+    raw_crop = data[mask]
+    smooth_crop = smoothed[mask]
     velocity_crop = velocity[mask]
+    above_crop = above[mask]
+    below_crop = below[mask]
+
+    # Convert close_zero indices to times and crop them
+    close_zero_times = times[close_zero]
+    close_zero_crop = close_zero_times[(close_zero_times >= t_start) & (close_zero_times <= t_end)]
 
     # === Plot ===
-    fig, axs = plt.subplots(2, 1, figsize=(12, 9), sharex=True, gridspec_kw={'height_ratios': [2, 1]})
+    fig, axs = plt.subplots(2, 1, figsize=(12, 8), sharex=True, gridspec_kw={'height_ratios': [2, 1]})
 
-    # Pupil trace
-    axs[0].plot(times_crop, data_crop, label='Raw Pupil Data', alpha=0.4, color='gray')
-    axs[0].plot(times_crop, smoothed_crop, label=f'Smoothed (σ={sigma})', color='blue')
+    # --- Plot pupil trace ---
+    axs[0].plot(times_crop, raw_crop, label='Raw Pupil Data', color='gray', alpha=0.4)
+    axs[0].plot(times_crop, smooth_crop, label=f'Smoothed (σ={sigma})', color='blue')
+
+    #  Keep track of which labels have been added
+    label_flags = {'above': False, 'below': False, 'close_zero': False}
+
+    # Blink Start
+    for t in times_crop[above_crop]:
+        label = 'Blink Start' if not label_flags['above'] else ""
+        axs[0].axvline(t, color='orange', linestyle='--', alpha=0.7, label=label)
+        label_flags['above'] = True
+
+    # Dilation Peak
+    for t in times_crop[below_crop]:
+        label = 'Dilation Peak' if not label_flags['below'] else ""
+        axs[0].axvline(t, color='purple', linestyle='--', alpha=0.7, label=label)
+        label_flags['below'] = True
+
+    # Stabilization
+    for t in close_zero_crop:
+        label = 'Stabilization' if not label_flags['close_zero'] else ""
+        axs[0].axvline(t, color='black', linestyle=':', alpha=0.7, label=label)
+        label_flags['close_zero'] = True
+
     axs[0].set_ylabel('Pupil Size')
-    axs[0].legend()
-    axs[0].grid(True)
     axs[0].set_title(f'{ch_name} — Pupil Trace and Velocity (Time: {t_start}-{t_end}s)')
-    
+    axs[0].legend(loc='upper right')
+    axs[0].grid(True)
 
-    # Velocity trace
-    axs[1].plot(times_crop, velocity_crop, label='Smoothed Velocity', color='green')
-    # axs[1].axhline(0, color='black', linestyle='--', linewidth=0.8)
-    axs[1].axhline(vt_end, color='red', linestyle='--', linewidth=1.5, label=f'+Threshold = {vt_end:.1f}')
-    axs[1].axhline(-vt_start, color='red', linestyle='--', linewidth=1.5, label=f'-Threshold = {-vt_start:.1f}')
+    # --- Plot velocity ---
+    axs[1].plot(times_crop, velocity_crop, label='Velocity', color='green')
+    axs[1].axhline(vt_end, color='red', linestyle='--', linewidth=1.5, label=f'+Thresh (vt_end) = {vt_end:.1f}')
+    axs[1].axhline(-vt_start, color='red', linestyle='--', linewidth=1.5, label=f'-Thresh (vt_start) = {-vt_start:.1f}')
     axs[1].set_xlabel('Time (s)')
     axs[1].set_ylabel('Velocity')
     axs[1].legend()
     axs[1].grid(True)
 
-    fig.suptitle(f'{filename}')
+    fig.suptitle(f'{filename[0] if filename else ""}')
     plt.tight_layout()
     plt.show()
 
-    print(f'v_percentile: {velocity_percentile}, vt_start: {vt_start:.3f}, vt_end: {vt_end:.3f}')
+    print(f'Median: {med:.3f}, MAD: {mad:.3f}')
+    print(f'vt_start (med + {mad_start_mult}×MAD): {vt_start:.3f}')
+    print(f'vt_end (med + {mad_end_mult}×MAD): {vt_end:.3f}')
+
+    return above, below, close_zero
 
 
 

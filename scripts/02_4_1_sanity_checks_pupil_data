@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import itertools
 import numpy as np
 import os
-from pupil_utils import annotate_velocity_blinks, remove_missing_data, plot_pupil_trace_and_velocity, interpolate_blinks, merge_and_rename_annotations
+from pupil_utils import annotate_velocity_blinks, remove_missing_data, plot_pupil_trace_and_velocity_mad, interpolate_blinks, merge_and_rename_annotations
 from scipy.ndimage import gaussian_filter1d
 from scipy.interpolate import interp1d
 
@@ -431,48 +431,45 @@ raw_copy = annotate_velocity_blinks(
 
 #print(np.unique(raw_copy.annotations.description))
 #%%
-tmin = 4590
+tmin = 1600
 tmax = tmin + 20
 raw_copy2 = raw_copy_annot.copy().crop(tmin=tmin, tmax=tmax)
 blink_annot = raw_copy_annot.annotations[np.isin(raw_copy_annot.annotations.description,  ['BAD_velo_blink', "BAD_merged_blink", "blink_used_for_merged", 'velo_blink_interp', 'blink_merged_interp'])] # 'velo_blink_interp', 'BAD_velo_blink', "BAD_merged_blink", "blink_used_for_merged"
 # Assign filtered annotations to the copied raw object
 raw_copy2.set_annotations(blink_annot)
 raw_copy2.plot(scalings=1e3, duration=1000.1, picks= ['pupil_left', 'pupil_right'],  title=None, show=True)
-print(np.unique(raw_copy.annotations.description))
+#print(np.unique(raw_copy.annotations.description))
 #%%
-plot_pupil_trace_and_velocity(raw_copy, ch_name='pupil_left', sigma=4, t_start=3890, window_duration=20, velocity_percentile=99.5)
-#%%
-
-
-
+plot_pupil_trace_and_velocity(raw_copy, ch_name='pupil_right', sigma=20, t_start=1600, window_duration=20, velocity_percentile=99.5)
 
 # %%
-# trying to implement a renaming of annotations
-
 # One participant full rundown
 save_dir = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/raw_cache"
 raw_cache = {}
-for i in ['GJL7U8']:
+for i in ['REUNMA']:
     path = os.path.join(save_dir, f"{i}_raw.fif")
     if os.path.exists(path):
         raw_cache[i] = mne.io.read_raw_fif(path, preload=True)
 
+#%%
 i = 'GJL7U8'
 
 raw = raw_cache[i]
 
 raw_copy = raw.copy()
 
-raw_copy_annot = annotate_velocity_blinks(
+raw_copy_annot, lists = annotate_velocity_blinks(
     raw_copy,
     channel_names=('pupil_left', 'pupil_right'),
-    velocity_percentile=99.5,
     margin_before=0.01,
     margin_after=0.01,
     max_duration=0.5,
     description='BAD_velo_blink',
     sfreq=None,
-    sigma=5)
+    sigma=5,
+    vt_start_multiplyer = 8,
+    vt_end_multiplyer = 8,
+    low_v_thresh_devider = 0.175)
 
 #%%
 
