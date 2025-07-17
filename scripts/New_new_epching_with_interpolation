@@ -7,7 +7,7 @@ import itertools
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
-from pupil_utils import annotate_velocity_blinks, remove_missing_data, plot_pupil_trace_and_velocity, interpolate_blinks, merge_and_rename_annotations
+from pupil_utils import annotate_velocity_blinks, remove_missing_data, plot_pupil_trace_and_velocity_mad, interpolate_blinks, merge_and_rename_annotations, set_zero_to_nan
 from scipy.ndimage import gaussian_filter1d
 
 
@@ -61,9 +61,14 @@ pos1_pairs = {key: trigger_dict[key] for key in trigger_dict if "pos1" in key}
 # %% 
 # creating folder for epochs
 datafolder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data"
-folder_name = f"Epochs_even_newer"
-epochs_folderpath = os.path.join(datafolder_path, folder_name)
+folder_name_epochs = f"Epochs_even_newer"
+epochs_folderpath = os.path.join(datafolder_path, folder_name_epochs)
 os.makedirs(epochs_folderpath, exist_ok=True)
+
+# creating folder to save annotated raws
+folder_name_raws = f"final_annotated_raw_cache_from_epoch"
+raw_folderpath = os.path.join(datafolder_path, folder_name_raws)
+os.makedirs(raw_folderpath, exist_ok=True)
 
 #  %%
 # Creating epochs timelocked to pos1
@@ -71,8 +76,9 @@ os.makedirs(epochs_folderpath, exist_ok=True)
 freqs = []
 in_epochs_annots_df_all = pd.DataFrame()
 per_epochs_annots_df = pd.DataFrame()
+annots_all = []
 
-for i in good_partis:
+for i in good_partis[0:2]:
         
     # read file per subID
     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
@@ -90,7 +96,7 @@ for i in good_partis:
     metadata_pp = df.loc[(df['subID'] == i)]
     
 
-    ####################
+    #########################
     # Does the Custom Mapping intefer with the blink interpolations at all?
     
     # Create Custom Mapping to map annotations found to event ids that match the triggers used
@@ -123,24 +129,27 @@ for i in good_partis:
     # this might be done better in the newest version of mne. 
     events_pos1 = events_from_annot[np.isin(events_from_annot, [values_with_pos1])[:, -1]]
 
-    ########################
+    #########################
     # currently adds the new annotations to the old ones, could maybe also just use the new ones
 
     raw = annotate_velocity_blinks(
         raw,
         channel_names=('pupil_left', 'pupil_right'),
-        velocity_percentile=99.5,
         margin_before=0.01,
         margin_after=0.01,
         max_duration=0.5,
         description='BAD_velo_blink',
         sfreq=None,
-        sigma=4)
+        sigma=5,
+        vt_start_multiplyer = 40,
+        vt_end_multiplyer = 40,
+        low_v_thresh_multiplyer = 1,
+        max_search_duration=0.8
+        )
 
 
-    #################
+    #########################
     # merging and renaming consecutive blinks
-
     raw = merge_and_rename_annotations(
         raw,
         match=["BAD_velo_blink"],
@@ -149,21 +158,28 @@ for i in good_partis:
         rename_original_to="blink_used_for_merged",
         channel_names=['pupil_right', 'pupil_left']
     )
+    #########################
+    # setting all zero data points to nan
+    raw = set_zero_to_nan(raw, channel_names=('pupil_left', 'pupil_right'))
 
-    #############
+    #########################
     # interpolating with custom function
-
     raw = interpolate_blinks(raw, buffer=[0.05, 0.05], match=["BAD_velo_blink", "BAD_merged_blink"], interpolate_gaze=False, method="MonotonicCubicSpline")
 
-    #################
-    # replacing zeros with nans and annotating
-    raw = remove_missing_data(raw, channel_names=('pupil_left', 'pupil_right'), buffer=[0.15, 0.15])
+    #########################
+    # removing buffer area around remaining nan data after interpolation and annotating those nans
+    raw = remove_missing_data(raw, channel_names=('pupil_left', 'pupil_right'), buffer=[0.2, 0.4])
     nan_annot = mne.preprocessing.annotate_nan(raw)
     raw.set_annotations(raw.annotations + nan_annot)
 
-        
     #########################
+    # saving the annotated raw to maybe inspect later
+    raw_filename = f"{i}_annotated_raw.fif"
+    raw_path = os.path.join(raw_folderpath, raw_filename)
+    raw.save(raw_path, overwrite=True)
 
+    #########################
+    #########################
     # Epoching
     pupil_epochs_pos1 = mne.Epochs(
         raw,
@@ -179,33 +195,56 @@ for i in good_partis:
         reject_by_annotation=False
     )
     
+    ##########################
+    ##########################
+    # # Counting blink stats
+    # # in epochs (includes associated channels)
+    # in_epochs_annots_df = pupil_epochs_pos1.annotations.to_data_frame()
+    # in_epochs_annots_df['subID'] = i
+    # in_epochs_annots_df_all = pd.concat([in_epochs_annots_df_all, in_epochs_annots_df])
+    
+    # # per epoch, includes epoch number, load condition and onset relative to epoch
+    # for load in [1, 2, 3]:
+    #     epochs_load = pupil_epochs_pos1[f'items_presented == {load}']
+    #     epoch_number = pupil_epochs_pos1[f'items_presented == {load}'].metadata['trial']
+    #     one_load_epoch_annots_df = pd.DataFrame([
+    #     {
+    #         "epoch_index": epoch_number.iat[i],
+    #         "onset": a[0],
+    #         "duration": a[1],
+    #         "description": a[2],
+    #     }
+    #     for i, annots in enumerate(epochs_load.get_annotations_per_epoch())
+    #     for a in annots if len(a) >= 3
+    #     ])
+    #     one_load_epoch_annots_df['load'] = load
+    #     one_load_epoch_annots_df['subID'] = i
+    #     per_epochs_annots_df = pd.concat([per_epochs_annots_df, one_load_epoch_annots_df])
+    # ---> OLD PROBABLY DELETE
+    
+    ##########################
+    # new annotations list for blink statistics, now with epoch specific onset, duration, description (only the relevant ones),
+    # channel names, and adding epoch number, items presented and subID
+    tokeep = ['BAD_NAN', 'blink_used_for_merged', 'merged_blink_interp', 'velo_blink_interp']
+    for idx in range(len(pupil_epochs_pos1)):
+        annots = pupil_epochs_pos1[idx].annotations
+        filtered_annots = annots[np.isin(annots.description, tokeep)]
 
-    # --- Counting blink stats ---
-    in_epochs_annots_df = pupil_epochs_pos1.annotations.to_data_frame()
-    in_epochs_annots_df['subID'] = i
-    in_epochs_annots_df_all = pd.concat([in_epochs_annots_df_all, in_epochs_annots_df])
+        if len(filtered_annots) == 0:
+            continue
 
-# maybe change epoch index to not be an index but the actual epoch number from the metadata
-# currently appending the load does not work -> probably because I am setting the whole column to one single load number
-    
-    for load in [1, 2, 3]:
-        epochs_load = pupil_epochs_pos1[f'items_presented == {load}']
-        epoch_number = pupil_epochs_pos1[f'items_presented == {load}'].metadata['trial']
-        one_load_epoch_annots_df = pd.DataFrame([
-        {
-            "epoch_index": epoch_number.iat[i],
-            "onset": a[0],
-            "duration": a[1],
-            "description": a[2],
-        }
-        for i, annots in enumerate(epochs_load.get_annotations_per_epoch())
-        for a in annots if len(a) >= 3
-        ])
-        one_load_epoch_annots_df['load'] = load
-        one_load_epoch_annots_df['subID'] = i
-        per_epochs_annots_df = pd.concat([per_epochs_annots_df, one_load_epoch_annots_df])
-    
-    
+        meta = pupil_epochs_pos1[idx].metadata
+        epoch_number = meta['trial'].item()
+        items_presented = meta['items_presented'].item()
+        subID = meta['subID'].item()
+
+        for onset, duration, description, ch_names in zip(filtered_annots.onset,
+                                                filtered_annots.duration,
+                                                filtered_annots.description,
+                                                filtered_annots.ch_names):
+            annots_all.append((onset, duration, description, ch_names, epoch_number, items_presented, subID))
+
+
 
 
     # Save epoch in fif format to a specified folder
@@ -224,13 +263,21 @@ freqs_df_name = f'freqs_df_evennewer.csv'
 csv_filepath = os.path.join(data_folder, freqs_df_name)
 freqs_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
 
-in_epochs_annots_df_name = f'in_epochs_annots_df_even_newer.csv'
-csv_filepath = os.path.join(data_folder, in_epochs_annots_df_name)
-in_epochs_annots_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
+# Convert to a structured NumPy array or DataFrame at the end
+annots_df_all = pd.DataFrame(annots_all, columns=[
+    'onset', 'duration', 'description', 'ch_names',
+    'epoch_number', 'items_presented', 'subID'
+])
 
-per_epochs_annots_df_name = f'per_epochs_annots_df_even_newer.csv'
-csv_filepath = os.path.join(data_folder, per_epochs_annots_df_name)
-per_epochs_annots_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
+display(annots_df_all)
+
+# in_epochs_annots_df_name = f'in_epochs_annots_df_even_newer.csv'
+# csv_filepath = os.path.join(data_folder, in_epochs_annots_df_name)
+# in_epochs_annots_df_all.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
+
+# per_epochs_annots_df_name = f'per_epochs_annots_df_even_newer.csv'
+# csv_filepath = os.path.join(data_folder, per_epochs_annots_df_name)
+# per_epochs_annots_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
 
 
 # %%

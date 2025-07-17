@@ -26,9 +26,10 @@ def annotate_velocity_blinks(
     description='BAD_velo_blink',
     sfreq=None,
     sigma=4,
-    vt_start_multiplyer = 6,
-    vt_end_multiplyer = 6,
-    low_v_thresh_devider = 4
+    vt_start_multiplyer = 8,
+    vt_end_multiplyer = 8,
+    low_v_thresh_multiplyer = 1.5,
+    max_search_duration=0.5
 ):
     """
     Annotate blinks based on pupil velocity profile:
@@ -78,8 +79,7 @@ def annotate_velocity_blinks(
             velocity = np.gradient(smoothed) * sfreq
         else:
             velocity = np.gradient(data) * sfreq
-        # smoothed = gaussian_filter1d(data, sigma=sigma)
-        # velocity = np.gradient(smoothed) * sfreq
+
 
         # clipping the top 1 percent of data to not have outliers influence the threshold
         velocity_clipped = mstats.winsorize(velocity, limits=[0.01, 0.01])  # clip top and bottom 1%
@@ -92,48 +92,53 @@ def annotate_velocity_blinks(
 
         vt_start = med + vt_start_multiplyer * mad
         vt_end = med + vt_end_multiplyer * mad
-
-        above, below, close_zero = [], [], []
+        low_v_thresh = med * low_v_thresh_multiplyer
 
         i = 0
         while i < len(velocity) - 1:
+            found_dilation = False
+            found_end = False
             
             # Blink onset: rapid constriction
             if velocity[i] < -vt_start:
                 istart = i
                 
+                # Limit search range
+                max_search = int(sfreq * max_search_duration)
+                
                 # Dilation: search after constriction
-                dilation_zone = velocity[istart:]
-                try:
-                    imid = np.where(dilation_zone > vt_end)[0][0] + istart
-                except IndexError:
-                    break  # No dilation found, stop
+                dilation_zone = velocity[istart:istart + max_search]
+                dilation_indices = np.where(dilation_zone > vt_end)[0]
+                if dilation_indices.size > 0:
+                    imid = dilation_indices[0] + istart
+                    found_dilation = True
 
-                # Stabilization: velocity drops close to zero
-                post_dilate_zone = velocity[imid:]
-                low_v_thresh = mad / low_v_thresh_devider
-                try:
-                    iend = np.where(np.abs(post_dilate_zone) < low_v_thresh)[0][0] + imid
-                    
-                except IndexError:
-                    break  # No low-velocity end found
+                    # Look for stabilization
+                    post_dilate_zone = velocity[imid:imid + max_search]
+                    low_v_indices = np.where(np.abs(post_dilate_zone) < low_v_thresh)[0]
+                    if low_v_indices.size > 0:
+                        iend = low_v_indices[0] + imid
+                        found_end = True
 
-                # Check duration
-                duration_sec = (iend - istart) / sfreq
-                if duration_sec <= max_duration:
-                    onset = (istart / sfreq) - margin_before
-                    onset = max(0, onset)
-                    total_duration = duration_sec + margin_before + margin_after
+                        # Validate and annotate
+                        duration_sec = (iend - istart) / sfreq
+                        if duration_sec <= max_duration:
+                            onset = (istart / sfreq) - margin_before
+                            onset = max(0, onset)
+                            total_duration = duration_sec + margin_before + margin_after
 
-                    onsets.append(onset)
-                    durations.append(total_duration)
-                    descriptions.append(description)
-                    ch_names_list.append([ch_name])
-                    i = iend + 1
-                else:
-                    i+=1
+                            onsets.append(onset)
+                            durations.append(total_duration)
+                            descriptions.append(description)
+                            ch_names_list.append([ch_name])
+
+                            i = iend - 1
+                            continue  # go to next blink candidate
+                # Adaptive skip logic
+            if found_dilation:
+                i = imid + 1
             else:
-                i += 1
+                i += int(sfreq * 0.01)  # skip 10 ms
             
     print(f"{ch_name}: med={med:.2f}, mad={mad:.2f}, vt_start={vt_start:.2f}, vt_end={vt_end:.2f}, low_v_thresh={low_v_thresh:.2f}")
 
@@ -156,10 +161,37 @@ def annotate_velocity_blinks(
 #######################
 
 def remove_missing_data(raw, channel_names=('pupil_left', 'pupil_right'), buffer=[0.15, 0.15]):
-    raw = raw.copy()  
     sfreq = raw.info['sfreq']
     pre_buffer_samples = int(buffer[0] * sfreq)
     post_buffer_samples = int(buffer[1] * sfreq)
+
+    for ch_name in channel_names:
+        if ch_name not in raw.ch_names:
+            continue
+
+        ch_idx = raw.ch_names.index(ch_name)
+        data = raw._data[ch_idx]
+
+        # Find zero (or near-zero) sample indices
+        nan_indices = np.where(np.isnan(data))[0]
+
+        # Build a mask with buffer around each zero index
+        mask = np.zeros_like(data, dtype=bool)
+        for i in nan_indices:
+            start = max(0, i - pre_buffer_samples)
+            end = min(len(data), i + post_buffer_samples + 1)
+            mask[start:end] = True
+
+        # Set the masked region to NaN
+        data[mask] = np.nan
+    return raw
+
+
+#######################
+#######################
+
+def set_zero_to_nan(raw, channel_names=('pupil_left', 'pupil_right')):
+    sfreq = raw.info['sfreq']
 
     for ch_name in channel_names:
         if ch_name not in raw.ch_names:
@@ -174,13 +206,14 @@ def remove_missing_data(raw, channel_names=('pupil_left', 'pupil_right'), buffer
         # Build a mask with buffer around each zero index
         mask = np.zeros_like(data, dtype=bool)
         for i in zero_indices:
-            start = max(0, i - pre_buffer_samples)
-            end = min(len(data), i + post_buffer_samples + 1)
+            start = max(0, i)
+            end = min(len(data), i + 1)
             mask[start:end] = True
 
         # Set the masked region to NaN
         data[mask] = np.nan
     return raw
+
 
 ###########################
 ###########################
@@ -188,21 +221,24 @@ def remove_missing_data(raw, channel_names=('pupil_left', 'pupil_right'), buffer
 
 def plot_pupil_trace_and_velocity_mad(
     raw,
-    ch_name='pupil_left',
+    ch_name='pupil_right',
     sigma=4,
     t_start=0,
     window_duration=20,
-    mad_start_mult=6,
-    mad_end_mult=6,
-    low_v_thresh_devider=0.175,
-    max_duration=0.5
+    vt_start_multiplyer=8,
+    vt_end_multiplyer=8,
+    low_v_thresh_multiplyer=1.5,
+    max_search_duration=0.5,
+    max_duration=0.5,
 ):
     """
     Plot pupil trace and velocity using Median + MAD thresholding.
-    Highlights blink onsets, dilation peaks, and stabilization.
+    Uses same logic as `annotate_velocity_blinks`.
     """
-    t_end = t_start + window_duration
+
+    # === Setup ===
     sfreq = raw.info['sfreq']
+    t_end = t_start + window_duration
     times = raw.times
     data = raw.copy().pick(ch_name).get_data()[0]
     filename = raw.filenames
@@ -215,50 +251,59 @@ def plot_pupil_trace_and_velocity_mad(
         smoothed = data
         velocity = np.gradient(data) * sfreq
 
-    # === Compute thresholds ===
+    # === Thresholds ===
     velocity_clipped = mstats.winsorize(velocity, limits=[0.01, 0.01])
     abs_velocity = np.abs(velocity_clipped)
 
     med = np.nanmedian(abs_velocity)
     mad = np.nanmedian(np.abs(abs_velocity - med))
 
-    vt_start = med + mad_start_mult * mad
-    vt_end = med + mad_end_mult * mad
+    vt_start = med + vt_start_multiplyer * mad
+    vt_end = med + vt_end_multiplyer * mad
+    low_v_thresh = med * low_v_thresh_multiplyer
 
-    # === Detect blink-related events ===
-    above = np.zeros_like(velocity, dtype=bool)
-    below = np.zeros_like(velocity, dtype=bool)
-    close_zero = []
+    # === Threshold masks (independent) ===
+    below_thresh_mask = velocity < -vt_start
+    above_thresh_mask = velocity > vt_end
+    low_velocity_mask = np.abs(velocity) < low_v_thresh
 
+    # === Blink detection (same as annotation logic) ===
+    blink_spans = []
     i = 0
+    max_search = int(sfreq * max_search_duration)
+
     while i < len(velocity) - 1:
+        found_dilation = False
+        found_end = False
+
         if velocity[i] < -vt_start:
             istart = i
 
-            dilation_zone = velocity[istart:]
-            try:
-                imid = np.where(dilation_zone > vt_end)[0][0] + istart
-            except IndexError:
-                break
+            # Look for dilation
+            dilation_zone = velocity[istart:istart + max_search]
+            dilation_indices = np.where(dilation_zone > vt_end)[0]
+            if dilation_indices.size > 0:
+                imid = dilation_indices[0] + istart
+                found_dilation = True
 
-            post_dilate_zone = velocity[imid:]
-            low_v_thresh = mad / low_v_thresh_devider
-            try:
-                iend = np.where(np.abs(post_dilate_zone) < low_v_thresh)[0][0] + imid
-            except IndexError:
-                break
+                # Look for low velocity
+                post_dilate_zone = velocity[imid:imid + max_search]
+                low_v_indices = np.where(np.abs(post_dilate_zone) < low_v_thresh)[0]
+                if low_v_indices.size > 0:
+                    iend = low_v_indices[0] + imid
+                    found_end = True
 
-            duration_sec = (iend - istart) / sfreq
-            if duration_sec <= max_duration:
-                above[istart] = True
-                below[imid] = True
-                close_zero.append(iend)
+                    duration_sec = (iend - istart) / sfreq
+                    if duration_sec <= max_duration:
+                        blink_spans.append((istart, iend))
+                        i = iend - 1
+                        continue
 
-                i = iend + 1
-            else:
-                i+=1
+        # Skip ahead
+        if found_dilation:
+            i = imid + 1
         else:
-            i += 1
+            i += int(sfreq * 0.01)  # skip 10 ms
 
     # === Crop to time window ===
     mask = (times >= t_start) & (times <= t_end)
@@ -266,64 +311,57 @@ def plot_pupil_trace_and_velocity_mad(
     raw_crop = data[mask]
     smooth_crop = smoothed[mask]
     velocity_crop = velocity[mask]
-    above_crop = above[mask]
-    below_crop = below[mask]
+    below_thresh_crop = below_thresh_mask[mask]
+    above_thresh_crop = above_thresh_mask[mask]
+    low_velocity_crop = low_velocity_mask[mask]
 
-    # Convert close_zero indices to times and crop them
-    close_zero_times = times[close_zero]
-    close_zero_crop = close_zero_times[(close_zero_times >= t_start) & (close_zero_times <= t_end)]
+    # === Plotting ===
+    fig, axs = plt.subplots(3, 1, figsize=(14, 10), sharex=True,
+                            gridspec_kw={'height_ratios': [2, 1.5, 1]})
 
-    # === Plot ===
-    fig, axs = plt.subplots(2, 1, figsize=(12, 8), sharex=True, gridspec_kw={'height_ratios': [2, 1]})
-
-    # --- Plot pupil trace ---
+    # --- Plot 1: Pupil trace ---
     axs[0].plot(times_crop, raw_crop, label='Raw Pupil Data', color='gray', alpha=0.4)
     axs[0].plot(times_crop, smooth_crop, label=f'Smoothed (σ={sigma})', color='blue')
 
-    #  Keep track of which labels have been added
-    label_flags = {'above': False, 'below': False, 'close_zero': False}
+    for istart, iend in blink_spans:
+        if t_start * sfreq <= istart <= t_end * sfreq:
+            axs[0].axvspan(times[istart], times[iend], color='red', alpha=0.3)
 
-    # Blink Start
-    for t in times_crop[above_crop]:
-        label = 'Blink Start' if not label_flags['above'] else ""
-        axs[0].axvline(t, color='orange', linestyle='--', alpha=0.7, label=label)
-        label_flags['above'] = True
-
-    # Dilation Peak
-    for t in times_crop[below_crop]:
-        label = 'Dilation Peak' if not label_flags['below'] else ""
-        axs[0].axvline(t, color='purple', linestyle='--', alpha=0.7, label=label)
-        label_flags['below'] = True
-
-    # Stabilization
-    for t in close_zero_crop:
-        label = 'Stabilization' if not label_flags['close_zero'] else ""
-        axs[0].axvline(t, color='black', linestyle=':', alpha=0.7, label=label)
-        label_flags['close_zero'] = True
-
+    axs[0].legend(['Raw Pupil Data', f'Smoothed (σ={sigma})', 'Detected Blink'])
     axs[0].set_ylabel('Pupil Size')
     axs[0].set_title(f'{ch_name} — Pupil Trace and Velocity (Time: {t_start}-{t_end}s)')
-    axs[0].legend(loc='upper right')
     axs[0].grid(True)
 
-    # --- Plot velocity ---
+    # --- Plot 2: Velocity trace ---
     axs[1].plot(times_crop, velocity_crop, label='Velocity', color='green')
-    axs[1].axhline(vt_end, color='red', linestyle='--', linewidth=1.5, label=f'+Thresh (vt_end) = {vt_end:.1f}')
-    axs[1].axhline(-vt_start, color='red', linestyle='--', linewidth=1.5, label=f'-Thresh (vt_start) = {-vt_start:.1f}')
-    axs[1].set_xlabel('Time (s)')
-    axs[1].set_ylabel('Velocity')
+    axs[1].axhline(vt_end, color='purple', linestyle='--', linewidth=1.5, label=f'vt_end = {vt_end:.2f}')
+    axs[1].axhline(-vt_start, color='orange', linestyle='--', linewidth=1.5, label=f'-vt_start = {-vt_start:.2f}')
     axs[1].legend()
+    axs[1].set_ylabel('Velocity')
     axs[1].grid(True)
 
-    fig.suptitle(f'{filename[0] if filename else ""}')
+    # --- Plot 3: Independent threshold masks ---
+    axs[2].plot(times_crop, below_thresh_crop.astype(int), drawstyle='steps-mid', color='orange', label='velocity < -vt_start')
+    axs[2].plot(times_crop, above_thresh_crop.astype(int) + 1.2, drawstyle='steps-mid', color='purple', label='velocity > vt_end')
+    axs[2].plot(times_crop, low_velocity_crop.astype(int) + 2.4, drawstyle='steps-mid', color='black', label='|velocity| < low_v_thresh')
+
+    axs[2].set_yticks([0, 1.2, 2.4])
+    axs[2].set_yticklabels(['< -vt_start', '> vt_end', 'low velocity'])
+    axs[2].set_ylim(-0.5, 3.5)
+    axs[2].set_xlabel('Time (s)')
+    axs[2].set_title('All Threshold Events (Independent of Blink Detection)')
+    axs[2].legend(loc='upper right')
+    axs[2].grid(True)
+
+    fig.suptitle(f'{filename if filename else ""}')
     plt.tight_layout()
     plt.show()
 
+    # === Print thresholds for logging ===
     print(f'Median: {med:.3f}, MAD: {mad:.3f}')
-    print(f'vt_start (med + {mad_start_mult}×MAD): {vt_start:.3f}')
-    print(f'vt_end (med + {mad_end_mult}×MAD): {vt_end:.3f}')
-
-    return above, below, close_zero
+    print(f'vt_start (med + {vt_start_multiplyer}×MAD): {vt_start:.3f}')
+    print(f'vt_end (med + {vt_end_multiplyer}×MAD): {vt_end:.3f}')
+    print(f'low_v_thresh (med * {low_v_thresh_multiplyer}): {low_v_thresh:.3f}')
 
 
 
@@ -417,15 +455,17 @@ def _interpolate_blinks(raw, buffer, blink_annots, match, interpolate_gaze, meth
 
     # function handles
     interp_funcs = {
-        "Linear" : np.interp,
-        "CubicSpline" : _interp_cubicspline,
-        "MonotonicCubicSpline" : _interp_pchip,
-        "NonCubicSpline" : _interp_make_spline,
-        "Nearest" : _interp_1d,
+        "Linear": _interp_ignore_nan(np.interp),
+        "CubicSpline": _interp_ignore_nan(sp.interpolate.CubicSpline),
+        "MonotonicCubicSpline": _interp_ignore_nan(sp.interpolate.PchipInterpolator),
+        "NonCubicSpline": _interp_ignore_nan(sp.interpolate.make_interp_spline),
+        "Nearest": _interp_ignore_nan(sp.interpolate.interp1d),
     }
 
     logger.info("Interpolating missing data during blinks...")
+
     pre_buffer, post_buffer = buffer
+
     # iterate over each eyetrack channel and interpolate the blinks
     interpolated_chs = []
     for ci, ch_info in enumerate(raw.info["chs"]):
@@ -435,11 +475,13 @@ def _interpolate_blinks(raw, buffer, blink_annots, match, interpolate_gaze, meth
         else:  # interpolate over pupil channels only
             if ch_info["coil_type"] != FIFF.FIFFV_COIL_EYETRACK_PUPIL:
                 continue
+
         # Create an empty boolean mask
         mask = np.zeros_like(raw.times, dtype=bool)
         starts, ends = _annotations_starts_stops(raw, match)
         starts = np.divide(starts, raw.info["sfreq"])
         ends = np.divide(ends, raw.info["sfreq"])
+
         for annot, start, end in zip(blink_annots, starts, ends):
             if "ch_names" not in annot or not annot["ch_names"]:
                 msg = f"Blink annotation missing values for 'ch_names' key: {annot}"
@@ -450,14 +492,19 @@ def _interpolate_blinks(raw, buffer, blink_annots, match, interpolate_gaze, meth
                 continue  # skip if the channel is not in the blink annotation
             # Update the mask for times within the current blink period
             mask |= (raw.times >= start) & (raw.times <= end)
+
         blink_indices = np.where(mask)[0]
         non_blink_indices = np.where(~mask)[0]
+    
+        if len(blink_indices) == 0 or len(non_blink_indices) < 2:
+            continue
 
         # Interpolation
-        interpolated_samples = interp_funcs[method](
+        interp_func = interp_funcs[method]
+        interpolated_samples = interp_func(
             raw.times[blink_indices],
             raw.times[non_blink_indices],
-            raw._data[ci, non_blink_indices],
+            raw._data[ci, non_blink_indices]
         )
         # Replace the samples at the blink_indices with the interpolated values
         raw._data[ci, blink_indices] = interpolated_samples
@@ -492,6 +539,31 @@ def _interp_1d(x, xp, fp):
     """wrapper for scipy interpolation classes"""
     Interp = sp.interpolate.interp1d(xp, fp)
     return Interp(x)
+
+
+def _interp_ignore_nan(interp_class_or_func):
+    """Wrap an interpolation class/function to safely skip NaNs in fp."""
+
+    def wrapped(x, xp, fp):
+        valid = ~np.isnan(fp)
+        if np.sum(valid) < 2:
+            return np.full_like(x, np.nan)  # Not enough data
+        xp_valid = xp[valid]
+        fp_valid = fp[valid]
+
+        # Handle function vs. class-based interpolators
+        if callable(interp_class_or_func) and hasattr(interp_class_or_func, "__call__"):
+            try:
+                interpolator = interp_class_or_func(xp_valid, fp_valid)
+                return interpolator(x)
+            except Exception:
+                # fallback for np.interp
+                return np.interp(x, xp_valid, fp_valid)
+        else:
+            return np.interp(x, xp_valid, fp_valid)
+
+    return wrapped
+
 
 
 
@@ -614,4 +686,81 @@ def merge_and_rename_annotations(
         raw.set_annotations(raw.annotations + merged)
 
     return raw
-# %%
+
+
+def get_annotations_per_epoch_custom(self):
+    """Get a list of annotations that occur during each epoch.
+
+    Returns
+    -------
+    epoch_annots : list
+        A list of lists (with length equal to number of epochs) where each
+        inner list contains any annotations that overlap the corresponding
+        epoch. Annotations are stored as a :class:`tuple` of onset,
+        duration, description (not as a :class:`~mne.Annotations` object),
+        where the onset is now relative to time=0 of the epoch, rather than
+        time=0 of the original continuous (raw) data.
+    """
+    # create a list of annotations for each epoch
+    epoch_annot_list = [[] for _ in range(len(self.events))]
+
+    # check if annotations exist
+    if self.annotations is None:
+        return epoch_annot_list
+
+    # when each epoch and annotation starts/stops
+    # no need to account for first_samp here...
+    epoch_tzeros = self.events[:, 0] / self._raw_sfreq
+    epoch_starts, epoch_stops = (
+        np.atleast_2d(epoch_tzeros) + np.atleast_2d(self.times[[0, -1]]).T
+    )
+    # ... because first_samp isn't accounted for here either
+    annot_starts = self._annotations.onset
+    annot_stops = annot_starts + self._annotations.duration
+
+    # the first two cases (annot_straddles_epoch_{start|end}) will both
+    # (redundantly) capture cases where an annotation fully encompasses
+    # an epoch (e.g., annot from 1-4s, epoch from 2-3s). The redundancy
+    # doesn't matter because results are summed and then cast to bool (all
+    # we care about is presence/absence of overlap).
+    annot_straddles_epoch_start = np.logical_and(
+        np.atleast_2d(epoch_starts) >= np.atleast_2d(annot_starts).T,
+        np.atleast_2d(epoch_starts) < np.atleast_2d(annot_stops).T,
+    )
+
+    annot_straddles_epoch_end = np.logical_and(
+        np.atleast_2d(epoch_stops) > np.atleast_2d(annot_starts).T,
+        np.atleast_2d(epoch_stops) <= np.atleast_2d(annot_stops).T,
+    )
+
+    # this captures the only remaining case we care about: annotations
+    # fully contained within an epoch (or exactly coextensive with it).
+    annot_fully_within_epoch = np.logical_and(
+        np.atleast_2d(epoch_starts) <= np.atleast_2d(annot_starts).T,
+        np.atleast_2d(epoch_stops) >= np.atleast_2d(annot_stops).T,
+    )
+
+    # combine all cases to get array of shape (n_annotations, n_epochs).
+    # Nonzero entries indicate overlap between the corresponding
+    # annotation (row index) and epoch (column index).
+    all_cases = (
+        annot_straddles_epoch_start
+        + annot_straddles_epoch_end
+        + annot_fully_within_epoch
+    )
+
+    # for each Epoch-Annotation overlap occurrence:
+    for annot_ix, epo_ix in zip(*np.nonzero(all_cases)):
+        this_annot = self._annotations[annot_ix]
+        this_tzero = epoch_tzeros[epo_ix]
+        # adjust annotation onset to be relative to epoch tzero...
+        annot = (
+            this_annot["onset"] - this_tzero,
+            this_annot["duration"],
+            this_annot["description"],
+            this_annot["ch_names"],
+            epo_ix
+        )
+        # ...then add it to the correct sublist of `epoch_annot_list`
+        epoch_annot_list[epo_ix].append(annot)
+    return epoch_annot_list

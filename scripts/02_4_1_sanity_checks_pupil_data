@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import itertools
 import numpy as np
 import os
-from pupil_utils import annotate_velocity_blinks, remove_missing_data, plot_pupil_trace_and_velocity_mad, interpolate_blinks, merge_and_rename_annotations
+from pupil_utils import annotate_velocity_blinks, remove_missing_data, plot_pupil_trace_and_velocity_mad, interpolate_blinks, merge_and_rename_annotations, set_zero_to_nan
 from scipy.ndimage import gaussian_filter1d
 from scipy.interpolate import interp1d
 
@@ -36,9 +36,6 @@ for i in good_partis:
 
     epochs_df = pupil_epoch.to_data_frame()
     epochs_df['subID'] = i
-    # can I plot on top of each other without transforming to dataframe first?
-    # there would have to be a way to use hue or something
-    # pupil_epochs_combined[j].average().plot()
 
     epochs_all_uncombined_even_newer = pd.concat([epochs_all_uncombined_even_newer, epochs_df])
 
@@ -63,9 +60,6 @@ for i in good_partis:
 
     epochs_combined_nan_df = pupil_epochs_combined_nan.to_data_frame()
     epochs_combined_nan_df['subID'] = i
-    # can I plot on top of each other without transforming to dataframe first?
-    # there would have to be a way to use hue or something
-    # pupil_epochs_combined[j].average().plot()
 
     epochs_all_combined_nan_even_newer = pd.concat([epochs_all_combined_nan_even_newer, epochs_combined_nan_df])
 
@@ -74,9 +68,6 @@ epochs_all_combined_nan_even_newer = epochs_all_combined_nan_even_newer.reset_in
 
 # %%
 # plotting all trials per subID in a plt plot for uncombined pupils
-
-# first with epochs_all_uncombined_new
-# then with epochs_all_uncombined_even_newer
 
 for i in good_partis: 
     data = epochs_all_uncombined_even_newer[epochs_all_uncombined_even_newer['subID'] == i]
@@ -123,10 +114,10 @@ for i in good_partis:
 # looking at a couple of epochs at a time
 # RP15M5, REUNMA
 
-for p in ['GJL7U8']: # good_partis[1:2]
-    for i in range(220, 240, 20): #(10, 590, 10) -> for starting at 10 up to 590 in steps of 10
+for p in ['REUNMA']: # good_partis[1:2]
+    for i in range(20, 590, 70): #(10, 590, 10) -> for starting at 10 up to 590 in steps of 10
         data = epochs_all_uncombined_even_newer[epochs_all_uncombined_even_newer['subID'] == p]
-        i_before = i - 10
+        i_before = i - 20
         data = data[data['epoch'].isin(range(i_before, i))]
 
         fig, axs = plt.subplots(1, 2, layout='constrained', figsize=(12, 5))
@@ -225,28 +216,36 @@ plt.show()
 # reading all raws into a folder to more easily work with them
 
 save_dir = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/raw_cache"
+os.makedirs(save_dir, exist_ok=True)
+
 raw_cache = {}
+problematic_partis = ['D62XJG', 'ZGV9KP', 'JMUA97', 'Z632AK', 'AGYVK9', 'KJN4WD', 'UZYJ8Q', 'RP15M5', 'REUNMA', '1UVQEK', '8H3YTN']
 
-for i in ['RP15M5']:
+for i in ['D62XJG']:
+    
     save_path = os.path.join(save_dir, f"{i}_raw.fif")
-
-    # # Skip if already saved
-    # if os.path.exists(save_path):
-    #     print(f"Skipping {i} — already cached.")
-    #     continue
+    # Skip if already saved
+    if os.path.exists(save_path):
+        print(f"Skipping {i} — already cached.")
+        continue
 
     eyelink_file = f"/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink/{i}.asc"
     print(f"Loading and saving {i}...")
     raw = mne.io.read_raw_eyelink(eyelink_file)
+
+
     raw.save(save_path, overwrite=True)
     raw_cache[i] = raw
+
+
+
 
 #%%
 # loading a few raws from folder to use
 
 save_dir = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/raw_cache"
 raw_cache = {}
-for i in good_partis:
+for i in good_partis[0:10]:
     path = os.path.join(save_dir, f"{i}_raw.fif")
     if os.path.exists(path):
         raw_cache[i] = mne.io.read_raw_fif(path, preload=True)
@@ -254,25 +253,27 @@ for i in good_partis:
 # %%
 # loading a few annotated raws from folder to use
 
-save_dir = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/raw_cache/raw_annots"
-raw_cache_annot = {}
-for i in good_partis[0:10]:
-    path = os.path.join(save_dir, f"{i}_annot_raw.fif")
+save_dir = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/raw_cache"
+
+problematic_partis = ['D62XJG', 'ZGV9KP', 'JMUA97', 'Z632AK', 'AGYVK9', 'KJN4WD', 'UZYJ8Q', 'RP15M5', 'REUNMA', '1UVQEK', '8H3YTN']
+
+raw_cache_problemo = {}
+for i in problematic_partis:
+    path = os.path.join(save_dir, f"{i}_raw.fif")
     if os.path.exists(path):
-        raw_cache_annot[i] = mne.io.read_raw_fif(path, preload=True)
+        raw_cache_problemo[i] = mne.io.read_raw_fif(path, preload=True)
 
 # %%
 
 # loading a few annotated and merged raws from folder to use
-
-
-
-save_dir = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/raw_cache/raw_annots"
-raw_cache_renamed = {}
-for i in good_partis[0:10]:
-    path = os.path.join(save_dir, f"{i}_annots_renamed_raw.fif")
+save_dir = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/final_annotated_raw_cache_from_epoch"
+raw_cache_annot = {}
+for i in ['REUNMA', 'KJN4WD', 'D62XJG']:
+    path = os.path.join(save_dir, f"{i}_annotated_raw.fif")
     if os.path.exists(path):
-        raw_cache_renamed[i] = mne.io.read_raw_fif(path, preload=True)
+        raw_cache_annot[i] = mne.io.read_raw_fif(path, preload=True)
+    else:
+        print('path doesnt exist')
 
 
 # %%
@@ -291,23 +292,30 @@ for i in good_partis[0:10]:
 
 save_dir = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/raw_cache/raw_annots"
 raw_cache_annot = {}
-velocity_percentile = 99.5
+
 for i in good_partis[0:10]:
         
     raw = raw_cache[i]
 
     raw_copy = raw.copy()
+
+    drop_chs = ['xpos_right', 'xpos_left', 'ypos_right', 'ypos_left']
+    raw_copy.drop_channels(drop_chs)
     
     raw_copy_annot = annotate_velocity_blinks(
         raw_copy,
         channel_names=('pupil_left', 'pupil_right'),
-        velocity_percentile=99.5,
         margin_before=0.01,
         margin_after=0.01,
         max_duration=0.5,
         description='BAD_velo_blink',
         sfreq=None,
-        sigma=4)
+        sigma=5,
+        vt_start_multiplyer = 8,
+        vt_end_multiplyer = 8,
+        low_v_thresh_multiplyer = 1,
+        max_search_duration=0.5
+        )
     save_path = os.path.join(save_dir, f"{i}_annot_raw.fif")
     raw_copy_annot.save(save_path, overwrite=True)
     
@@ -344,8 +352,8 @@ for i in good_partis[0:10]:
         
     raw = raw_cache_renamed[i]
 
-    raw_copy = raw.copy()
-    raw_copy_interpol = interpolate_blinks(raw_copy, buffer=[0.05, 0.05], match=["BAD_velo_blink", 'BAD_merged_blink'], interpolate_gaze=False, method="MonotonicCubicSpline")
+    raw_copy3 = raw.copy()
+    raw_copy_interpol = interpolate_blinks(raw_copy3, buffer=[0.05, 0.05], match=["BAD_velo_blink", 'BAD_merged_blink'], interpolate_gaze=False, method="MonotonicCubicSpline")
 
     raw_cache_interpol[i] = raw_copy_interpol
     save_path = os.path.join(save_dir, f"{i}_interpol_merged_and_velo_raw.fif")
@@ -375,16 +383,16 @@ for i in good_partis[0:10]:
 
 # %%
 # plotting part of raw
-for i in good_partis[0:10]:
-    tmin = 3890
-    tmax = tmin + 20
+for i in ['ZGV9KP']:
+    tmin = 3750
+    tmax = tmin + 200
     
-    raw = raw_cache_removed_missing[i]
+    raw = raw_cache_problemo[i]
     print(raw.filenames)
     print(tmin)
     raw_copy2 = raw.copy()
     raw_copy3 = raw_copy2.copy().crop(tmin=tmin, tmax=tmax)
-    blink_annot = raw_copy2.annotations[np.isin(raw_copy2.annotations.description,  ['velo_blink_interp', 'blink_used_for_merge', 'merged_blink_interp', 'BAD_merged_blink', 'BAD_velo_blink', 'BAD_NAN'])] 
+    blink_annot = raw_copy2.annotations[np.isin(raw_copy2.annotations.description,  ['velo_blink_interp', 'blink_used_for_merge', 'merged_blink_interp', 'BAD_merged_blink', 'BAD_velo_blink', 'BAD_NAN'])] # 'velo_blink_interp', 'blink_used_for_merge', 'merged_blink_interp', 'BAD_merged_blink', 'BAD_velo_blink', 'BAD_NAN'
     # Assign filtered annotations to the copied raw object
     raw_copy3.set_annotations(blink_annot)
     raw_copy3.plot(scalings=1e3, duration=1000.1, picks= ['pupil_left', 'pupil_right'],  title=None, show=True) #
@@ -429,94 +437,103 @@ raw_copy = annotate_velocity_blinks(
 # raw_copy.set_annotations(raw_copy.annotations + nan_annot)
 # print(np.unique(raw_copy.annotations.description))
 
-#print(np.unique(raw_copy.annotations.description))
-#%%
-tmin = 1600
-tmax = tmin + 20
-raw_copy2 = raw_copy_annot.copy().crop(tmin=tmin, tmax=tmax)
-blink_annot = raw_copy_annot.annotations[np.isin(raw_copy_annot.annotations.description,  ['BAD_velo_blink', "BAD_merged_blink", "blink_used_for_merged", 'velo_blink_interp', 'blink_merged_interp'])] # 'velo_blink_interp', 'BAD_velo_blink', "BAD_merged_blink", "blink_used_for_merged"
-# Assign filtered annotations to the copied raw object
-raw_copy2.set_annotations(blink_annot)
-raw_copy2.plot(scalings=1e3, duration=1000.1, picks= ['pupil_left', 'pupil_right'],  title=None, show=True)
-#print(np.unique(raw_copy.annotations.description))
-#%%
-plot_pupil_trace_and_velocity(raw_copy, ch_name='pupil_right', sigma=20, t_start=1600, window_duration=20, velocity_percentile=99.5)
 
 # %%
 # One participant full rundown
-save_dir = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/raw_cache"
+problematic_partis = ['D62XJG', 'ZGV9KP', 'JMUA97', 'Z632AK', 'AGYVK9', 'KJN4WD', 'UZYJ8Q', 'RP15M5', 'REUNMA', '1UVQEK', '8H3YTN']
+
 raw_cache = {}
 for i in ['REUNMA']:
-    path = os.path.join(save_dir, f"{i}_raw.fif")
-    if os.path.exists(path):
-        raw_cache[i] = mne.io.read_raw_fif(path, preload=True)
+    eyelink_file = f"/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink/{i}.asc"
+    print(f"Loading and saving {i}...")
+    raw = mne.io.read_raw_eyelink(eyelink_file)
+    raw_cache[i] = raw
+
 
 #%%
-i = 'GJL7U8'
+raw_annots_zero = {}
+raw_annots_interpol = {}
 
-raw = raw_cache[i]
+for i in problematic_partis:
 
-raw_copy = raw.copy()
+    raw = raw_cache_problemo[i]
 
-raw_copy_annot, lists = annotate_velocity_blinks(
-    raw_copy,
-    channel_names=('pupil_left', 'pupil_right'),
-    margin_before=0.01,
-    margin_after=0.01,
-    max_duration=0.5,
-    description='BAD_velo_blink',
-    sfreq=None,
-    sigma=5,
-    vt_start_multiplyer = 8,
-    vt_end_multiplyer = 8,
-    low_v_thresh_devider = 0.175)
+    raw_copy1 = raw.copy()
 
-#%%
+    drop_chs = ['xpos_right', 'xpos_left', 'ypos_right', 'ypos_left']
+    raw_copy1.drop_channels(drop_chs)
 
-raw_copy_annot_renamed = merge_and_rename_annotations(
-    raw_copy_annot,
-    match=["BAD_velo_blink"],
-    min_gap_sec=0.1,
-    new_description="BAD_merged_blink",
-    rename_original_to="blink_used_for_merged",
-    channel_names=['pupil_right', 'pupil_left']
-)
-
-#%%
-channel = 'pupil_left'
-exclude_labels = ['saccade', 'fixation', 'BAD_blink', 'blink_used_for_merged'] # 'BAD_merged_blink', , 'BAD_velo_blink'
-
-raw_to_use = raw_copy_annot.copy()
-
-# Filter annotations for the specific channel and not excluded
-ch_specific_annots = [
-    ann for ann in raw_to_use.annotations
-    if (
-        (ann['ch_names'] is not None and channel in ann['ch_names']) and
-        (ann['description'] not in exclude_labels)
+    raw_copy_annot = annotate_velocity_blinks(
+        raw_copy1,
+        channel_names=('pupil_left', 'pupil_right'),
+        margin_before=0.01,
+        margin_after=0.01,
+        max_duration=0.5,
+        description='BAD_velo_blink',
+        sfreq=None,
+        sigma=4,
+        vt_start_multiplyer = 40,
+        vt_end_multiplyer = 40,
+        low_v_thresh_multiplyer = 1,
+        max_search_duration=0.8
     )
-]
 
-# Create new Annotations object
-filtered_annot = mne.Annotations(
-    onset=[a['onset'] for a in ch_specific_annots],
-    duration=[a['duration'] for a in ch_specific_annots],
-    description=[a['description'] for a in ch_specific_annots],
-    orig_time=raw_to_use.annotations.orig_time,
-    ch_names=[a['ch_names'] for a in ch_specific_annots]
-)
-tmin = 5790
-tmax = tmin + 20
-# Crop and apply annotations
-raw_copy_plot = raw_to_use.copy().crop(tmin=tmin, tmax=tmax)
-raw_copy_plot.set_annotations(filtered_annot)
 
-# Plot
-raw_copy_plot.plot(
-    scalings=1e3,
-    duration=1000.1,
-    picks=[channel],
-    title=f"Annotations for {channel} (excluding saccades/fixation)"
-)
+    raw_copy2 = raw_copy_annot.copy()
+    raw_copy_annot_renamed = merge_and_rename_annotations(
+        raw_copy2,
+        match=["BAD_velo_blink"],
+        min_gap_sec=0.1,
+        new_description="BAD_merged_blink",
+        rename_original_to="blink_used_for_merged",
+        channel_names=['pupil_right', 'pupil_left']
+    )
+
+    raw_copy3 = raw_copy_annot_renamed.copy()
+    raw_set_zero = set_zero_to_nan(raw_copy3, channel_names=('pupil_left', 'pupil_right'))
+
+    raw_copy4 = raw_set_zero.copy()
+    raw_copy_interpol = interpolate_blinks(raw_copy4, buffer=[0.2, 0.2], match=["BAD_velo_blink", "BAD_merged_blink"], interpolate_gaze=False, method="MonotonicCubicSpline")
+
+    raw_copy5 = raw_copy_interpol.copy()
+    raw_copy_removed = remove_missing_data(raw_copy5, channel_names=('pupil_left', 'pupil_right'), buffer=[0.2, 0.4])
+
+    raw_copy6 = raw_copy_removed.copy()
+    nan_annot = mne.preprocessing.annotate_nan(raw_copy6)
+    # nan_annot = annotate_nan_custom(raw_copy5, ch_names=('pupil_left', 'pupil_right'))
+    raw_copy6.set_annotations(raw_copy6.annotations + nan_annot)
+
+    raw_annots_zero[i] = raw_set_zero
+    raw_annots_interpol[i] = raw_copy6
+
+
+#%%
+for p in ['D62XJG']:
+    raw_copy6 = raw_cache_annot[p]
+    for i in range(1400, 1800, 50):
+        tmin = i
+        tmax = tmin + 20
+        print(raw_copy6.filenames)
+        print(tmin)
+        raw_copy_plot = raw_copy6.copy().crop(tmin=tmin, tmax=tmax)
+        blink_annot = raw_copy6.annotations[np.isin(raw_copy6.annotations.description,  ['BAD_velo_blink', "BAD_merged_blink", "blink_used_for_merged", 'velo_blink_interp', 'merged_blink_interp', 'BAD_NAN', 'NAN_interp'])] # 'BAD_velo_blink', "BAD_merged_blink", "blink_used_for_merged", 'velo_blink_interp', 'merged_blink_interp', 'BAD_NAN', 'NAN_interp'
+        # Assign filtered annotations to the copied raw object
+        raw_copy_plot.set_annotations(blink_annot)
+        raw_copy_plot.plot(scalings=1e3, duration=1000.1, picks= ['pupil_left', 'pupil_right'],  title=None, show=True)
+#%%
+for p in raw_annots_interpol:
+    raw_copy1 = raw_cache_problemo[p]
+    plot_pupil_trace_and_velocity_mad(
+        raw_copy1,
+        ch_name='pupil_right',
+        sigma=4,
+        t_start=2100,
+        window_duration=20,
+        vt_start_multiplyer=75,
+        vt_end_multiplyer=75,
+        low_v_thresh_multiplyer=1,
+        max_search_duration=0.8,
+        max_duration=0.5
+    )
 
 # %%

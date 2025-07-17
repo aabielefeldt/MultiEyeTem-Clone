@@ -2,3 +2,9 @@
     "**/figures/**": true,
     "**/csv_files/**": true
   }
+
+{
+  "workbench.colorCustomizations": {
+      "editor.rangeHighlightBackground": "#00AA00"
+  }
+}
