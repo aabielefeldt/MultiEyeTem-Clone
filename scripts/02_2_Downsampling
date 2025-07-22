@@ -1,0 +1,207 @@
+# %%
+# Importsconda
+import mne
+import numpy as np
+import pandas as pd
+import itertools
+import os
+from pupil_utils import annotate_velocity_blinks, remove_missing_data, plot_pupil_trace_and_velocity_mad, interpolate_blinks, merge_and_rename_annotations, set_zero_to_nan
+
+
+# %% Load Metadata
+df = pd.read_csv('../data/csv_files/df.csv')
+good_partis = df['subID'].unique()
+
+# %%
+# if qt is used as backend the kernel crashes
+mne.viz.set_browser_backend('matplotlib')
+
+# %%
+# Trigger Dictionary
+# these were set in the original experiment script, additional pairs were also set in the experiment except for "fixation", "saccade", and "BAD_blink". 
+# Not sure if it is necessary to add them here because they are not relevant for what I am using the trigger_dict for 
+
+n_objects = ['obj1', 'obj2', 'obj3']
+n_positions = ['pos1', 'pos2', 'pos3']
+n_orientations = [f'ori{i}' for i in range(1, 17)]
+
+# Generate combinations of the three conditions
+combinations = itertools.product(n_positions, n_objects, n_orientations)
+
+# Create a dictionary to store the combinations
+trigger_dict = {}
+
+# Populate the dictionary with formatted combinations
+for idx, combo in enumerate(combinations, start=1):
+    trigger_dict['_'.join(combo)] = idx
+
+additional_pairs = {
+    "onset_concrete_cued_left": 220,
+    "onset_concrete_cued_right": 221,
+    "left_button_press": 241,
+    "right_button_press": 242,
+    "feedback_cued_item": 244,
+    "mask": 245,
+    "beginning/end_of_task": 246,
+    "fixation": 247,
+    "saccade": 248,
+    "BAD_blink": 249
+}
+
+trigger_dict.update(additional_pairs)
+
+# Extract values with "pos1" in the key, and key-value pairs
+values_with_pos1 = [trigger_dict[key] for key in trigger_dict if "pos1" in key]
+pos1_pairs = {key: trigger_dict[key] for key in trigger_dict if "pos1" in key}
+
+# %%
+# Downsampling
+raw_folderpath = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/final_annotated_raw_cache_from_epoch"
+
+# subID to resample from freqs_df (which has been created in the epochs script)
+freqs_df = pd.read_csv('/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/csv_files/freqs_df.csv')
+wrong_partis  = freqs_df[freqs_df['frequency'] > 500]['subID'].unique()
+print(wrong_partis)
+
+# Creating epochs while downsampling
+for i in wrong_partis:
+
+    # read file per differently sampled subID
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
+    eyelink_file = folder_path + "/" + i + ".asc"
+    raw = mne.io.read_raw_eyelink(eyelink_file)
+
+    # Drop gaze channels
+    drop_chs = ['xpos_right', 'xpos_left', 'ypos_right', 'ypos_left']
+    raw.drop_channels(drop_chs)
+
+    metadata_pp = df.loc[(df['subID'] == i)]
+
+
+    #########################
+    # currently adds the new annotations to the old ones, could maybe also just use the new ones
+
+    raw = annotate_velocity_blinks(
+        raw,
+        channel_names=('pupil_left', 'pupil_right'),
+        margin_before=0.01,
+        margin_after=0.01,
+        max_duration=0.5,
+        description='BAD_velo_blink',
+        sfreq=None,
+        sigma=5,
+        vt_start_multiplyer = 40,
+        vt_end_multiplyer = 40,
+        low_v_thresh_multiplyer = 1,
+        max_search_duration=0.8
+        )
+
+
+    #########################
+    # merging and renaming consecutive blinks
+    raw = merge_and_rename_annotations(
+        raw,
+        match=["BAD_velo_blink"],
+        min_gap_sec=0.1,
+        new_description="BAD_merged_blink",
+        rename_original_to="blink_used_for_merged",
+        channel_names=['pupil_right', 'pupil_left']
+    )
+    #########################
+    # setting all zero data points to nan
+    raw = set_zero_to_nan(raw, channel_names=('pupil_left', 'pupil_right'))
+
+    #########################
+    # interpolating with custom function
+    raw = interpolate_blinks(raw, buffer=[0.05, 0.05], match=["BAD_velo_blink", "BAD_merged_blink"], interpolate_gaze=False, method="MonotonicCubicSpline")
+
+    #########################
+    # removing buffer area around remaining nan data after interpolation and annotating those nans
+    raw = remove_missing_data(raw, channel_names=('pupil_left', 'pupil_right'), buffer=[0.2, 0.4])
+    nan_annot = mne.preprocessing.annotate_nan(raw)
+    raw.set_annotations(raw.annotations + nan_annot)
+
+    #########################
+    # saving the annotated raw to maybe inspect later
+    raw_filename = f"{i}_annotated_raw.fif"
+    raw_path = os.path.join(raw_folderpath, raw_filename)
+    raw.save(raw_path, overwrite=True)
+
+    #########################
+    #########################
+    # Filtering according to sampling frequency 
+    current_sfreq = raw.info["sfreq"]
+    desired_sfreq = 500  # Hz
+    decim = np.round(current_sfreq / desired_sfreq).astype(int)
+    obtained_sfreq = current_sfreq / decim
+    lowpass_freq = obtained_sfreq / 3.0
+    raw_filtered = raw.copy().filter(l_freq=None, h_freq=lowpass_freq)
+    #########################
+    #########################
+
+    #########################
+    # saving the annotated raw to maybe inspect later
+    raw_filename = f"{i}_annotated_raw_downsampled.fif"
+    raw_path = os.path.join(raw_folderpath, raw_filename)
+    raw_filtered.save(raw_path, overwrite=True)
+
+
+
+    # Create Custom Mapping to map annotations found to event ids that match the triggers used
+    annotations = raw_filtered.annotations
+    custom_mapping = {}
+
+    # Generate mapping for annotations with integer descriptions
+    max_id = 0
+    for description in annotations.description:
+        if description.isdigit():
+            event_id = int(description)
+            custom_mapping[description] = event_id
+            if event_id > max_id:
+                max_id = event_id
+    next_event_id = max_id + 1
+    
+    # Add non-numeric descriptions with unique event IDs
+    for description in annotations.description:
+        if not description.isdigit():
+            if description not in custom_mapping:  # Ensure each description is only mapped once
+                custom_mapping[description] = next_event_id
+                next_event_id += 1
+    sorted_custom_mapping = dict(sorted(custom_mapping.items(), key=lambda item: int(item[0]) if item[0].isdigit() else float('inf')))
+
+    # Get events from annotations using the custom mapping 
+    events_from_annot, event_dict = mne.events_from_annotations(
+        raw_filtered, event_id=sorted_custom_mapping)
+    
+    events_pos1 = events_from_annot[np.isin(events_from_annot, [values_with_pos1])[:, -1]]
+
+    #########################
+    #########################
+    # Epoching
+    pupil_epochs = mne.Epochs(
+        raw_filtered, 
+        events_pos1,
+        event_id=pos1_pairs,
+        tmin=-0.1,
+        tmax=9,
+        baseline=None,
+        metadata=metadata_pp,
+        picks=['pupil_left', 'pupil_right'],
+        event_repeated='error',
+        preload=True,
+        reject_by_annotation=False,
+        decim=decim
+    )
+
+    print(
+        "desired sampling frequency was {} Hz; decim factor of {} yielded an "
+        "actual sampling frequency of {} Hz.".format(
+            desired_sfreq, decim, pupil_epochs.info["sfreq"]
+        )
+    )
+
+    folder_name = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+    filename = f"{i}_even_newer-epo.fif"
+    filepath = os.path.join(folder_name, filename)
+    pupil_epochs.save(filepath, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
+# %%

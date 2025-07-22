@@ -365,8 +365,6 @@ def plot_pupil_trace_and_velocity_mad(
 
 
 
-
-
 #######################
 # Felix interpolation function
 # looks perfect to me so far
@@ -687,42 +685,34 @@ def merge_and_rename_annotations(
 
     return raw
 
+# %%
 
 def get_annotations_per_epoch_custom(self):
-    """Get a list of annotations that occur during each epoch.
+    """Get a flat list of annotation records across all epochs.
 
     Returns
     -------
-    epoch_annots : list
-        A list of lists (with length equal to number of epochs) where each
-        inner list contains any annotations that overlap the corresponding
-        epoch. Annotations are stored as a :class:`tuple` of onset,
-        duration, description (not as a :class:`~mne.Annotations` object),
-        where the onset is now relative to time=0 of the epoch, rather than
-        time=0 of the original continuous (raw) data.
+    annot_records : list of dict
+        Each dict represents an annotation overlapping an epoch, with:
+        - onset (relative to epoch start)
+        - duration
+        - description
+        - ch_names
+        - epoch_number
     """
-    # create a list of annotations for each epoch
-    epoch_annot_list = [[] for _ in range(len(self.events))]
+    annot_records = []
 
-    # check if annotations exist
     if self.annotations is None:
-        return epoch_annot_list
+        return annot_records
 
-    # when each epoch and annotation starts/stops
-    # no need to account for first_samp here...
     epoch_tzeros = self.events[:, 0] / self._raw_sfreq
     epoch_starts, epoch_stops = (
         np.atleast_2d(epoch_tzeros) + np.atleast_2d(self.times[[0, -1]]).T
     )
-    # ... because first_samp isn't accounted for here either
+
     annot_starts = self._annotations.onset
     annot_stops = annot_starts + self._annotations.duration
 
-    # the first two cases (annot_straddles_epoch_{start|end}) will both
-    # (redundantly) capture cases where an annotation fully encompasses
-    # an epoch (e.g., annot from 1-4s, epoch from 2-3s). The redundancy
-    # doesn't matter because results are summed and then cast to bool (all
-    # we care about is presence/absence of overlap).
     annot_straddles_epoch_start = np.logical_and(
         np.atleast_2d(epoch_starts) >= np.atleast_2d(annot_starts).T,
         np.atleast_2d(epoch_starts) < np.atleast_2d(annot_stops).T,
@@ -733,34 +723,28 @@ def get_annotations_per_epoch_custom(self):
         np.atleast_2d(epoch_stops) <= np.atleast_2d(annot_stops).T,
     )
 
-    # this captures the only remaining case we care about: annotations
-    # fully contained within an epoch (or exactly coextensive with it).
     annot_fully_within_epoch = np.logical_and(
         np.atleast_2d(epoch_starts) <= np.atleast_2d(annot_starts).T,
         np.atleast_2d(epoch_stops) >= np.atleast_2d(annot_stops).T,
     )
 
-    # combine all cases to get array of shape (n_annotations, n_epochs).
-    # Nonzero entries indicate overlap between the corresponding
-    # annotation (row index) and epoch (column index).
     all_cases = (
         annot_straddles_epoch_start
         + annot_straddles_epoch_end
         + annot_fully_within_epoch
     )
+    
 
-    # for each Epoch-Annotation overlap occurrence:
     for annot_ix, epo_ix in zip(*np.nonzero(all_cases)):
         this_annot = self._annotations[annot_ix]
         this_tzero = epoch_tzeros[epo_ix]
-        # adjust annotation onset to be relative to epoch tzero...
-        annot = (
-            this_annot["onset"] - this_tzero,
-            this_annot["duration"],
-            this_annot["description"],
-            this_annot["ch_names"],
-            epo_ix
-        )
-        # ...then add it to the correct sublist of `epoch_annot_list`
-        epoch_annot_list[epo_ix].append(annot)
-    return epoch_annot_list
+        annot_records.append({
+            'onset': this_annot['onset'] - this_tzero,
+            'duration': this_annot['duration'],
+            'description': this_annot['description'],
+            'ch_names': this_annot['ch_names'],
+            'epoch_number': epo_ix+1
+        })
+    
+
+    return annot_records

@@ -4,12 +4,8 @@ import mne
 import numpy as np
 import pandas as pd
 import itertools
-import matplotlib.pyplot as plt
-import seaborn as sns
 import os
 from pupil_utils import annotate_velocity_blinks, remove_missing_data, plot_pupil_trace_and_velocity_mad, interpolate_blinks, merge_and_rename_annotations, set_zero_to_nan
-from scipy.ndimage import gaussian_filter1d
-
 
 
 # %% Load Metadata
@@ -61,7 +57,7 @@ pos1_pairs = {key: trigger_dict[key] for key in trigger_dict if "pos1" in key}
 # %% 
 # creating folder for epochs
 datafolder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data"
-folder_name_epochs = f"Epochs_even_newer"
+folder_name_epochs = f"Epochs"
 epochs_folderpath = os.path.join(datafolder_path, folder_name_epochs)
 os.makedirs(epochs_folderpath, exist_ok=True)
 
@@ -74,7 +70,7 @@ os.makedirs(raw_folderpath, exist_ok=True)
 # Creating epochs timelocked to pos1
 
 freqs = []
-in_epochs_annots_df_all = pd.DataFrame()
+annots_df_all = pd.DataFrame()
 per_epochs_annots_df = pd.DataFrame()
 annots_all = []
 
@@ -195,89 +191,24 @@ for i in good_partis[0:2]:
         reject_by_annotation=False
     )
     
-    ##########################
-    ##########################
-    # # Counting blink stats
-    # # in epochs (includes associated channels)
-    # in_epochs_annots_df = pupil_epochs_pos1.annotations.to_data_frame()
-    # in_epochs_annots_df['subID'] = i
-    # in_epochs_annots_df_all = pd.concat([in_epochs_annots_df_all, in_epochs_annots_df])
-    
-    # # per epoch, includes epoch number, load condition and onset relative to epoch
-    # for load in [1, 2, 3]:
-    #     epochs_load = pupil_epochs_pos1[f'items_presented == {load}']
-    #     epoch_number = pupil_epochs_pos1[f'items_presented == {load}'].metadata['trial']
-    #     one_load_epoch_annots_df = pd.DataFrame([
-    #     {
-    #         "epoch_index": epoch_number.iat[i],
-    #         "onset": a[0],
-    #         "duration": a[1],
-    #         "description": a[2],
-    #     }
-    #     for i, annots in enumerate(epochs_load.get_annotations_per_epoch())
-    #     for a in annots if len(a) >= 3
-    #     ])
-    #     one_load_epoch_annots_df['load'] = load
-    #     one_load_epoch_annots_df['subID'] = i
-    #     per_epochs_annots_df = pd.concat([per_epochs_annots_df, one_load_epoch_annots_df])
-    # ---> OLD PROBABLY DELETE
-    
-    ##########################
-    # new annotations list for blink statistics, now with epoch specific onset, duration, description (only the relevant ones),
-    # channel names, and adding epoch number, items presented and subID
-    tokeep = ['BAD_NAN', 'blink_used_for_merged', 'merged_blink_interp', 'velo_blink_interp']
-    for idx in range(len(pupil_epochs_pos1)):
-        annots = pupil_epochs_pos1[idx].annotations
-        filtered_annots = annots[np.isin(annots.description, tokeep)]
-
-        if len(filtered_annots) == 0:
-            continue
-
-        meta = pupil_epochs_pos1[idx].metadata
-        epoch_number = meta['trial'].item()
-        items_presented = meta['items_presented'].item()
-        subID = meta['subID'].item()
-
-        for onset, duration, description, ch_names in zip(filtered_annots.onset,
-                                                filtered_annots.duration,
-                                                filtered_annots.description,
-                                                filtered_annots.ch_names):
-            annots_all.append((onset, duration, description, ch_names, epoch_number, items_presented, subID))
-
-
-
 
     # Save epoch in fif format to a specified folder
-    filename = f"{i}_even_newer-epo.fif"
+    filename = f"{i}-epo.fif"
     epochs_path = os.path.join(epochs_folderpath, filename)
     pupil_epochs_pos1.save(epochs_path, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
 
 # creating a dataframe with all subjects sampling frequency to later select differently sampled datafiles
 freqs_df = pd.DataFrame(freqs, columns=['subID', 'frequency'])
 
-
 # saving dfs
 data_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/csv_files'
 
-freqs_df_name = f'freqs_df_evennewer.csv'
+freqs_df_name = f'freqs_df.csv'
 csv_filepath = os.path.join(data_folder, freqs_df_name)
 freqs_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
 
-# Convert to a structured NumPy array or DataFrame at the end
-annots_df_all = pd.DataFrame(annots_all, columns=[
-    'onset', 'duration', 'description', 'ch_names',
-    'epoch_number', 'items_presented', 'subID'
-])
 
-display(annots_df_all)
 
-# in_epochs_annots_df_name = f'in_epochs_annots_df_even_newer.csv'
-# csv_filepath = os.path.join(data_folder, in_epochs_annots_df_name)
-# in_epochs_annots_df_all.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
-
-# per_epochs_annots_df_name = f'per_epochs_annots_df_even_newer.csv'
-# csv_filepath = os.path.join(data_folder, per_epochs_annots_df_name)
-# per_epochs_annots_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
 
 
 # %%
