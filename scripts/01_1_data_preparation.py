@@ -96,15 +96,6 @@ orientation_bins = {
 # Create a new column with bin labels
 df['Orientation_Bin'] = df['object_cued_rot'].map(orientation_bins)
 
-# %%
-# Creating a column for cardinal vs oblique orientation category
-
-# orientations closest to the cardinal axes
-orientation_subset_cardinal = [348.75, 11.25, 78.75, 101.25, 168.75, 191.25, 258.75, 281.25]
-
-# Create a new column to indicate the categories
-df['cardinal_category'] = df['object_cued_rot'].apply(lambda x: 'cardinal' if x in orientation_subset_cardinal else 'oblique')
-
 
 # %%
 # Creating a column for cardinal vs oblique orientation category per shown item (encoding)
@@ -126,6 +117,19 @@ df['trial_ori_cat_combo'] = df.apply(
         for val in [row['obj1_ori_cat'], row['obj2_ori_cat'], row['obj3_ori_cat']]
     ),
     axis=1
+)
+
+#%%
+# adding column for all_cardinal, all_oblique or mixed
+
+df['trial_ori_pattern'] = np.where(
+    df['trial_ori_cat_combo'].isin(['cnn', 'ccn', 'ccc']),
+    'all_cardinal',
+    np.where(
+        df['trial_ori_cat_combo'].isin(['onn', 'oon', 'ooo']),
+        'all_oblique',
+        'mixed'
+    )
 )
 
 # %% 

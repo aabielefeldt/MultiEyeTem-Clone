@@ -1,0 +1,103 @@
+# %%
+# Importsconda
+import mne
+import pandas as pd
+import numpy as np
+# %% Load Metadata
+
+df = pd.read_csv('../data/csv_files/df.csv')
+good_partis = df['subID'].unique()
+
+# %%
+# appending all epochs into one list while:
+# combining both pupil channels (using nanmean)
+# applying baseline
+# seperating by condition
+# cropping according to condition
+# averaging epochs (using nanmean)
+
+# and then shifting so that delay onset is the same for all conditions
+
+
+evoked_df = pd.DataFrame()
+
+for i in good_partis:
+    
+    # reading epochs per participant
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+    epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+
+    # print(pupil_epoch.to_data_frame().isna().sum())
+    
+    # combining channels
+    pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
+    roi_dict = dict(pupils=pupil_ix)
+    combine_nanmean = lambda data: np.nanmean(data, axis=1)
+    pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method=combine_nanmean)
+
+    # applying baseline
+    pupil_epochs_combined_bl = pupil_epochs_combined.apply_baseline(baseline=(-0.1, 0))
+    baseline = pupil_epochs_combined.baseline
+
+    # seperating per load condition
+    con1_epochs = pupil_epochs_combined_bl["items_presented == 1"]
+    con2_epochs = pupil_epochs_combined_bl["items_presented == 2"]
+    con3_epochs = pupil_epochs_combined_bl["items_presented == 3"]
+
+    # shortening the epochs based on condition (crop defaults to inclduing tmax)
+    con1_epochs.crop(-0.1, 7)
+    con2_epochs.crop(-0.1, 8)
+    con3_epochs.crop(-0.1, 9)
+
+    # averaging per load condition
+    # leading to error because there are some epochs that are only nan for pupils?
+    evoked_nan_mean = lambda x: np.nanmean(x, axis=0)
+    con1_ave = con1_epochs.average(method=evoked_nan_mean)
+    con2_ave = con2_epochs.average(method=evoked_nan_mean)
+    con3_ave = con3_epochs.average(method=evoked_nan_mean)
+
+    # adding individual averaged data to dataframe including load and subID
+    con1_ave_df = con1_ave.to_data_frame()
+    con1_ave_df['Load'] = 1
+    con1_ave_df['subID'] = i
+    con2_ave_df = con2_ave.to_data_frame()
+    con2_ave_df['Load'] = 2
+    con2_ave_df['subID'] = i
+    con3_ave_df = con3_ave.to_data_frame()
+    con3_ave_df['Load'] = 3
+    con3_ave_df['subID'] = i
+
+    # concatenating to evoked_df
+    evoked_df = pd.concat([evoked_df, con1_ave_df])
+    evoked_df = pd.concat([evoked_df, con2_ave_df])
+    evoked_df = pd.concat([evoked_df, con3_ave_df])
+    evoked_df['baseline_start'] = baseline[0]
+    evoked_df['baseline_end'] = baseline[1]
+
+evoked_df = evoked_df.reset_index()
+
+evoked_df.to_csv('../data/csv_files/evoked_df.csv', index=False)
+
+# %%
+
+# shifting the conditions so that the epochs that are epoched on pos1 are time-locked to the test onset
+evoked_df_shifted = evoked_df.copy()
+evoked_df_shifted.loc[evoked_df_shifted['Load']==1, 'time'] +=2
+evoked_df_shifted.loc[evoked_df_shifted['Load']==2, 'time'] +=1
+evoked_df_shifted.loc[evoked_df_shifted['Load']==3, 'time'] +=0
+
+
+
+# %%
+mask_partis = df[df['mask']==1]['subID'].unique().tolist()
+nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
+# Adding column for mask
+evoked_df_shifted['mask'] = evoked_df_shifted['subID'].apply(
+    lambda x: 1 if x in mask_partis else 0)
+
+
+#%%
+# saving
+evoked_df_shifted.to_csv('../data/csv_files/evoked_df_shifted.csv', index=False)
+# %%

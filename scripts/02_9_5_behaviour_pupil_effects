@@ -1,0 +1,557 @@
+# %%
+# Importsconda
+import mne
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from scipy import stats
+from scipy.stats import zscore
+from mne.stats import permutation_cluster_test
+# %% Load Metadata
+
+df = pd.read_csv('../data/csv_files/df.csv')
+good_partis = df['subID'].unique()
+
+
+# is the pupil bigger in better accuracy trials?
+
+# can I use evokeds that I already have for this?
+
+# better accuracy from df, pupil data, per load from evokeds?
+# %%
+
+evoked_df_accuracy = pd.DataFrame()
+
+for i in good_partis:
+    
+    # reading epochs per participant
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+    epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+    
+    # combining channels
+    pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
+    roi_dict = dict(pupils=pupil_ix)
+    combine_nanmean = lambda data: np.nanmean(data, axis=1)
+    pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method=combine_nanmean)
+
+    # applying baseline
+    pupil_epochs_combined_bl = pupil_epochs_combined.apply_baseline(baseline=(-0.1, 0))
+    baseline = pupil_epochs_combined.baseline
+
+    # only using cardinal trials
+    # pupil_epochs_cardinal = pupil_epochs_combined_bl['acc_trial_concrete_cued==1']
+
+    # seperating per cardinal category condition
+    con1_epochs_pos1 = pupil_epochs_combined_bl["items_presented == 1"]
+    con1_epochs_correct = con1_epochs_pos1["acc_trial_concrete_cued == 1"]
+    con1_epochs_false = con1_epochs_pos1["acc_trial_concrete_cued == 0"]
+    con2_epochs_pos1 = pupil_epochs_combined_bl["items_presented == 2"]
+    con2_epochs_correct = con2_epochs_pos1["acc_trial_concrete_cued == 1"]
+    con2_epochs_false = con2_epochs_pos1["acc_trial_concrete_cued == 0"]
+    con3_epochs_pos1 = pupil_epochs_combined_bl["items_presented == 3"]
+    con3_epochs_correct = con3_epochs_pos1["acc_trial_concrete_cued == 1"]
+    con3_epochs_false = con3_epochs_pos1["acc_trial_concrete_cued == 0"]
+
+    # shortening the epochs based on condition (crop defaults to inclduing tmax)
+    con1_epochs_correct.crop(-0.1, 7)
+    con2_epochs_correct.crop(-0.1, 8)
+    con3_epochs_correct.crop(-0.1, 9)
+    con1_epochs_false.crop(-0.1, 7)
+    con2_epochs_false.crop(-0.1, 8)
+    con3_epochs_false.crop(-0.1, 9)
+
+    # averaging per load condition
+    evoked_nan_mean = lambda x: np.nanmean(x, axis=0)
+    con1_ave_correct = con1_epochs_correct.average(method=evoked_nan_mean)
+    con2_ave_correct = con2_epochs_correct.average(method=evoked_nan_mean)
+    con3_ave_correct = con3_epochs_correct.average(method=evoked_nan_mean)
+    con1_ave_false = con1_epochs_false.average(method=evoked_nan_mean)
+    con2_ave_false = con2_epochs_false.average(method=evoked_nan_mean)
+    con3_ave_false = con3_epochs_false.average(method=evoked_nan_mean)
+
+    # adding individual averaged data to dataframe including load and subID
+    # Correct trials
+    con1_ave_df_correct = con1_ave_correct.to_data_frame()
+    con1_ave_df_correct['Load'] = 1
+    con1_ave_df_correct['subID'] = i
+    con1_ave_df_correct['accuracy'] = 'correct'
+    con2_ave_df_correct = con2_ave_correct.to_data_frame()
+    con2_ave_df_correct['Load'] = 2
+    con2_ave_df_correct['subID'] = i
+    con2_ave_df_correct['accuracy'] = 'correct'
+    con3_ave_df_correct = con3_ave_correct.to_data_frame()
+    con3_ave_df_correct['Load'] = 3
+    con3_ave_df_correct['subID'] = i
+    con3_ave_df_correct['accuracy'] = 'correct'
+
+    # False trials
+    con1_ave_df_false = con1_ave_false.to_data_frame()
+    con1_ave_df_false['Load'] = 1
+    con1_ave_df_false['subID'] = i
+    con1_ave_df_false['accuracy'] = 'false'
+    con2_ave_df_false = con2_ave_false.to_data_frame()
+    con2_ave_df_false['Load'] = 2
+    con2_ave_df_false['subID'] = i
+    con2_ave_df_false['accuracy'] = 'false'
+    con3_ave_df_false = con3_ave_false.to_data_frame()
+    con3_ave_df_false['Load'] = 3
+    con3_ave_df_false['subID'] = i
+    con3_ave_df_false['accuracy'] = 'false'
+
+    # concatenating to evoked_df_accuracy
+    evoked_df_accuracy = pd.concat([evoked_df_accuracy, con1_ave_df_correct])
+    evoked_df_accuracy = pd.concat([evoked_df_accuracy, con2_ave_df_correct])
+    evoked_df_accuracy = pd.concat([evoked_df_accuracy, con3_ave_df_correct])
+    evoked_df_accuracy = pd.concat([evoked_df_accuracy, con1_ave_df_false])
+    evoked_df_accuracy = pd.concat([evoked_df_accuracy, con2_ave_df_false])
+    evoked_df_accuracy = pd.concat([evoked_df_accuracy, con3_ave_df_false])
+    evoked_df_accuracy['baseline_start'] = baseline[0]
+    evoked_df_accuracy['baseline_end'] = baseline[1]
+
+evoked_df_accuracy = evoked_df_accuracy.reset_index()
+
+evoked_df_accuracy.to_csv('../data/csv_files/evoked_df_accuracy.csv', index=False)
+
+# %%
+# Shifting
+
+# shifting the conditions so that the epochs that are epoched on pos1 are time-locked to the test onset
+evoked_df_accuracy_shifted = evoked_df_accuracy.copy()
+evoked_df_accuracy_shifted.loc[evoked_df_accuracy_shifted['Load']==1, 'time'] +=2
+evoked_df_accuracy_shifted.loc[evoked_df_accuracy_shifted['Load']==2, 'time'] +=1
+evoked_df_accuracy_shifted.loc[evoked_df_accuracy_shifted['Load']==3, 'time'] +=0
+
+# %%
+mask_partis = df[df['mask']==1]['subID'].unique().tolist()
+nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
+# Adding column for mask
+evoked_df_accuracy_shifted['mask'] = evoked_df_accuracy_shifted['subID'].apply(
+    lambda x: 1 if x in mask_partis else 0)
+
+display(evoked_df_accuracy_shifted)
+evoked_df_accuracy_shifted.to_csv('../data/csv_files/evoked_df_accuracy_shifted.csv', index=False)
+
+
+
+# %%
+# trying to plot all cardinal vs all oblique
+# this isnt ideal because there are so many more trials in the correct subsample than in the false ones
+with sns.plotting_context(context='paper', font_scale=1.5): 
+    
+    for load in [1,2,3]:
+
+        subset = evoked_df_accuracy_shifted[evoked_df_accuracy_shifted['Load'] == load]
+
+        fig, ax = plt.subplots(figsize=(12, 10), sharex=True, sharey=True)
+
+        sns.lineplot(data=subset, x='time', y='pupils', hue='accuracy', errorbar='se', legend='full')
+
+        sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
+
+        ax.axvline(0, color='black', alpha=0.33)
+        ax.axvline(1, color='black', alpha=0.66)
+        ax.axvline(2, color='black')  
+        ax.axvline(3, color='darkblue')  
+        ax.axvline(6.5, color='blue')  
+
+        # Define y-coordinate for labels (as a fraction of the plot height)
+        label_y = 1.05
+
+        # Add labels above the vertical lines
+        ax.text(0, ax.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+        ax.text(1, ax.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+        ax.text(2, ax.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+        ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+        ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+
+
+        # Highlighting the baseline window
+        baseline = (evoked_df_accuracy_shifted.at[0, 'baseline_start'], evoked_df_accuracy_shifted.at[0, 'baseline_end'])
+        baseline_str = '_'.join(map(str, baseline))
+        # Include window that was used for the baseline
+        # maybe remove here because misleading with shifted data
+        # ax.axvspan(baseline[0], baseline[1], ymin=0, ymax=1, color='blue', alpha=0.4)
+
+        # Set x-axis to show all whole numbers within range
+        x_ticks = np.arange(int(evoked_df_accuracy_shifted['time'].min()), int(evoked_df_accuracy_shifted['time'].max()) + 1, 1)
+        ax.set_xticks(x_ticks)
+        ax.set_xticklabels(x_ticks)
+
+        # Increase font size of x and y tick labels
+        ax.tick_params(axis='x', labelsize=14)
+        ax.tick_params(axis='y', labelsize=14)
+
+        # Adding a legend
+        ax.legend(loc='best', fontsize=12)
+
+        # Adding a title
+        plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize = 20)
+        plt.title(f'Load {load}', y=1.25, color='blue', alpha=0.4)
+        plt.show()
+    
+    
+# %%
+counts_acc = pd.DataFrame()
+
+for i in good_partis:
+
+    sub_subset = df[df['subID']==i]
+    sub_acc_count = sub_subset.groupby('acc_trial_concrete_cued')['trial'].count()
+    sub_acc_count.name = i
+    counts_acc = pd.concat([counts_acc, sub_acc_count], axis=1)
+
+counts_acc.rename(index={0: 'false', 1: 'correct'}, inplace=True)
+display(counts_acc)
+
+display(counts_acc.loc['false'].sum())
+display(counts_acc.loc['correct'].sum())
+# %%
+
+# %%
+#these plots shows all three load conditions for either only false trials or only correct trials
+with sns.plotting_context(context='paper', font_scale=1.5): 
+    accuracy = ['correct', 'false']
+    for acc in accuracy:
+
+        subset = evoked_df_accuracy_shifted[evoked_df_accuracy_shifted['accuracy'] == acc]
+
+        fig, ax = plt.subplots(figsize=(12, 10), sharex=True, sharey=True)
+
+        sns.lineplot(data=subset, x='time', y='pupils', hue='Load', errorbar='se', legend='full')
+
+        sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
+
+        ax.axvline(0, color='black', alpha=0.33)
+        ax.axvline(1, color='black', alpha=0.66)
+        ax.axvline(2, color='black')  
+        ax.axvline(3, color='darkblue')  
+        ax.axvline(6.5, color='blue')  
+
+        # Define y-coordinate for labels (as a fraction of the plot height)
+        label_y = 1.05
+
+        # Add labels above the vertical lines
+        ax.text(0, ax.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+        ax.text(1, ax.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+        ax.text(2, ax.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+        ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+        ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+
+
+        # Highlighting the baseline window
+        baseline = (evoked_df_accuracy_shifted.at[0, 'baseline_start'], evoked_df_accuracy_shifted.at[0, 'baseline_end'])
+        baseline_str = '_'.join(map(str, baseline))
+        # Include window that was used for the baseline
+        # maybe remove here because misleading with shifted data
+        # ax.axvspan(baseline[0], baseline[1], ymin=0, ymax=1, color='blue', alpha=0.4)
+
+        # Set x-axis to show all whole numbers within range
+        x_ticks = np.arange(int(evoked_df_accuracy_shifted['time'].min()), int(evoked_df_accuracy_shifted['time'].max()) + 1, 1)
+        ax.set_xticks(x_ticks)
+        ax.set_xticklabels(x_ticks)
+
+        # Increase font size of x and y tick labels
+        ax.tick_params(axis='x', labelsize=14)
+        ax.tick_params(axis='y', labelsize=14)
+
+        # Adding a legend
+        ax.legend(loc='best', fontsize=12)
+
+        # Adding a title
+        plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize = 20)
+        plt.title(f'Accuracy {acc}', y=1.25, color='blue', alpha=0.4)
+        plt.show()
+    
+# %%
+
+# %%
+#these plots shows all three load conditions for either only false trials or only correct trials
+with sns.plotting_context(context='paper', font_scale=1.5): 
+        
+    subset_acc = evoked_df_accuracy_shifted[evoked_df_accuracy_shifted['accuracy'] == 'correct']
+    subset_fal = evoked_df_accuracy_shifted[evoked_df_accuracy_shifted['accuracy'] == 'false']
+    fig, ax = plt.subplots(figsize=(12, 10), sharex=True, sharey=True)
+
+    sns.lineplot(data=subset_acc, x='time', y='pupils', hue='Load', errorbar='se', legend='full')
+    sns.lineplot(data=subset_fal, x='time', y='pupils', hue='Load', errorbar='se', legend='full', palette='crest')
+
+    sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
+
+    ax.axvline(0, color='black', alpha=0.33)
+    ax.axvline(1, color='black', alpha=0.66)
+    ax.axvline(2, color='black')  
+    ax.axvline(3, color='darkblue')  
+    ax.axvline(6.5, color='blue')  
+
+    # Define y-coordinate for labels (as a fraction of the plot height)
+    label_y = 1.05
+
+    # Add labels above the vertical lines
+    ax.text(0, ax.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+    ax.text(1, ax.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+    ax.text(2, ax.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+    ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+    ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+
+
+    # Highlighting the baseline window
+    baseline = (evoked_df_accuracy_shifted.at[0, 'baseline_start'], evoked_df_accuracy_shifted.at[0, 'baseline_end'])
+    baseline_str = '_'.join(map(str, baseline))
+    # Include window that was used for the baseline
+    # maybe remove here because misleading with shifted data
+    # ax.axvspan(baseline[0], baseline[1], ymin=0, ymax=1, color='blue', alpha=0.4)
+
+    # Set x-axis to show all whole numbers within range
+    x_ticks = np.arange(int(evoked_df_accuracy_shifted['time'].min()), int(evoked_df_accuracy_shifted['time'].max()) + 1, 1)
+    ax.set_xticks(x_ticks)
+    ax.set_xticklabels(x_ticks)
+
+    # Increase font size of x and y tick labels
+    ax.tick_params(axis='x', labelsize=14)
+    ax.tick_params(axis='y', labelsize=14)
+
+    # Adding a legend
+    ax.legend(loc='best', fontsize=12)
+
+    # Adding a title
+    plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize = 20)
+    plt.title(f'Accuracy {acc}', y=1.25, color='blue', alpha=0.4)
+    plt.show()
+# %%
+# plots seperated by mask showing accurate vs false trials seperated by load on top of each other
+with sns.plotting_context(context='paper', font_scale=1.5): 
+        
+    subset_acc = evoked_df_accuracy_shifted[evoked_df_accuracy_shifted['accuracy'] == 'correct']
+    subset_fal = evoked_df_accuracy_shifted[evoked_df_accuracy_shifted['accuracy'] == 'false']
+    for mask in [0,1]:
+        fig, ax = plt.subplots(figsize=(12, 10), sharex=True, sharey=True)
+
+        sns.lineplot(data=subset_acc[subset_acc['mask']==mask], x='time', y='pupils', hue='Load', errorbar='se', legend='full')
+        sns.lineplot(data=subset_fal[subset_fal['mask']==mask], x='time', y='pupils', hue='Load', errorbar='se', legend='full', palette='crest')
+
+        sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
+
+        ax.axvline(0, color='black', alpha=0.33)
+        ax.axvline(1, color='black', alpha=0.66)
+        ax.axvline(2, color='black')  
+        ax.axvline(3, color='darkblue')  
+        ax.axvline(6.5, color='blue')  
+
+        # Define y-coordinate for labels (as a fraction of the plot height)
+        label_y = 1.05
+
+        # Add labels above the vertical lines
+        ax.text(0, ax.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+        ax.text(1, ax.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+        ax.text(2, ax.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+        ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+        ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+
+
+        # Highlighting the baseline window
+        baseline = (evoked_df_accuracy_shifted.at[0, 'baseline_start'], evoked_df_accuracy_shifted.at[0, 'baseline_end'])
+        baseline_str = '_'.join(map(str, baseline))
+        # Include window that was used for the baseline
+        # maybe remove here because misleading with shifted data
+        # ax.axvspan(baseline[0], baseline[1], ymin=0, ymax=1, color='blue', alpha=0.4)
+
+        # Set x-axis to show all whole numbers within range
+        x_ticks = np.arange(int(evoked_df_accuracy_shifted['time'].min()), int(evoked_df_accuracy_shifted['time'].max()) + 1, 1)
+        ax.set_xticks(x_ticks)
+        ax.set_xticklabels(x_ticks)
+
+        # Increase font size of x and y tick labels
+        ax.tick_params(axis='x', labelsize=14)
+        ax.tick_params(axis='y', labelsize=14)
+
+        # Adding a legend
+        ax.legend(loc='best', fontsize=12)
+
+        # Adding a title
+        plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize = 20)
+        plt.title(f'Maks {mask} (accurate trials = reddish)', y=1.25, color='blue', alpha=0.4)
+        plt.show()
+
+# %%
+
+# Collapse across loads: average (Load1+Load2+Load3)/3 for Correct and False
+mat_correct = pd.concat([mat_c1, mat_c2, mat_c3]).groupby(level=0).mean()
+mat_false   = pd.concat([mat_f1, mat_f2, mat_f3]).groupby(level=0).mean()
+
+# Align common subs/times
+common_subs_acc = mat_correct.index.intersection(mat_false.index)
+common_times_acc = mat_correct.columns.intersection(mat_false.columns)
+
+Xc = mat_correct.loc[common_subs_acc, common_times_acc].to_numpy()
+Xf = mat_false.loc[common_subs_acc, common_times_acc].to_numpy()
+times_acc = common_times_acc.to_numpy()
+
+def paired_t(X1, X2):
+    t_vals, _ = stats.ttest_rel(X1, X2, axis=0)
+    return t_vals
+
+
+# Run paired-samples cluster t-test
+T_obs_acc, clusters_acc, pvals_acc, H0_acc = permutation_cluster_test(
+    [Xc, Xf],
+    n_permutations=5000,
+    tail=0,              # two-tailed t-test
+    threshold=3,      # uses t-distribution automatically
+    out_type='mask',
+    verbose=True,
+    stat_fun=paired_t
+
+)
+
+# Plot
+plt.figure(figsize=(11,5))
+plt.plot(times_acc, T_obs_acc, label='t (Accuracy main effect)')
+for i_c, c in enumerate(clusters_acc):
+    if pvals_acc[i_c] < 0.05:
+        plt.axvspan(times_acc[c][0], times_acc[c][-1], alpha=0.3, label='p < 0.05 cluster' if i_c==0 else None)
+plt.axhline(0, color='k', lw=0.8)
+plt.xlabel('Time (s)')
+plt.ylabel('t-statistic')
+plt.title('Cluster permutation: Main effect of Accuracy (Correct vs False)')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+#%%
+# -----------------------------
+# 0) Prep
+# -----------------------------
+delay_time_window = evoked_df_accuracy.copy()
+delay_time_window['time'] = delay_time_window['time'].round(3)
+
+
+# OPTIONAL: z-score within subject (across all trials & times) BEFORE averaging
+#delay_time_window['pupils'] = delay_time_window.groupby('subID')['pupils'].transform(lambda x: zscore(x, nan_policy='omit'))
+
+start_time = 3
+end_time = 6.5
+delay_time_window = delay_time_window[(delay_time_window['time'] >= start_time) & (delay_time_window['time'] <= end_time)]
+
+# -----------------------------
+# 1) Build subject×time matrices per Load & Accuracy
+# -----------------------------
+def make_matrix(dfin, load_val, acc_label):
+    _df = dfin[(dfin['Load'] == load_val) & (dfin['accuracy'] == acc_label)]
+    # average over any residual trials per subject/time
+    piv = _df.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+    return piv  # rows: subjects, cols: time
+
+mat_c1 = make_matrix(delay_time_window, 1, 'correct')
+mat_f1 = make_matrix(delay_time_window, 1, 'false')
+mat_c2 = make_matrix(delay_time_window, 2, 'correct')
+mat_f2 = make_matrix(delay_time_window, 2, 'false')
+mat_c3 = make_matrix(delay_time_window, 3, 'correct')
+mat_f3 = make_matrix(delay_time_window, 3, 'false')
+
+# -----------------------------
+# 2) Make "difference waves" per Load: Correct - False
+# -----------------------------
+# Align time axes per load
+common_times_1 = mat_c1.columns.intersection(mat_f1.columns)
+common_times_2 = mat_c2.columns.intersection(mat_f2.columns)
+common_times_3 = mat_c3.columns.intersection(mat_f3.columns)
+
+D1 = (mat_c1[common_times_1] - mat_f1[common_times_1])
+D2 = (mat_c2[common_times_2] - mat_f2[common_times_2])
+D3 = (mat_c3[common_times_3] - mat_f3[common_times_3])
+
+# -----------------------------
+# 3) Ensure common subjects & common timepoints across ALL three loads
+# -----------------------------
+common_subs = D1.index.intersection(D2.index).intersection(D3.index)
+common_times = D1.columns.intersection(D2.columns).intersection(D3.columns)
+
+D1 = D1.loc[common_subs, common_times]
+D2 = D2.loc[common_subs, common_times]
+D3 = D3.loc[common_subs, common_times]
+times = common_times.to_numpy()
+
+X1 = D1.to_numpy()  # shape: n_subjects × n_times
+X2 = D2.to_numpy()
+X3 = D3.to_numpy()
+
+# -----------------------------
+# 4) Repeated-measures (within-subject) one-way ANOVA F stat over loads
+#    This computes F at each timepoint assuming subjects are a random factor.
+# -----------------------------
+def rm_oneway_F(*X):
+    """
+    X: list of arrays, each shape (n_subjects, n_times), one per level (here 3 loads)
+    Returns: F-values per timepoint (shape: n_times,)
+    """
+    Y = np.stack(X, axis=1)               # (S, L, T)
+    S, L, T = Y.shape
+    # Means
+    grand = Y.mean(axis=(0, 1))           # (T,)
+    subj_mean = Y.mean(axis=1)            # (S, T)
+    level_mean = Y.mean(axis=0)           # (L, T)
+    # Sums of squares
+    SS_total   = ((Y - grand)**2).sum(axis=(0, 1))              # (T,)
+    SS_subject = L * ((subj_mean - grand)**2).sum(axis=0)       # (T,)
+    SS_level   = S * ((level_mean - grand)**2).sum(axis=0)      # (T,)
+    SS_error   = SS_total - SS_subject - SS_level               # (T,)
+    # DoF
+    df_level = L - 1
+    df_error = (L - 1) * (S - 1)
+    # Mean squares & F
+    MS_level = SS_level / df_level
+    MS_error = SS_error / df_error
+    F = MS_level / MS_error
+    return F
+
+# -----------------------------
+# 5) Cluster permutation (interaction test)
+#    We're testing whether the accuracy difference depends on load -> A×B interaction.
+#    Use one-tailed (F >= 0) and let threshold=None pick a data-driven threshold.
+# -----------------------------
+T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
+    [X1, X2, X3],
+    stat_fun=rm_oneway_F,
+    n_permutations=5000,
+    threshold=3.0,   # data-driven threshold; or set an F critical value if you prefer
+    tail=1,           # F is inherently one-sided (>= 0)
+    out_type='mask',
+    verbose=True
+)
+
+# -----------------------------
+# 6) Plot F(t) and significant clusters
+# -----------------------------
+plt.figure(figsize=(11, 5))
+plt.plot(times, T_obs, label='F (Accuracy×Load interaction)')
+for i_c, c in enumerate(clusters):
+    if cluster_p_values[i_c] < 0.05:
+        # c is a boolean mask over time
+        plt.axvspan(times[c][0], times[c][-1], alpha=0.3, label='p < 0.05 cluster' if i_c == 0 else None)
+plt.axhline(0, color='k', lw=0.8)
+plt.xlabel('Time (s)')
+plt.ylabel('F-statistic')
+plt.title('Cluster permutation: Accuracy × Load (interaction on Correct−False differences)')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# Optionally, visualize the three difference waves (means across subjects)
+plt.figure(figsize=(11, 5))
+plt.plot(times, X1.mean(axis=0), label='Load 1: Correct−False')
+plt.plot(times, X2.mean(axis=0), label='Load 2: Correct-False')
+plt.plot(times, X3.mean(axis=0), label='Load 3: Correct−False')
+for i_c, c in enumerate(clusters):
+    if cluster_p_values[i_c] < 0.05:
+        plt.axvspan(times[c][0], times[c][-1], alpha=0.2)
+plt.axhline(0, color='k', lw=0.8)
+plt.xlabel('Time (s)')
+plt.ylabel('Δ pupil (arb. units)')
+plt.title('Subject-mean difference waves by Load (for context)')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# %%

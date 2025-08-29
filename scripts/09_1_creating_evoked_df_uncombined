@@ -1,7 +1,11 @@
 # %%
 # Importsconda
+
 import mne
 import pandas as pd
+import seaborn as sns
+import numpy as np
+import matplotlib.pyplot as plt
 
 # %% Load Metadata
 
@@ -17,7 +21,7 @@ mne.viz.set_browser_backend('matplotlib')
 # appending all epochs into one dataframe and combining both pupil channels
 evoked_df_uncombined = pd.DataFrame()
 
-
+# try using nanmean for averaging, epochs that used nans (epochs_even_newer), try using plt instead of sns
 
 for i in good_partis:
     
@@ -26,16 +30,38 @@ for i in good_partis:
     epoch_file = folder_path + "/" + i + "_pos1_interpol-epo.fif"
     pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
 
+    # combining channels
+    pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
+    roi_dict = dict(pupils=pupil_ix)
+    combine_nanmean = lambda data: np.nanmean(data, axis=1)
+    pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method=combine_nanmean)
+
+    # applying baseline
+    pupil_epochs_combined_bl = pupil_epochs_combined.apply_baseline(baseline=(-0.1, 0))
+    baseline = pupil_epochs_combined.baseline
+
     # seperating per load condition
-    con1_epochs = pupil_epoch["items_presented == 1"]
-    con2_epochs = pupil_epoch["items_presented == 2"]
-    con3_epochs = pupil_epoch["items_presented == 3"]
+    con1_epochs = pupil_epochs_combined["items_presented == 1"]
+    con2_epochs = pupil_epochs_combined["items_presented == 2"]
+    con3_epochs = pupil_epochs_combined["items_presented == 3"]
+
+    # shortening the epochs based on condition (crop defaults to inclduing tmax)
+    con1_epochs.crop(-0.1, 7)
+    con2_epochs.crop(-0.1, 8)
+    con3_epochs.crop(-0.1, 9)
 
     # averaging per load condition
-    con1_ave = con1_epochs.average()
-    con2_ave = con2_epochs.average()
-    con3_ave = con3_epochs.average()
+    evoked_nan_mean = lambda x: np.nanmean(x, axis=0)
+    con1_ave = con1_epochs.average(method=evoked_nan_mean)
+    con2_ave = con2_epochs.average(method=evoked_nan_mean)
+    con3_ave = con3_epochs.average(method=evoked_nan_mean)
+
+    # con1_ave = con1_epochs.average()
+    # con2_ave = con2_epochs.average()
+    # con3_ave = con3_epochs.average()
     
+    #display(con1_ave_df[con1_ave_df['pupil_left'].isna()])
+
     # adding individual averaged data to dataframe including load and subID
     con1_ave_df = con1_ave.to_data_frame()
     con1_ave_df['Load'] = 1
@@ -54,4 +80,142 @@ for i in good_partis:
 
 evoked_df_uncombined = evoked_df_uncombined.reset_index()
 
-evoked_df_uncombined.to_csv('../data/csv_files/evoked_df_uncombined.csv', index=False)
+# evoked_df_uncombined.to_csv('../data/csv_files/evoked_df_uncombined.csv', index=False)
+
+# %% 
+# Shifting
+evoked_df_shifted = evoked_df_uncombined.copy()
+evoked_df_shifted.loc[evoked_df_shifted['Load']==1, 'time'] +=2
+evoked_df_shifted.loc[evoked_df_shifted['Load']==2, 'time'] +=1
+evoked_df_shifted.loc[evoked_df_shifted['Load']==3, 'time'] +=0
+
+
+# %%
+# Plotting 
+
+
+with sns.plotting_context(context='paper', font_scale=1.5): 
+    
+    fig, ax = plt.subplots(figsize=(10,8))
+
+    #sns.lineplot(data=evoked_df_shifted, x='time', y='pupil_left', hue='Load', palette='crest', errorbar='se', ax=ax)
+    sns.lineplot(data=evoked_df_shifted, x='time', y='pupil_right', hue='Load', palette='crest', errorbar='se', ax=ax)
+
+    sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
+    
+    ax.axvline(0, color='black', alpha=0.33)
+    ax.axvline(1, color='black', alpha=0.66)
+    ax.axvline(2, color='black')  
+    ax.axvline(3, color='darkblue')  
+    ax.axvline(6.5, color='blue')  
+
+    # Define y-coordinate for labels (as a fraction of the plot height)
+    label_y = 1.05
+
+    # Add labels above the vertical lines
+    ax.text(0, ax.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+    ax.text(1, ax.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+    ax.text(2, ax.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+    ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+    ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+
+    # add significance dots
+    # sig = sig_results_shifted['time'].values
+    # y_sig = [ax.get_ylim()[0]] * len(sig)
+    # ax.plot(sig, y_sig, ".", color='red', label='p < 0.05')
+
+    # Highlighting the baseline window
+    # baseline = (evoked_df_shifted.at[0, 'baseline_start'], evoked_df_shifted.at[0, 'baseline_end'])
+    # baseline_str = '_'.join(map(str, baseline))
+    # Include window that was used for the baseline
+    # maybe remove here because misleading with shifted data
+    # ax.axvspan(baseline[0], baseline[1], ymin=0, ymax=1, color='blue', alpha=0.4)
+
+    # Set x-axis to show all whole numbers within range
+    x_ticks = np.arange(int(evoked_df_shifted['time'].min()), int(evoked_df_shifted['time'].max()) + 1, 1)
+    ax.set_xticks(x_ticks)
+    ax.set_xticklabels(x_ticks)
+
+    # Increase font size of x and y tick labels
+    ax.tick_params(axis='x', labelsize=14)
+    ax.tick_params(axis='y', labelsize=14)
+
+    # Adding a title
+    plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize = 20)
+    plt.title(f'Title', y=1.25, color='blue', alpha=0.4)
+    
+    # Adding a legend
+    ax.legend(loc='upper right', fontsize=12)
+    new_labels = ['Load 1', 'Load 2', 'Load 3']
+    for t, l in zip(ax.get_legend().texts, new_labels):
+        t.set_text(l)
+
+    # Save the figure
+    # name=f"pupil_fig_shifted_bl{baseline_str}.png"
+    # figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures'
+    # figure_filepath = os.path.join(figures_folder, name)
+
+    # plt.savefig(figure_filepath, bbox_inches = 'tight')
+# %%
+# plot without seaborn
+
+# Assume evoked_df_shifted is already loaded and has columns:
+# 'time', 'pupil_right', 'Load'
+
+fig, ax = plt.subplots(figsize=(10, 8))
+
+# Define color mapping for each Load condition (replicating seaborn's 'crest' palette approximately)
+colors = {1: 'teal', 2: 'mediumseagreen', 3: 'skyblue'}
+
+# Plotting each Load group with mean and SEM
+for load, group in evoked_df_shifted.groupby('Load'):
+    time = group['time'].unique()
+    mean_vals = group.groupby('time')['pupil_right'].mean()
+    sem_vals = group.groupby('time')['pupil_right'].sem()
+
+    ax.plot(time, mean_vals, label=f'Load {load}', color=colors[load])
+    ax.fill_between(time, mean_vals - sem_vals, mean_vals + sem_vals, color=colors[load], alpha=0.3)
+
+# Add vertical lines
+ax.axvline(0, color='black', alpha=0.33)
+ax.axvline(1, color='black', alpha=0.66)
+ax.axvline(2, color='black')
+ax.axvline(3, color='darkblue')
+ax.axvline(6.5, color='blue')
+
+# Define y-coordinate for text labels
+label_y = 1.05
+ylim = ax.get_ylim()
+
+ax.text(0, ylim[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+ax.text(1, ylim[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+ax.text(2, ylim[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+ax.text(3, ylim[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+ax.text(6.5, ylim[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+
+# Set x-axis ticks to whole numbers
+x_ticks = np.arange(int(evoked_df_shifted['time'].min()), int(evoked_df_shifted['time'].max()) + 1, 1)
+ax.set_xticks(x_ticks)
+ax.set_xticklabels(x_ticks)
+
+# Adjust tick font sizes
+ax.tick_params(axis='x', labelsize=14)
+ax.tick_params(axis='y', labelsize=14)
+
+# Title and subtitle
+plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize=20)
+plt.title('Title', y=1.25, color='blue', alpha=0.4)
+
+# Legend
+ax.legend(title='Load', loc='upper right', fontsize=12)
+
+# Remove top and right spines
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+
+# Optional: Save figure
+# plt.savefig('/path/to/save/figure.png', bbox_inches='tight')
+
+plt.tight_layout()
+plt.show()
+

@@ -47,18 +47,19 @@ for i in good_partis:
     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
     epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
     pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
-
+    
     # combining channels
     pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
     roi_dict = dict(pupils=pupil_ix)
     combine_nanmean = lambda data: np.nanmean(data, axis=1)
     pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method=combine_nanmean)
-
+    
 
     pupil_epochs_combined_df = pupil_epochs_combined.to_data_frame()
     pupil_epochs_combined_df['subID'] = i
 
     median_pupil = pupil_epochs_combined_df['pupils'].median()
+    print(median_pupil)
     pupil_epochs_combined_df['pupils_centered'] = pupil_epochs_combined_df['pupils'] - median_pupil
     histo_all = pd.concat([histo_all, pupil_epochs_combined_df[['pupils_centered', 'subID']]], ignore_index=True)
 
@@ -91,9 +92,7 @@ plt.show()
 
 # %%
 # Histogram of pupil sizes per subID per timepoint during baseline period
-# do I just plot the size averaged per baseline period per trial?
 
-# At top of script
 all_baseline_means = pd.DataFrame()
 
 for i in good_partis:
@@ -109,22 +108,18 @@ for i in good_partis:
     combine_nanmean = lambda data: np.nanmean(data, axis=1)
     pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method=combine_nanmean)
 
+    # cropping to baseline period
     pupil_epochs_combined.crop(tmin=-0.1, tmax=0, include_tmax=True)
-
-    # now I have an average per timepoint, I want an average per baseline period - ???
-    #ave = pupil_epochs_combined.average()
 
     pupil_epochs_combined_df = pupil_epochs_combined.to_data_frame()
     pupil_epochs_combined_df['subID'] = i
 
-    #baseline period is between -0.1 and 0
     mean_list = []
     for l, k in enumerate(np.unique(pupil_epochs_combined_df['epoch'])):
         baseline_mean = pupil_epochs_combined_df[pupil_epochs_combined_df['epoch']== l]['pupils'].mean()
         mean_list.append(({'subID': i, 'baseline_mean': baseline_mean, 'epoch': k}))
 
     baseline_df = pd.DataFrame(mean_list)
-    # Inside your loop, after baseline_df is created
     baseline_df['baseline_mean_centered'] = baseline_df['baseline_mean'] - baseline_df['baseline_mean'].median()
     all_baseline_means = pd.concat([all_baseline_means, baseline_df[['baseline_mean', 'baseline_mean_centered', 'subID']]], ignore_index=True)
 
@@ -133,12 +128,13 @@ for i in good_partis:
     plt.title(f'SubID {i} - distribution of pupil size during periods used for baseline ')
     sns.histplot(data=baseline_df, bins=50, stat='density', x='baseline_mean', legend=True)
     plt.show()
+
     # Save the figure
     # name=f"pupil_size_histogram_during_baseline_{i}.png"
     # figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures/baseline_pupil_size'
     # figure_filepath = os.path.join(figures_folder, name)
-
     # plt.savefig(figure_filepath, bbox_inches = 'tight')
+
 # Plot of distribution of all baseline means
 plt.figure()
 plt.title("Baseline pupil size (raw, all participants)")
@@ -154,189 +150,5 @@ plt.axvline(0, color='gray', linestyle='--', label='Subject median = 0')
 plt.xlabel("Centered baseline pupil size")
 plt.legend()
 plt.show()
-
-
-#%%
-# Blink statistics:
-# reading dataframe with all (relevant) annotations (created below)
-anno_df_all = pd.read_csv('../data/csv_files/anno_df_all.csv')
-
-#%%
-# split the dataframe into right and left eye
-anno_df_right_eye = anno_df_all[anno_df_all['ch_names'].isin([np.nan, "('pupil_right',)"])].copy()
-anno_df_left_eye = anno_df_all[anno_df_all['ch_names'].isin([np.nan, "('pupil_left',)"])].copy()
-
-#anno_df_all = anno_df_all.reset_index()
-per_epoch_annos = anno_df_right_eye.groupby(['subID', 'epoch_number', 'items_presented', 'description'])['onset'].count().reset_index(name='count')
-
-
-blinks = ['blink_used_for_merged', 'velo_blink_interp']
-per_epoch_blinks = per_epoch_annos[per_epoch_annos['description'].isin(blinks)]
-per_epoch_blink_sum = per_epoch_blinks.groupby(['subID', 'epoch_number', 'items_presented'])['count'].sum().reset_index()
-
-
-# %%
-plt.figure(figsize=(20,6))
-
-sns.histplot(data=per_epoch_blink_sum, bins=40, x='count', hue='subID')
-
-plt.show()
-
-# plot of blinks per epoch in a histogram with all subIDs as hue
-#%%
-mean_blinks_per_epoch = per_epoch_blink_sum.groupby(['subID'])['count'].mean().reset_index(name='epoch_mean')
-
-plt.figure(figsize=(20,6))
-
-sns.barplot(data=mean_blinks_per_epoch, x='subID', y='epoch_mean')
-plt.legend()
-plt.show()
-
-#%%
-mean_blinks_per_epoch_load = per_epoch_blink_sum.groupby(['subID', 'items_presented'])['count'].mean().reset_index(name='epoch_mean')
-
-plt.figure(figsize=(20,6))
-
-sns.barplot(data=mean_blinks_per_epoch_load, x='subID', y='epoch_mean', hue='items_presented')
-plt.legend()
-plt.show()
-
-# %%
-# difference between load condition blinks anova (not significant)
-anova_results = pg.rm_anova(
-    dv='count',         # dependent variable
-    within='items_presented', # within-subjects factor
-    subject='subID',          # subject identifier
-    data=per_epoch_blink_sum,
-    detailed=True             # for full output
-)
-
-display(anova_results)
-# Check significance
-p_value = anova_results.loc[0, 'p-GG-corr']  # Use Greenhouse-Geisser corrected p-value
-
-if p_value < 0.05:
-    print(f"\n✅ The effect of load (items_presented) on blink count is statistically significant (p = {p_value:.4f}).")
-else:
-    print(f"\n❌ The effect of load (items_presented) on blink count is NOT statistically significant (p = {p_value:.4f}).")
-
-# %%
-
-# %%
-# filter for nan 
-nans_both_pupils = anno_df_all[anno_df_all['description'] == 'BAD_NAN'].copy()
-
-# %%
-per_epoch_nan_count = nans_both_pupils.groupby(['subID', 'ch_names'])['onset'].count().reset_index(name='count')
-
-plt.figure(figsize=(20,6))
-
-sns.barplot(data=per_epoch_nan_count, x='subID', y='count', hue='ch_names')
-plt.legend()
-plt.show()
-
-#%%
-# this is not accurate because Nan annotation durations seem to be copied to the next epoch annotations if they are spanning multiple epochs
-# only summing unique durations now to avoid copied durations, not perfect but good estimation
-
-# Note: Should I exclude people based on their nan periods? 4 subIDs where there is a larger nan duration in both eyes.
-
-# Drop NaN durations to avoid issues
-df_clean = nans_both_pupils.dropna(subset=['duration'])
-
-# Group by subID, get unique durations, then sum them
-unique_duration_sum = (
-    df_clean
-    .groupby(['subID', 'ch_names'])['duration']
-    .unique()
-    .apply(np.sum)
-    .reset_index(name='sum_unique_durations')
-)
-
-plt.figure(figsize=(20,6))
-sns.barplot(data=unique_duration_sum, x='subID', y='sum_unique_durations', hue='ch_names')
-plt.legend()
-plt.show()
-
-#%%
-# potential nan outliers
-outliers_iqr = []
-
-for name, group in unique_duration_sum.groupby('ch_names'):
-    Q1 = group['sum_unique_durations'].quantile(0.25)
-    Q3 = group['sum_unique_durations'].quantile(0.75)
-    IQR = Q3 - Q1
-
-    lower = Q1 - 1.5 * IQR
-    upper = Q3 + 1.5 * IQR
-
-    outliers = group[(group['sum_unique_durations'] < lower) | (group['sum_unique_durations'] > upper)].copy()
-    outliers['method'] = 'IQR'
-    outliers['ch_names'] = name
-    outliers_iqr.append(outliers)
-
-outliers_iqr_df = pd.concat(outliers_iqr, ignore_index=True)
-display(outliers_iqr_df)
-# --> NPLPMR, RP15M5, TEPWRW are outliers in both pupil channels
-#%%
-# Creating dataframe with all relevant annotations within epochs for blink statistics
-#####################################################################################
-# now also adding all epochs filled with nans where no annotations where
-
-tokeep = ['BAD_NAN', 'blink_used_for_merged', 'merged_blink_interp', 'velo_blink_interp']
-anno_df_all = []
-
-for i in good_partis:
-    print(f"Processing {i}...")
-
-    # Load epochs
-    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
-    epoch_file = os.path.join(folder_path, f"{i}_even_newer-epo.fif")
-    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
-    n_epochs = len(pupil_epoch)
-
-    # Get list of items presented
-    load_list = df[df['subID'] == i].sort_values('trial')['items_presented'].tolist()
-
-    # Get annotation data
-    annots = get_annotations_per_epoch_custom(pupil_epoch)
-    anno_df = pd.DataFrame.from_records(annots)
-    anno_df['subID'] = i
-
-    # Add items_presented
-    anno_df['items_presented'] = [
-        load_list[ep - 1] if ep - 1 < len(load_list) else np.nan
-        for ep in anno_df['epoch_number']
-    ]
-
-    # Filter to relevant annotations
-    anno_df = anno_df[anno_df['description'].isin(tokeep)].copy()
-
-    # --- Create full grid of all epochs × all descriptions ---
-    all_epochs = range(1, n_epochs + 1)
-    grid = pd.DataFrame(list(product(all_epochs, tokeep)), columns=['epoch_number', 'description'])
-    grid['subID'] = i
-    grid['items_presented'] = [load_list[ep - 1] if ep - 1 < len(load_list) else np.nan for ep in grid['epoch_number']]
-
-    # Merge actual annotation info
-    merged = pd.merge(
-        grid,
-        anno_df[['epoch_number', 'description', 'onset', 'duration', 'ch_names', 'subID']],
-        on=['epoch_number', 'description', 'subID'],
-        how='left'
-    )
-
-    # Append to total
-    anno_df_all.append(merged)
-
-# Combine all subjects
-anno_df_all = pd.concat(anno_df_all, ignore_index=True)
-
-# Optional: set a MultiIndex
-# anno_df_all = anno_df_all.set_index(['subID', 'epoch_number', 'description']).sort_index()
-
-# Save if needed
-csv_path = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/csv_files/anno_df_all.csv'
-anno_df_all.to_csv(csv_path, encoding='utf-8', index=False)
 
 

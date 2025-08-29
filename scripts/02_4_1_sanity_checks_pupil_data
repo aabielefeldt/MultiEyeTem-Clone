@@ -11,6 +11,15 @@ from pupil_utils import annotate_velocity_blinks, remove_missing_data, plot_pupi
 from scipy.ndimage import gaussian_filter1d
 from scipy.interpolate import interp1d
 
+
+# %%
+# in this script:
+# plotting epochs per participant without averaging epochs per subID
+# plotting all trials of all participants as lineplots to look at outliers and blinks and such
+# for combined and uncombined pupils
+# using plt (and not seaborn) because seaborn fills in brakes in the individual lines, basically interpolating missing data
+
+
 # %% Load Metadata
 
 df = pd.read_csv('../data/csv_files/df.csv')

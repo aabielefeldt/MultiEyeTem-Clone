@@ -21,7 +21,7 @@ issue_partis = ['REUNMA', '1UVQEK', '35T018', '4A2K27', '30K8XE', 'R8CW7K']
 
 no_time_partis = good_partis[~np.isin(good_partis, issue_partis)].tolist()
 
-
+evoked_df_shifted = pd.read_csv('../data/csv_files/evoked_df_shifted.csv')
 
 # %%
 # Subsample of only participants without time issue
@@ -42,7 +42,7 @@ with sns.plotting_context(context='paper', font_scale=1.5):
 
     # Plot for participants WITH mask (Left Plot)
     sns.lineplot(
-        data=evoked_df_pos1_interpol_shifted[evoked_df_pos1_interpol_shifted['subID'].isin(mask_partis)], 
+        data=evoked_df_shifted[evoked_df_shifted['subID'].isin(mask_partis)], 
         hue='Load', palette='crest', x='time', y='pupils',  
         errorbar='se', ax=ax1,
     )
@@ -68,7 +68,7 @@ with sns.plotting_context(context='paper', font_scale=1.5):
 
     # Plot for participants WITHOUT mask (Right Plot)
     sns.lineplot(
-        data=evoked_df_pos1_interpol_shifted[evoked_df_pos1_interpol_shifted['subID'].isin(nomask_partis)], 
+        data=evoked_df_shifted[evoked_df_shifted['subID'].isin(nomask_partis)], 
         hue='Load', x='time', y='pupils', 
         errorbar='se', ax=ax2, legend='full'
     )
@@ -93,14 +93,14 @@ with sns.plotting_context(context='paper', font_scale=1.5):
 
 
     # Highlighting the baseline window
-    baseline = (evoked_df_pos1_interpol_shifted.at[0, 'baseline_start'], evoked_df_pos1_interpol_shifted.at[0, 'baseline_end'])
+    baseline = (evoked_df_shifted.at[0, 'baseline_start'], evoked_df_shifted.at[0, 'baseline_end'])
     baseline_str = '_'.join(map(str, baseline))
     # Include window that was used for the baseline
     # maybe remove here because misleading with shifted data
     # ax.axvspan(baseline[0], baseline[1], ymin=0, ymax=1, color='blue', alpha=0.4)
 
     # Set x-axis to show all whole numbers within range
-    x_ticks = np.arange(int(evoked_df_pos1_interpol_shifted['time'].min()), int(evoked_df_pos1_interpol_shifted['time'].max()) + 1, 1)
+    x_ticks = np.arange(int(evoked_df_shifted['time'].min()), int(evoked_df_shifted['time'].max()) + 1, 1)
     ax2.set_xticks(x_ticks)
     ax2.set_xticklabels(x_ticks)
 

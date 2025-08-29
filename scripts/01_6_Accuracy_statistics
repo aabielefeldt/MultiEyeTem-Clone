@@ -148,42 +148,6 @@ plt.xlabel('Stimuli Sets')
 plt.ylabel('Mean Accuracy')
 plt.show()
 
-# %% 
-# Mean accuracy by condition, oneway ANOVA
-
-# Note: should I maybe do this on individual participants rather than the whole df? (do it in within a loop)
-
-# does all three conditions in one and groups them by 'items_presented' which is the condition (can add .values at the end if I want only the answer values)
-mean_acc = df['acc_trial_concrete_cued'].mean()
-print("Mean accuracy for all conditions:", mean_acc)
-
-mean_cond = df.groupby('items_presented')['acc_trial_concrete_cued'].mean()
-print("Mean accuracy per condition:", mean_cond)
-
-condition_means = mean_cond.tolist()
-
-
-
-# Pingouin ANOVA
-# Note: should this also run on participants or the full data?
-anova_result_acc_items = pg.anova(data=df, dv='acc_trial_concrete_cued', between='items_presented')
-display('Anova Results', anova_result_acc_items.round(4))
-
-# Define the significance level (alpha)
-alpha = 0.05
-
-# Check if the p-value is less than alpha to determine significance
-if anova_result_acc_items['p-unc'].values[0] < alpha:
-    print("The one-way ANOVA indicates a significant difference in accuracy among the three conditions.\n")
-    tukey = pg.pairwise_tukey(dv='acc_trial_concrete_cued', between='items_presented', data=df)
-    display(tukey.round(4))
-    significant_pairs = tukey[tukey['p-tukey'] < 0.05]
-    for index, row in significant_pairs.iterrows():
-        print(f"There is a significant difference between groups {row['A']} and {row['B']}.")
-        print(f"Mean difference: {row['mean(A)'] - row['mean(B)']}")
-else:
-    print("The one-way ANOVA does not indicate a significant difference in accuracy among the three conditions.")
-
 
 # %%
 # mean for all conditions
@@ -202,7 +166,7 @@ for i in good_partis:
     results.append(participant_data_acc)
 
 results_acc_con = pd.concat(results)
-display(results_acc_con)
+display(results_acc_con.round(4))
 
 
 # Pingouin ANOVA
@@ -220,7 +184,7 @@ if anova_result_acc_items['p-unc'].values[0] < alpha:
     significant_pairs = tukey[tukey['p-tukey'] < 0.05]
     for index, row in significant_pairs.iterrows():
         print(f"There is a significant difference between groups {row['A']} and {row['B']}.")
-        print(f"Mean difference: {row['mean(A)'] - row['mean(B)']}")
+        print(f"Mean difference: {(row['mean(A)'] - row['mean(B)']).round(4)}")
 else:
     print("The one-way ANOVA does not indicate a significant difference in accuracy among the three conditions.")
 

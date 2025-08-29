@@ -1,0 +1,290 @@
+
+# %%
+# Importsconda
+import mne
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import itertools
+import numpy as np
+from pupil_utils import annotate_velocity_blinks, remove_missing_data, plot_pupil_trace_and_velocity_mad, interpolate_blinks, merge_and_rename_annotations, set_zero_to_nan, get_annotations_per_epoch_custom
+import os
+from itertools import product
+import pingouin as pg
+
+#%%
+# if qt is used as backend the kernel crashes
+mne.viz.set_browser_backend('matplotlib')
+
+#%%
+df = pd.read_csv('../data/csv_files/df.csv')
+good_partis = df['subID'].unique()
+
+#%%
+# Blink statistics:
+# reading dataframe with all (relevant) annotations (created below)
+anno_df_all = pd.read_csv('../data/csv_files/anno_df_all.csv')
+
+#%%
+# split the dataframe into right and left eye
+anno_df_right_eye = anno_df_all[anno_df_all['ch_names'].isin([np.nan, "('pupil_right',)"])].copy()
+anno_df_left_eye = anno_df_all[anno_df_all['ch_names'].isin([np.nan, "('pupil_left',)"])].copy()
+
+#anno_df_all = anno_df_all.reset_index()
+per_epoch_annos = anno_df_left_eye.groupby(['subID', 'epoch_number', 'items_presented', 'description'])['onset'].count().reset_index(name='count')
+
+
+blinks = ['blink_used_for_merged', 'velo_blink_interp']
+per_epoch_blinks = per_epoch_annos[per_epoch_annos['description'].isin(blinks)]
+per_epoch_blink_sum = per_epoch_blinks.groupby(['subID', 'epoch_number', 'items_presented'])['count'].sum().reset_index()
+
+
+# %%
+# trying to combine right and left pupil again (taking the mean of both)
+per_epoch_annos_right_eye = anno_df_right_eye.groupby(['subID', 'epoch_number', 'items_presented', 'description'])['onset'].count().reset_index(name='count_right_eye')
+per_epoch_blinks_right_eye = per_epoch_annos_right_eye[per_epoch_annos_right_eye['description'].isin(blinks)]
+per_epoch_blink_sum_right_eye = per_epoch_blinks_right_eye.groupby(['subID', 'epoch_number', 'items_presented'])['count_right_eye'].sum().reset_index()
+
+per_epoch_annos_left_eye = anno_df_left_eye.groupby(['subID', 'epoch_number', 'items_presented', 'description'])['onset'].count().reset_index(name='count_left_eye')
+per_epoch_blinks_left_eye = per_epoch_annos_left_eye[per_epoch_annos_left_eye['description'].isin(blinks)]
+per_epoch_blink_sum_left_eye = per_epoch_blinks_left_eye.groupby(['subID', 'epoch_number', 'items_presented'])['count_left_eye'].sum().reset_index()
+
+per_epoch_blinks_sum_both_eyes = pd.merge(per_epoch_blink_sum_left_eye, per_epoch_blink_sum_right_eye, on=['subID','epoch_number', 'items_presented'])
+per_epoch_blinks_sum_both_eyes['mean_blink_count_both_eyes'] = per_epoch_blinks_sum_both_eyes[['count_left_eye', 'count_right_eye']].mean(axis=1)
+display(per_epoch_blinks_sum_both_eyes)
+
+# %%
+# plot of blinks per epoch in a histogram with all subIDs as hue
+plt.figure(figsize=(20,6))
+
+sns.histplot(data=per_epoch_blinks_sum_both_eyes, bins=40, x='mean_blink_count_both_eyes', hue='subID')
+
+plt.show()
+
+
+#%%
+mean_blinks_per_epoch = per_epoch_blinks_sum_both_eyes.groupby(['subID'])['mean_blink_count_both_eyes'].mean().reset_index(name='epoch_mean')
+
+plt.figure(figsize=(20,6))
+
+sns.barplot(data=mean_blinks_per_epoch, x='subID', y='epoch_mean')
+plt.legend()
+plt.show()
+
+#%%
+mean_blinks_per_epoch_load = per_epoch_blinks_sum_both_eyes.groupby(['subID', 'items_presented'])['mean_blink_count_both_eyes'].mean().reset_index(name='epoch_mean')
+
+plt.figure(figsize=(20,6))
+
+sns.barplot(data=mean_blinks_per_epoch_load, x='subID', y='epoch_mean', hue='items_presented')
+plt.legend()
+plt.show()
+
+# %%
+
+blink_outlier_subID = ['GJL7U8']
+mean_blinks_per_epoch_load_excluded = mean_blinks_per_epoch_load[~mean_blinks_per_epoch_load['subID'].isin(blink_outlier_subID)]
+
+# anova on difference between number of blinks per load condition (-> significant!)
+anova_results = pg.rm_anova(
+    dv='epoch_mean',         # dependent variable
+    within='items_presented', # within-subjects factor
+    subject='subID',          # subject identifier
+    data=mean_blinks_per_epoch_load_excluded,
+    detailed=True             # for full output
+)
+
+display(anova_results)
+# Check significance
+p_value = anova_results.loc[0, 'p-GG-corr']  # Use Greenhouse-Geisser corrected p-value
+
+if p_value < 0.05:
+    print(f"\n✅ The effect of load (items_presented) on blink count is statistically significant (p = {p_value:.4f}).")
+else:
+    print(f"\n❌ The effect of load (items_presented) on blink count is NOT statistically significant (p = {p_value:.4f}).")
+
+# %%
+# mean number of blinks per epoch for all participants
+mean_blinks_per_epoch_all = mean_blinks_per_epoch['epoch_mean'].mean().round(3)
+display(mean_blinks_per_epoch_all)
+
+# after excluding GJL7U8
+mean_blinks_per_epoch_all_excluded = mean_blinks_per_epoch_load_excluded['epoch_mean'].mean().round(3)
+display(mean_blinks_per_epoch_all_excluded)
+
+mean_blinks_per_epoch_load_excluded_per_load = mean_blinks_per_epoch_load_excluded.groupby('items_presented')['epoch_mean'].mean().reset_index()
+display(mean_blinks_per_epoch_load_excluded_per_load)
+# %%
+# Make sure items_presented is categorical
+mean_blinks_per_epoch_load['items_presented'] = mean_blinks_per_epoch_load['items_presented'].astype(str)
+
+plt.figure(figsize=(10,6))
+
+sns.lineplot(
+    data=mean_blinks_per_epoch_load_excluded,
+    x='items_presented',
+    y='epoch_mean',
+    hue='subID',
+    marker='o'  # add circles at each data point
+)
+sns.lineplot(
+    data=mean_blinks_per_epoch_load_excluded_per_load,
+    x='items_presented',
+    y='epoch_mean',
+    marker='X',
+    markersize=12,
+    color='black',
+    lw=2.5,
+    linestyle='--'  # add circles at each data point
+)
+
+plt.legend([])
+plt.show()
+
+#%%
+
+# potential blink outliers
+outliers_iqr_blinks = []
+
+Q1 = mean_blinks_per_epoch['epoch_mean'].quantile(0.25)
+Q3 = mean_blinks_per_epoch['epoch_mean'].quantile(0.75)
+IQR = Q3 - Q1
+
+lower = Q1 - 1.5 * IQR
+upper = Q3 + 1.5 * IQR
+
+outliers = mean_blinks_per_epoch[(mean_blinks_per_epoch['epoch_mean'] < lower) | (mean_blinks_per_epoch['epoch_mean'] > upper)].copy()
+outliers['method'] = 'IQR'
+outliers_iqr_blinks.append(outliers)
+
+outliers_iqr_blinks_df = pd.concat(outliers_iqr_blinks, ignore_index=True)
+display(outliers_iqr_blinks_df)
+
+# --> GJL7U8 = outlier 
+
+
+
+
+# %%
+# NAN or missing data periods
+
+# Trying to do statistics on missing data (nans) per participant, hard because duration is copied to the next 
+# epoch if a nan period is spanning multiple epochs
+# also nan periods are mostly problematic if they are cooccuring in both pupils at the same time, and therefore cannot 
+# be interpolated from the other eye
+
+# this is counting all timepoints within epochs and per subID where both eyes are missing and calculating the percentage of missing time points against all timepoints
+nan_data = []
+
+for i in good_partis:
+    
+    # reading epochs per participant
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+    epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+    pupil_epoch_df = pupil_epoch.to_data_frame()
+
+    # checking for all timepoints where there is nan in both pupil channels
+    n_nan_points = pupil_epoch_df[['pupil_left', 'pupil_right']].isna().all(axis=1).sum()
+    total_points = len(pupil_epoch_df)
+    percentage = round(n_nan_points/total_points, 3)
+
+    nan_data.append({
+        'subID': i,
+        'n_nan_points': n_nan_points,
+        'total_points': total_points,
+        'percentage': percentage
+    })
+
+# Create a dataframe once at the end
+nan_df_all = pd.DataFrame(nan_data)
+
+mean_nan_percentage_all = nan_df_all['percentage'].mean().round(3)
+
+# %%
+plt.figure(figsize=(25,6))
+sns.barplot(data=nan_df_all, x='subID', y='percentage')
+plt.legend()
+plt.show()
+#%%
+# potential nan outliers
+outliers_iqr_nan = []
+
+Q1 = nan_df_all['percentage'].quantile(0.25)
+Q3 = nan_df_all['percentage'].quantile(0.75)
+IQR = Q3 - Q1
+
+lower = Q1 - 1.5 * IQR
+upper = Q3 + 1.5 * IQR
+
+outliers = nan_df_all[(nan_df_all['percentage'] < lower) | (nan_df_all['percentage'] > upper)].copy()
+outliers['method'] = 'IQR'
+outliers_iqr_nan.append(outliers)
+
+outliers_iqr_nan_df = pd.concat(outliers_iqr_nan, ignore_index=True)
+display(outliers_iqr_nan_df)
+
+# --> Z16JQR, AGYVK9, T4LJ1R, TEPWRW are outliers in both pupil channels
+
+#%%
+# Creating dataframe with all relevant annotations within epochs for blink statistics
+#####################################################################################
+# now also adding all epochs filled with nans where no annotations where
+
+tokeep = ['BAD_NAN', 'blink_used_for_merged', 'merged_blink_interp', 'velo_blink_interp']
+anno_df_all = []
+
+for i in good_partis:
+    print(f"Processing {i}...")
+
+    # Load epochs
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+    epoch_file = os.path.join(folder_path, f"{i}_even_newer-epo.fif")
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+    n_epochs = len(pupil_epoch)
+
+    # Get list of items presented
+    load_list = df[df['subID'] == i].sort_values('trial')['items_presented'].tolist()
+
+    # Get annotation data
+    annots = get_annotations_per_epoch_custom(pupil_epoch)
+    anno_df = pd.DataFrame.from_records(annots)
+    anno_df['subID'] = i
+
+    # Add items_presented
+    anno_df['items_presented'] = [
+        load_list[ep - 1] if ep - 1 < len(load_list) else np.nan
+        for ep in anno_df['epoch_number']
+    ]
+
+    # Filter to relevant annotations
+    anno_df = anno_df[anno_df['description'].isin(tokeep)].copy()
+
+    # --- Create full grid of all epochs × all descriptions ---
+    all_epochs = range(1, n_epochs + 1)
+    grid = pd.DataFrame(list(product(all_epochs, tokeep)), columns=['epoch_number', 'description'])
+    grid['subID'] = i
+    grid['items_presented'] = [load_list[ep - 1] if ep - 1 < len(load_list) else np.nan for ep in grid['epoch_number']]
+
+    # Merge actual annotation info
+    merged = pd.merge(
+        grid,
+        anno_df[['epoch_number', 'description', 'onset', 'duration', 'ch_names', 'subID']],
+        on=['epoch_number', 'description', 'subID'],
+        how='left'
+    )
+
+    # Append to total
+    anno_df_all.append(merged)
+
+# Combine all subjects
+anno_df_all = pd.concat(anno_df_all, ignore_index=True)
+
+# Optional: set a MultiIndex
+# anno_df_all = anno_df_all.set_index(['subID', 'epoch_number', 'description']).sort_index()
+
+# Save if needed
+csv_path = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/csv_files/anno_df_all.csv'
+anno_df_all.to_csv(csv_path, encoding='utf-8', index=False)
+
+

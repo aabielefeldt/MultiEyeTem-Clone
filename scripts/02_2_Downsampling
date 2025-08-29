@@ -187,7 +187,7 @@ for i in wrong_partis:
         baseline=None,
         metadata=metadata_pp,
         picks=['pupil_left', 'pupil_right'],
-        event_repeated='error',
+        event_repeated='merge',
         preload=True,
         reject_by_annotation=False,
         decim=decim

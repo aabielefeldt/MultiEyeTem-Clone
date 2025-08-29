@@ -1,0 +1,568 @@
+# %%
+# Importsconda
+import mne
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from mne.stats import permutation_cluster_test, f_oneway, permutation_cluster_1samp_test
+from scipy import stats
+from scipy.stats import zscore
+from scipy.ndimage import gaussian_filter1d
+from scipy.stats import t
+
+# %% 
+# read evokes seperated by oblique vs cardinal
+df = pd.read_csv('../data/csv_files/df.csv')
+good_partis = df['subID'].unique()
+mask_partis = df[df['mask']==1]['subID'].unique().tolist()
+nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
+
+# evoked_df_shifted = pd.read_csv('../data/csv_files/evoked_df_shifted.csv')
+# evoked_df_only_cardinal_shifted = pd.read_csv('../data/csv_files/evoked_df_only_cardinal_shifted.csv')
+evoked_df_all_combos_shifted = pd.read_csv('../data/csv_files/evoked_df_all_combos_shifted.csv')
+# sig_results_shifted_cardinal_category = pd.read_csv('../data/csv_files/sig_results_shifted_cardinal_category.csv')
+
+ # %% Rounding the time of all to be identical between participants, ultimately move this to where the evoked dfs are created
+# evoked_df_shifted['time'] = evoked_df_shifted['time'].round(3)
+# evoked_df_only_cardinal_shifted['time'] = evoked_df_only_cardinal_shifted['time'].round(3)
+evoked_df_all_combos_shifted['time'] = evoked_df_all_combos_shifted['time'].round(3)
+# %%
+# defining t-test statistic
+
+def paired_t(X1, X2):
+    t_vals, _ = stats.ttest_rel(X1, X2, axis=0)
+    return t_vals
+
+def independent_t(X1, X2):
+    t_vals, _ = stats.ttest_ind(X1, X2, axis=0, equal_var=False)  # Welch’s t-test
+    return t_vals
+
+#%%
+# Data preparation for tests:
+
+# exluding participant?
+
+blink_outlier_subIDs = ['GJL7U8'] # , 'Z16JQR', 'AGYVK9', 'T4LJ1R', 'TEPWRW'
+evoked_df_all_combos_shifted_excluded = evoked_df_all_combos_shifted[~evoked_df_all_combos_shifted['subID'].isin(blink_outlier_subIDs)]
+
+# cropping to delay time window
+start_time = 3
+end_time = 6.5
+delay_time_window = evoked_df_all_combos_shifted_excluded[(evoked_df_all_combos_shifted_excluded['time'] >= start_time) & (evoked_df_all_combos_shifted_excluded['time'] <= end_time)]
+delay_time_window = evoked_df_all_combos_shifted[(evoked_df_all_combos_shifted['time'] >= start_time) & (evoked_df_all_combos_shifted['time'] <= end_time)]
+
+# z-scoring data
+delay_time_window = delay_time_window.copy()
+
+# Z-score within each subject (across all times and trials)
+delay_time_window['pupils'] = delay_time_window.groupby('subID')['pupils'].transform(
+    lambda x: zscore(x, nan_policy='omit')
+)
+
+
+
+#%%
+# 3.1 - Cardinal vs Oblique trials
+# cluster permutation test of mostly_cardinal trials vs mostly oblique trials (ignoring mixed trials, and ignoring load and mask)
+# now with time window, rounding an z-scoring
+
+df_card = delay_time_window[delay_time_window['cardinal_type']=='mostly_cardinal']
+df_obli = delay_time_window[delay_time_window['cardinal_type']=='mostly_oblique']
+
+# Use mean to aggregate multiple entries per subID/time
+X1_df = df_card.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+X2_df = df_obli.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+
+# Make sure both have the same subjects and times
+common_subjects = X1_df.index.intersection(X2_df.index)
+common_times = X1_df.columns.intersection(X2_df.columns)
+times = common_times.to_numpy()
+
+# Align them
+X1 = X1_df.loc[common_subjects, common_times].values
+X2 = X2_df.loc[common_subjects, common_times].values
+
+T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
+    [X1, X2],
+    n_permutations=1000,
+    threshold=2.0,  # Or set e.g., 2.0 for a t-threshold
+    tail=0,  # 0 for two-tailed
+    out_type='mask',  # cluster outputs as boolean masks
+    stat_fun=paired_t,  
+    verbose=True
+)
+
+# Store results
+cluster_results = {
+    "T_obs": T_obs,
+    "clusters": clusters,
+    "cluster_p_values": cluster_p_values,
+    "times": times
+}
+print(cluster_p_values)
+
+# Plot
+plt.figure(figsize=(10, 5))
+plt.plot(times, T_obs, label='T-values')
+for i_c, c in enumerate(clusters):
+    if cluster_p_values[i_c] < 0.05:
+        plt.axvspan(times[c][0], times[c][-1], color='red', alpha=0.3)
+plt.axhline(0, color='black', linestyle='--')
+plt.title(f'Cluster Permutation Test (cardinal vs oblique trials)')
+plt.xlabel('Time (s)')
+plt.ylabel('T-statistic')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+
+#%%
+# 3.2 - Cardinal vs Oblique vs mixed trials
+# much less mixed trials so maybe not a good idea
+# cluster permutation test of mostly_cardinal trials vs mostly oblique trials **and** mixed trials, and ignoring load and mask)
+# now with time window, rounding and z-scoring and excluding participants
+# same as above, just also using mixed trials and therefore using f_oneway 
+
+
+df_card = delay_time_window[delay_time_window['cardinal_type']=='mostly_cardinal']
+df_obli = delay_time_window[delay_time_window['cardinal_type']=='mostly_oblique']
+df_mix = delay_time_window[delay_time_window['cardinal_type']=='mixed']
+
+# Use mean to aggregate multiple entries per subID/time
+X1_df = df_card.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+X2_df = df_obli.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+X3_df = df_mix.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+
+# Make sure both have the same subjects and times
+common_subjects = X1_df.index.intersection(X2_df.index).intersection(X3_df.index)
+common_times = X1_df.columns.intersection(X2_df.columns).intersection(X3_df.columns)
+times = common_times.to_numpy()
+
+# Align them
+X1 = X1_df.loc[common_subjects, common_times].values
+X2 = X2_df.loc[common_subjects, common_times].values
+X3 = X3_df.loc[common_subjects, common_times].values
+
+T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
+    [X1, X2, X3],
+    n_permutations=1000,
+    threshold=None,  # None for f_oneway
+    tail=1,  # 0 for two-tailed, mumst be 1 for f_oneway
+    out_type='mask',  # cluster outputs as boolean masks
+    stat_fun=f_oneway,  # default should be f_oneway?
+    verbose=True
+)
+
+# Store results
+cluster_results = {
+    "T_obs": T_obs,
+    "clusters": clusters,
+    "cluster_p_values": cluster_p_values,
+    "times": times
+}
+print(cluster_p_values)
+
+# Plot
+plt.figure(figsize=(10, 5))
+plt.plot(times, T_obs, label='T-values')
+for i_c, c in enumerate(clusters):
+    if cluster_p_values[i_c] < 0.05:
+        plt.axvspan(times[c][0], times[c][-1], color='red', alpha=0.3)
+plt.axhline(0, color='black', linestyle='--')
+plt.title(f'Cluster Permutation Test (cardinal vs oblique trials)')
+plt.xlabel('Time (s)')
+plt.ylabel('T-statistic')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+
+# putting with the respective data analysis on top for now. check that that is correct
+# this would look good as a plot but is this legit?, do the same for the load conditions also
+times = np.array(common_times)  # make sure it's ordered
+X1_mean = X1.mean(axis=0)
+X2_mean = X2.mean(axis=0)
+X3_mean = X3.mean(axis=0)
+
+plt.plot(times, X1_mean, label='Mostly Cardinal')
+plt.plot(times, X2_mean, label='Mostly Oblique')
+plt.plot(times, X3_mean, label='Mixed')
+
+# Highlight significant clusters
+for i_c, cluster in enumerate(clusters):
+    if cluster_p_values[i_c] < 0.05:
+        time_mask = cluster
+        plt.axvspan(times[time_mask][0], times[time_mask][-1], color='red', alpha=0.3)
+
+plt.legend()
+plt.title('Cluster Permutation Test')
+plt.xlabel('Time (s)')
+plt.ylabel('Pupil size')
+plt.show()
+
+
+# %%
+# 3.3 - Cardinal vs Oblique trials (seperated by load)
+# cluster permutation test for cardinal vs oblique pupil dilation but for every load condition seperately (but not by mask) and within time window
+# is seperating by load ok in this case? are the number of trials per condition equals and/or are they confounded somehow?
+
+cluster_results = {}
+
+for load in [1, 2, 3]:
+    print(f"\nRunning cluster test for Load {load}...")
+
+    # Subset the data
+    df_load = delay_time_window[delay_time_window['Load'] == load]
+    df_card = df_load[df_load['cardinal_type'] == 'mostly_cardinal']
+    df_obli = df_load[df_load['cardinal_type'] == 'mostly_oblique']
+
+    # Pivot to get subjects x timepoints
+    X1_df = df_card.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+    X2_df = df_obli.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+
+    # Align subjects and timepoints
+    common_subs = X1_df.index.intersection(X2_df.index)
+    common_times = X1_df.columns.intersection(X2_df.columns)
+
+    X1 = X1_df.loc[common_subs, common_times].to_numpy()
+    X2 = X2_df.loc[common_subs, common_times].to_numpy()
+    times = common_times.to_numpy()
+
+    # Run cluster-based permutation test
+    T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
+        [X1, X2],
+        n_permutations=1000,
+        threshold=2.0,
+        tail=0,
+        out_type='mask',
+        verbose=True,
+        stat_fun=paired_t
+    )
+
+    # Store results
+    cluster_results[load] = {
+        "T_obs": T_obs,
+        "clusters": clusters,
+        "cluster_p_values": cluster_p_values,
+        "times": times
+    }
+    print(cluster_results[load]['cluster_p_values'])
+
+    # Plot
+    plt.figure(figsize=(10, 5))
+    plt.plot(times, T_obs, label='T-values')
+    for i_c, c in enumerate(clusters):
+        if cluster_p_values[i_c] < 0.05:
+            plt.axvspan(times[c][0], times[c][-1], color='red', alpha=0.3)
+    plt.axhline(0, color='black', linestyle='--')
+    plt.title(f'Cluster Permutation Test (Load {load})')
+    plt.xlabel('Time (s)')
+    plt.ylabel('T-statistic')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+# %%
+# 3.4 - Cardinal vs Oblique trials (seperated by mask)
+# cluster permutation test for cardinal vs oblique pupil dilation but for every load condition seperately (but not by mask) and within time window
+
+cluster_results = {}
+
+for mask in [0, 1]:
+    print(f"\nRunning cluster test for Cardinal vs Oblique trials for Mask = {mask}...")
+
+    # Subset the data
+    df_mask = delay_time_window[delay_time_window['mask'] == mask]
+    df_card = df_mask[df_mask['cardinal_type'] == 'mostly_cardinal']
+    df_obli = df_mask[df_mask['cardinal_type'] == 'mostly_oblique']
+
+    # Pivot to get subjects x timepoints
+    X1_df = df_card.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+    X2_df = df_obli.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+
+    # Align subjects and timepoints
+    common_subs = X1_df.index.intersection(X2_df.index)
+    common_times = X1_df.columns.intersection(X2_df.columns)
+
+    X1 = X1_df.loc[common_subs, common_times].to_numpy()
+    X2 = X2_df.loc[common_subs, common_times].to_numpy()
+    times = common_times.to_numpy()
+
+    # Run cluster-based permutation test
+    T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
+        [X1, X2],
+        n_permutations=1000,
+        threshold=2.0,
+        tail=0,
+        out_type='mask',
+        verbose=True,
+        stat_fun=paired_t
+    )
+
+    # Store results
+    cluster_results[mask] = {
+        "T_obs": T_obs,
+        "clusters": clusters,
+        "cluster_p_values": cluster_p_values,
+        "times": times
+    }
+    print(cluster_results[mask]['cluster_p_values'])
+
+    # Plot
+    plt.figure(figsize=(10, 5))
+    plt.plot(times, T_obs, label='T-values')
+    for i_c, c in enumerate(clusters):
+        if cluster_p_values[i_c] < 0.05:
+            plt.axvspan(times[c][0], times[c][-1], color='red', alpha=0.3)
+    plt.axhline(0, color='black', linestyle='--')
+    plt.title(f'Cluster Permutation Test (Mask = {mask})')
+    plt.xlabel('Time (s)')
+    plt.ylabel('T-statistic')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+    # putting with the respective data analysis on top for now. check that that is correct
+    # this would look good as a plot but is this legit?, do the same for the load conditions also
+    times = np.array(common_times)  # make sure it's ordered
+    X1_mean = X1.mean(axis=0)
+    X2_mean = X2.mean(axis=0)
+
+    plt.plot(times, X1_mean, label='Mostly Cardinal')
+    plt.plot(times, X2_mean, label='Mostly Oblique')
+
+    # Highlight significant clusters
+    for i_c, cluster in enumerate(clusters):
+        if cluster_p_values[i_c] < 0.05:
+            time_mask = cluster
+            plt.axvspan(times[time_mask][0], times[time_mask][-1], color='red', alpha=0.3)
+
+    plt.legend()
+    plt.title('Cluster Permutation Test')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Pupil size')
+    plt.show()
+
+
+
+
+# %%
+# 3.5- Cardinal vs Oblique trials (seperated by load and mask)
+# maybe need to check power especially for this one?
+# Cluster permutation test cardinal against oblique trials seperated by load and by mask and within delay time window
+
+# Container to store all results
+cluster_results = {}
+
+# Loop over Load and Mask conditions
+for mask_val in [0, 1]:
+    for load_val in [1, 2, 3]:
+        print(f"\nRunning cluster test for Load {load_val}, Mask {mask_val}...")
+
+        # Filter data
+        df_cond = delay_time_window[
+            (delay_time_window['Load'] == load_val) &
+            (delay_time_window['mask'] == mask_val)
+        ]
+        df_card = df_cond[df_cond['cardinal_type'] == 'mostly_cardinal']
+        df_obli = df_cond[df_cond['cardinal_type'] == 'mostly_oblique']
+
+        # Pivot: subjects × timepoints
+        X1_df = df_card.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+        X2_df = df_obli.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+
+        # Align both groups by common subjects and times
+        common_subs = X1_df.index.intersection(X2_df.index)
+        common_times = X1_df.columns.intersection(X2_df.columns)
+
+        # Skip if there's not enough subjects or timepoints
+        if len(common_subs) < 2 or len(common_times) < 10:
+            print("Not enough data – skipping.")
+            continue
+
+        # Get data arrays
+        X1 = X1_df.loc[common_subs, common_times].to_numpy()
+        X2 = X2_df.loc[common_subs, common_times].to_numpy()
+        times = common_times.to_numpy()
+        print(len(times))
+
+        # Run cluster permutation test
+        T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
+            [X1, X2],
+            n_permutations=1000,
+            threshold=2.0,
+            tail=0,
+            out_type='mask',
+            verbose=True,
+            stat_fun=paired_t,
+        )
+
+        # Store results
+        key = f"Load{load_val}_Mask{mask_val}"
+        cluster_results[key] = {
+            "T_obs": T_obs,
+            "clusters": clusters,
+            "cluster_p_values": cluster_p_values,
+            "times": times,
+            "subjects": list(common_subs)
+        }
+
+        print(cluster_results[key]['cluster_p_values'])
+
+        # Plot results
+        plt.figure(figsize=(10, 5))
+        plt.plot(times, T_obs, label='T-values')
+        for i_c, c in enumerate(clusters):
+            if cluster_p_values[i_c] < 0.05:
+                plt.axvspan(times[c][0], times[c][-1], color='red', alpha=0.3)
+        plt.axhline(0, color='black', linestyle='--')
+        plt.title(f'Cluster Permutation: Load {load_val}, Mask {mask_val}')
+        plt.xlabel('Time (s)')
+        plt.ylabel('T-statistic')
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
+        times = np.array(common_times)  # make sure it's ordered
+        X1_mean = X1.mean(axis=0)
+        X2_mean = X2.mean(axis=0)
+
+        plt.plot(times, X1_mean, label='Mostly Cardinal')
+        plt.plot(times, X2_mean, label='Mostly Oblique')
+
+        # Highlight significant clusters
+        for i_c, cluster in enumerate(clusters):
+            if cluster_p_values[i_c] < 0.05:
+                time_mask = cluster
+                plt.axvspan(times[time_mask][0], times[time_mask][-1], color='red', alpha=0.3)
+
+        plt.legend()
+        plt.title(f'Cluster Permutation Test, load{load_val} mask{mask_val}')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Pupil size')
+        plt.show()
+
+
+
+
+# %%
+#%%
+# Test the interaction between Load and Orientation type with a contrast based interaction test
+# copied from: interaction between Load and Accuracy with a contrast based interaction test
+
+alpha = 0.05
+n_perm = 5000
+
+
+# Build per-load (subjects × time) for each accuracy
+def mat_for(ct, load):
+    sub = delay_time_window[(delay_time_window['cardinal_type'] == ct) & (delay_time_window['Load'] == load)]
+    return sub.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+
+C1, C2, C3 = mat_for('mostly_oblique',1), mat_for('mostly_oblique',2), mat_for('mostly_oblique',3)
+I1, I2, I3 = mat_for('mostly_cardinal',  1), mat_for('mostly_cardinal',  2), mat_for('mostly_cardinal',  3)
+
+# Intersect subjects & times across all 6 to keep within-subjects
+common_subs = C1.index
+common_times = C1.columns
+for M in [C2, C3, I1, I2, I3]:
+    common_subs = common_subs.intersection(M.index)
+    common_times = common_times.intersection(M.columns)
+times = np.array(sorted(common_times))
+
+C1 = C1.loc[common_subs, times].to_numpy()
+C2 = C2.loc[common_subs, times].to_numpy()
+C3 = C3.loc[common_subs, times].to_numpy()
+I1 = I1.loc[common_subs, times].to_numpy()
+I2 = I2.loc[common_subs, times].to_numpy()
+I3 = I3.loc[common_subs, times].to_numpy()
+
+# Drop timepoints with any NaN across all 6
+col_ok = (~np.isnan(C1) & ~np.isnan(C2) & ~np.isnan(C3) &
+          ~np.isnan(I1) & ~np.isnan(I2) & ~np.isnan(I3)).all(axis=0)
+
+times = times[col_ok]
+C1, C2, C3 = C1[:, col_ok], C2[:, col_ok], C3[:, col_ok]
+I1, I2, I3 = I1[:, col_ok], I2[:, col_ok], I3[:, col_ok]
+
+# Linear trend weights across loads
+w = np.array([-1.0, 0.0, 1.0])
+
+# Per-subject linear trend time series for Correct and Incorrect
+trend_C = w[0]*C1 + w[1]*C2 + w[2]*C3   # (n_sub × n_time)
+trend_I = w[0]*I1 + w[1]*I2 + w[2]*I3
+
+# Interaction contrast: Correct − Incorrect (if positive → steeper positive load trend on correct trials)
+X = (trend_C - trend_I)                  # (n_sub × n_time)
+
+n = X.shape[0]
+threshold = t.ppf(1 - 0.025, df=n-1)
+
+# 1-sample cluster permutation test vs 0
+T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
+    X,
+    n_permutations=n_perm,
+    threshold=threshold,   # auto t-threshold for 1-sample t
+    tail=0,           # two-tailed (trend could be pos or neg)
+    out_type='mask',
+    verbose=True
+)
+
+rows = []
+for i_c, c in enumerate(clusters):
+    p = float(cluster_p_values[i_c])
+    if p < alpha:
+        # c is a boolean mask (out_type='mask'); if it's a slice tuple, adapt accordingly
+        if isinstance(c, np.ndarray):
+            idx = np.flatnonzero(c)
+        else:
+            idx = np.arange(len(times))[c]
+
+        if idx.size == 0:
+            continue
+
+
+        start_t = float(times[idx[0]])
+        end_t   = float(times[idx[-1]])
+        mean_t  = float(np.mean(T_obs[idx]))
+        dur     = int(idx.size)
+
+        rows.append({
+            "effect": "Interaction (linear trend: mostly_oblique − mostly_cardinal)",
+            "cluster_id": int(i_c + 1),
+            "start_time": start_t,
+            "end_time": end_t,
+            "duration_samps": dur,
+            "p_value": p,
+            "mean_t": mean_t,
+            "n_subjects": int(X.shape[0]),
+        })
+
+summary = pd.DataFrame(rows).reset_index(drop=True)
+display(summary if not summary.empty else pd.DataFrame({"note": ["No significant clusters after min-size filter."]}))
+summary.to_csv("clusters_LoadxAccuracy_linearTrend_interaction_FIXED.csv", index=False)
+
+
+# Plot t-curve with correctly shaded clusters
+plt.figure(figsize=(10,5))
+plt.plot(times, T_obs, label='t (mostly_oblique − mostly_cardinal load trend)')
+plt.axhline(0, color='k', linestyle=':', linewidth=0.8)
+
+for i_c, c in enumerate(clusters):
+    if cluster_p_values[i_c] < alpha:
+        if isinstance(c, np.ndarray):
+            idx = np.flatnonzero(c)
+        else:
+            idx = np.arange(len(times))[c]
+        plt.axvspan(float(times[idx[0]]), float(times[idx[-1]]), color='red', alpha=0.3)
+
+plt.xlabel("Time (s)")
+plt.ylabel("t")
+plt.title("Interaction via linear trend (C − I) — cluster summary (fixed mapping)")
+plt.tight_layout()
+plt.show()
+
+
+# %%

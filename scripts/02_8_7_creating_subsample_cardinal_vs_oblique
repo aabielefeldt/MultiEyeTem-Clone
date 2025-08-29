@@ -2,14 +2,14 @@
 # Importsconda
 import mne
 import pandas as pd
+import numpy as np
 
 # %% Load Metadata
 
 df = pd.read_csv('../data/csv_files/df.csv')
 good_partis = df['subID'].unique()
 
-mask_partis = df[df['mask']==1]['subID'].unique().tolist()
-nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
+
 
 # %%
 # if qt is used as backend the kernel crashes
@@ -40,14 +40,15 @@ evoked_df_only_cardinal = pd.DataFrame()
 for i in good_partis:
     
     # reading epochs per participant
-    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_pos1"
-    epoch_file = folder_path + "/" + i + "_pos1_interpol-epo.fif"
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+    epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
     pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
     
     # combining channels
     pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
     roi_dict = dict(pupils=pupil_ix)
-    pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method="mean")
+    combine_nanmean = lambda data: np.nanmean(data, axis=1)
+    pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method=combine_nanmean)
 
     # applying baseline
     pupil_epochs_combined_bl = pupil_epochs_combined.apply_baseline(baseline=(-0.1, 0))
@@ -76,12 +77,13 @@ for i in good_partis:
     con3_epochs_oblique.crop(-0.1, 9)
 
     # averaging per load condition
-    con1_ave_cardinal = con1_epochs_cardinal.average()
-    con2_ave_cardinal = con2_epochs_cardinal.average()
-    con3_ave_cardinal = con3_epochs_cardinal.average()
-    con1_ave_oblique = con1_epochs_oblique.average()
-    con2_ave_oblique = con2_epochs_oblique.average()
-    con3_ave_oblique = con3_epochs_oblique.average()
+    evoked_nan_mean = lambda x: np.nanmean(x, axis=0)
+    con1_ave_cardinal = con1_epochs_cardinal.average(method=evoked_nan_mean)
+    con2_ave_cardinal = con2_epochs_cardinal.average(method=evoked_nan_mean)
+    con3_ave_cardinal = con3_epochs_cardinal.average(method=evoked_nan_mean)
+    con1_ave_oblique = con1_epochs_oblique.average(method=evoked_nan_mean)
+    con2_ave_oblique = con2_epochs_oblique.average(method=evoked_nan_mean)
+    con3_ave_oblique = con3_epochs_oblique.average(method=evoked_nan_mean)
 
     # adding individual averaged data to dataframe including load and subID
     # Cardinal trials
@@ -136,13 +138,18 @@ evoked_df_only_cardinal_shifted.loc[evoked_df_only_cardinal_shifted['Load']==2, 
 evoked_df_only_cardinal_shifted.loc[evoked_df_only_cardinal_shifted['Load']==3, 'time'] +=0
 
 # %%
-
+mask_partis = df[df['mask']==1]['subID'].unique().tolist()
+nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
 # Adding column for mask
 evoked_df_only_cardinal_shifted['mask'] = evoked_df_only_cardinal_shifted['subID'].apply(
     lambda x: 1 if x in mask_partis else 0)
 
-display(evoked_df_only_cardinal_shifted)
+
+cardinal = ['cnn', 'ccn', 'ccc']
+oblique = ['onn', 'oon', 'ooo']
+category_map = {cat: 'all_cardinal' for cat in cardinal}
+category_map.update({cat: 'all_oblique' for cat in oblique})
+
+evoked_df_only_cardinal_shifted['cardinal_type'] = evoked_df_only_cardinal_shifted['cardinal_category'].map(category_map)
 
 evoked_df_only_cardinal_shifted.to_csv('../data/csv_files/evoked_df_only_cardinal_shifted.csv', index=False)
-
-# %%

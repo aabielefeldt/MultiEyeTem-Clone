@@ -1,0 +1,200 @@
+# %%
+# Importsconda
+import mne
+import numpy as np
+import pandas as pd
+import pingouin as pg
+import seaborn as sns
+import matplotlib.pyplot as plt
+from statsmodels.stats.anova import AnovaRM
+
+# %% 
+# read evoked dataframe
+
+evoked_df_only_cardinal_shifted = pd.read_csv('../data/csv_files/evoked_df_only_cardinal_shifted.csv')
+
+cardinal = ['cnn', 'ccn', 'ccc']
+oblique = ['onn', 'oon', 'ooo']
+category_map = {cat: 'all_cardinal' for cat in cardinal}
+category_map.update({cat: 'all_oblique' for cat in oblique})
+
+evoked_df_only_cardinal_shifted['cardinal_type'] = evoked_df_only_cardinal_shifted['cardinal_category'].map(category_map)
+
+
+#%%
+# excluding participants
+
+
+# %%
+# create time window for analysis
+start_time = 3
+end_time = 6.5
+
+# Filter main dataframe to that window
+delay_time_window = evoked_df_only_cardinal_shifted[
+    (evoked_df_only_cardinal_shifted['time'] >= start_time) &
+    (evoked_df_only_cardinal_shifted['time'] <= end_time)
+]
+delay_time_window['time'] = delay_time_window['time'].round(3)
+ts = sorted(delay_time_window['time'].unique())
+
+
+loads = [1, 2, 3]
+stats_list = []
+for load in loads:
+# run a repeated measures one-way ANOVA over every timepoint
+    df_load = delay_time_window[delay_time_window['Load'] == load].copy()
+    for it in ts:
+        evoked_it_time = df_load.loc[df_load['time'] == it]
+
+        try:
+            stats = pg.rm_anova(data=evoked_it_time, dv='pupils', subject='subID', within=['cardinal_type'], detailed=True)
+            stats['time'] = it
+            stats_list.append(stats)
+
+        except Exception as e:
+            print(f"ANOVA failed at time {it}: {e}")
+
+
+# %%
+# Concatenate all the results into a single DataFrame
+ANOVA_timepoints_results_cardinal_category = pd.concat(stats_list, ignore_index=True)
+#ANOVA_timepoints_results_cardinal_category.to_csv('../data/csv_files/ANOVA_timepoints_results_cardinal_category.csv', index=False)
+
+ANOVA_timepoints_results_cardinal_category.to_csv('../data/csv_files/ANOVA_timepoints_results_cardinal_category.csv', index=False)
+
+
+# Filter the significant results
+# sig_results_pos1_interpol_shifted = ANOVA_timepoints_results_cardinal_category[ANOVA_timepoints_results_cardinal_category['p-unc'] <= 0.05]
+# sig_results_pos1_interpol_shifted.to_csv('../data/csv_files/sig_results_pos1_interpol_shifted.csv', index=False)
+
+sig_results_shifted_cardinal_category = ANOVA_timepoints_results_cardinal_category[ANOVA_timepoints_results_cardinal_category['p-unc'] <= 0.05]
+sig_results_shifted_cardinal_category.to_csv('../data/csv_files/sig_results_shifted_cardinal_category.csv', index=False)
+
+
+# %%
+# create time window for analysis
+start_time = 3
+end_time = 6.5
+#delay_time_window = evoked_df_pos1_interpol_shifted[(evoked_df_pos1_interpol_shifted['time'] >= start_time) & (evoked_df_pos1_interpol_shifted['time'] <= end_time)]
+
+delay_time_window = evoked_df_only_cardinal_shifted[(evoked_df_only_cardinal_shifted['time'] >= start_time) & (evoked_df_only_cardinal_shifted['time'] <= end_time)]
+
+# all_con_evoked needs to be a new df for the evokeds from the pos1 epochs
+ts = delay_time_window['time'].unique()
+# %%
+# run a repeated measures one-way ANOVA over every timepoint
+
+start_time = 3
+end_time = 6.5
+
+# Filter main dataframe to that window
+delay_time_window = evoked_df_only_cardinal_shifted[
+    (evoked_df_only_cardinal_shifted['time'] >= start_time) &
+    (evoked_df_only_cardinal_shifted['time'] <= end_time)
+]
+delay_time_window['time'] = delay_time_window['time'].round(3)
+ts = sorted(delay_time_window['time'].unique())
+
+stats_list = []
+
+
+for it in ts:
+    df_time = delay_time_window[delay_time_window['time'] == it]
+
+    # # Check for balance
+    # n_per_cond = df_time.groupby(['subID', 'cardinal_type']).size().unstack(fill_value=0)
+    # if n_per_cond.min().min() == 0:
+    #     print(f"Unbalanced data at time {it} in load {load}")
+    #     continue
+
+    try:
+        stats = pg.rm_anova(data=df_time, dv='pupils', subject='subID', within=['cardinal_category'], detailed=True)
+        stats['time'] = it
+        stats['Load'] = load
+        stats_list.append(stats)
+    except Exception as e:
+        print(f"ANOVA failed at time {it}, load {load}: {e}")
+
+# %%
+# Define time window
+start_time = 3
+end_time = 6.5
+
+# Filter main dataframe to that window
+delay_time_window = evoked_df_only_cardinal_shifted[
+    (evoked_df_only_cardinal_shifted['time'] >= start_time) &
+    (evoked_df_only_cardinal_shifted['time'] <= end_time)
+]
+delay_time_window['time'] = delay_time_window['time'].round(3)
+ts = sorted(delay_time_window['time'].unique())
+
+loads = [1, 2, 3]
+masks = [0,1]
+# Store results
+stats_list = []
+for mask in masks:
+    df_mask = delay_time_window[delay_time_window['mask'] == mask].copy()
+    for load in loads:
+        df_load = df_mask[df_mask['Load'] == load].copy()
+
+        for it in ts:
+            df_time = df_load[df_load['time'].round(3) == it].copy()
+
+            # # Drop potential NaNs in critical columns (safety net)
+            # df_time = df_time.dropna(subset=['pupils', 'subID', 'cardinal_type'])
+
+            # # Keep only subjects with both orientation groups (balanced within-subjects)
+            # valid_subjects = (
+            #     df_time.groupby('subID')['cardinal_type']
+            #     .nunique()
+            #     .reset_index()
+            #     .query('cardinal_type == 2')['subID']
+            # )
+
+            # df_time_balanced = df_time[df_time['subID'].isin(valid_subjects)]
+
+            # # Skip if too few valid subjects
+            # if df_time_balanced['subID'].nunique() < 2:
+            #     print(f"Too few valid subjects at time {it}, load {load}")
+            #     continue
+
+            try:
+                stats = pg.rm_anova(
+                    data=df_time,
+                    dv='pupils',
+                    subject='subID',
+                    within='cardinal_type',
+                    detailed=True
+                )
+                stats['time'] = it
+                stats['Load'] = load
+                stats['mask'] = mask
+                stats_list.append(stats)
+
+            except Exception as e:
+                print(f"ANOVA failed at time {it}, load {load}: {e}")
+
+ANOVA_timepoints_results_cardinal_category = pd.concat(stats_list, ignore_index=True)
+sig_results_shifted_cardinal_category = ANOVA_timepoints_results_cardinal_category[ANOVA_timepoints_results_cardinal_category['p-unc'] <= 0.05]
+
+display(ANOVA_timepoints_results_cardinal_category)
+
+display(sig_results_shifted_cardinal_category)
+
+# %%
+# Concatenate all the results into a single DataFrame
+
+#ANOVA_timepoints_results_cardinal_category.to_csv('../data/csv_files/ANOVA_timepoints_results_cardinal_category.csv', index=False)
+
+ANOVA_timepoints_results_cardinal_category.to_csv('../data/csv_files/ANOVA_timepoints_results_cardinal_category.csv', index=False)
+
+
+# Filter the significant results
+# sig_results_pos1_interpol_shifted = ANOVA_timepoints_results_cardinal_category[ANOVA_timepoints_results_cardinal_category['p-unc'] <= 0.05]
+# sig_results_pos1_interpol_shifted.to_csv('../data/csv_files/sig_results_pos1_interpol_shifted.csv', index=False)
+
+
+sig_results_shifted_cardinal_category.to_csv('../data/csv_files/sig_results_shifted_cardinal_category.csv', index=False)
+
+# %%

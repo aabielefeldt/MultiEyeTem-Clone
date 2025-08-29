@@ -89,7 +89,7 @@ for i in range(len(oris)):
 
 
 # Plotting lines to connect dots
-ax.plot(thetas_adjusted, all_cons, '--', color=colors[1])
+ax.plot(thetas_adjusted, all_cons, '--', color='black')
 ax.plot(thetas_adjusted, con1s, '-', color=colors[5])
 ax.plot(thetas_adjusted, con2s, '-', color=colors[9])
 ax.plot(thetas_adjusted, con3s, '-', color=colors[13])
@@ -171,6 +171,7 @@ for condition in conditions:
         # Define the pairs of orientations for subtraction
         orientation_pairs = [(11.25, 348.75), (101.25, 78.75), (191.25, 168.75), (281.25, 258.75)]
 
+        # calculating the mean for that orientation within that participant and load condition
         for ori_x, ori_y in orientation_pairs:
             value_x = participant_data.loc[participant_data['object_cued_rot'] == ori_x, 'button_press_clockwise'].mean()
             value_y = participant_data.loc[participant_data['object_cued_rot'] == ori_y, 'button_press_clockwise'].mean()
@@ -319,6 +320,44 @@ def calculate_differences(df, chosen_column, condition=None):
     return df_with_diffs
 
 # %%
+# copy without cardinal category because i dont remember why that would have been needed
+# Example function to calculate differences based on grouped DataFrame
+def calculate_differences(df, chosen_column, condition=None):
+    # Step 1: Group DataFrames according to the condition
+    if condition == 1:
+        df_grouped = df[df['items_presented'] == 1].groupby(['subID', 'object_cued_rot']).agg({chosen_column: 'mean'}).reset_index()
+    elif condition == 2:
+        df_grouped = df[df['items_presented'] == 2].groupby(['subID', 'object_cued_rot']).agg({chosen_column: 'mean'}).reset_index()
+    elif condition == 3:
+        df_grouped = df[df['items_presented'] == 3].groupby(['subID', 'object_cued_rot']).agg({chosen_column: 'mean'}).reset_index()
+    else:
+        df_grouped = df.groupby(['subID', 'object_cued_rot']).agg({chosen_column: 'mean'}).reset_index()
+
+    # Step 2: Initialize a list to store results
+    results = []
+
+    # Step 3: Process each subID separately
+    for sub_id, group in df_grouped.groupby('subID'):
+        group = group.sort_values('object_cued_rot').reset_index(drop=True)
+
+        # Calculate median subtracted orientations
+        group['median_subtracted_oris'] = group['object_cued_rot'].rolling(window=2).median().fillna(0)
+
+        # Calculate differences in the chosen column
+        group[f'{chosen_column}_difference'] = group[chosen_column].diff()
+
+        circular_diff = group[chosen_column].iloc[0] - group[chosen_column].iloc[-1]
+        group.loc[group.index[0], f'{chosen_column}_difference'] = circular_diff
+
+        results.append(group)
+
+    # Concatenate all results into a single DataFrame
+    df_with_diffs = pd.concat(results, ignore_index=True)
+
+    return df_with_diffs
+
+
+# %%
 # mostly trying to figure out function?
 
 # trying to use the function i wrote to get to the same cardinal indexes as above, function differences might be irrelevant for oblique afterall because in the oblique I need differences between all cardinal and
@@ -340,7 +379,7 @@ function_diffs_all_con = calculate_differences(df, chosen_column='button_press_c
 
 # this still gives me the same results as above so maybe still easier to do it like this
 # difference score might still be useless if I want one single value per person
-function_diffs_con1.groupby(['subID', 'cardinal_category'])['button_press_clockwise'].mean()
+function_diffs_con1.groupby(['subID'])['button_press_clockwise'].mean()
 #display(function_diffs_con1)
 
 function_diffs_con1_on_sub = function_diffs_con1[function_diffs_con1['subID']=='1L974Q']
@@ -785,6 +824,62 @@ mean_diffs_all_conditions = calculate_differences_with_delayed_abs(df, 'button_p
 # the mean manual and the mean_diff_all are now nearly identical which is probably good.. need to check though if the data
 # is very manual/butchered now or if it is legit
 
+#%%
+# Modified function to calculate mean differences first, then apply absolute value
+def calculate_differences_with_delayed_abs(df, chosen_column, condition=None):
+    # Filter DataFrame based on condition
+    if condition:
+        df_grouped = df[df['items_presented'] == condition]
+    else:
+        df_grouped = df
+        
+    # Group by required columns and calculate mean for each group
+    df_grouped = df_grouped.groupby(['subID', 'object_cued_rot']).agg(
+        {chosen_column: 'mean'}).reset_index()
+
+    # List to store results
+    results = []
+
+    # Process each subID separately
+    for sub_id, group in df_grouped.groupby('subID'):
+        group = group.sort_values('object_cued_rot').reset_index(drop=True)
+        
+        # Calculate median subtracted orientations
+        group['median_subtracted_oris'] = group['object_cued_rot'].rolling(window=2).median().fillna(0)
+        
+        # Calculate signed differences (do not apply abs yet)
+        group[f'{chosen_column}_difference'] = group[chosen_column].diff()
+        
+        # Handle circular difference between last and first orientation
+        circular_diff = group[chosen_column].iloc[-1] - group[chosen_column].iloc[0]
+        group.loc[group.index[0], f'{chosen_column}_difference'] = circular_diff
+        
+        # Append to results
+        results.append(group)
+
+    # Concatenate all results into a single DataFrame
+    df_with_diffs = pd.concat(results, ignore_index=True)
+    print(df_with_diffs)
+    # Now calculate mean of differences per orientation and take absolute value after mean calculation
+    df_mean_diffs = df_with_diffs.groupby(['object_cued_rot', 'median_subtracted_oris']).agg(
+        {f'{chosen_column}_difference': 'mean'}).reset_index()
+
+    # Apply absolute transformation after taking the mean
+    df_mean_diffs[f'{chosen_column}_abs_difference'] = df_mean_diffs[f'{chosen_column}_difference'].abs()
+
+    return df_mean_diffs
+
+# Example usage
+# Assuming 'df' is your DataFrame and 'button_press_clockwise' is the chosen column
+mean_diffs_all_conditions = calculate_differences_with_delayed_abs(df, 'button_press_clockwise')
+
+
+# this now works, the df with differences is a little limited because some columns seem to be kicked out during 
+# the actual mean calculations in "df_mean_diffs = df_with_diffs.groupby(['obj..."
+# what exactly is happening here, why does it work? Is this useful?
+# The differences between cardinal and non-cardinal positions are even more prominent now. why?
+# the mean manual and the mean_diff_all are now nearly identical which is probably good.. need to check though if the data
+# is very manual/butchered now or if it is legit
 # %%
 new_abs_diffs_con_all = calculate_differences_with_delayed_abs(df, 'button_press_clockwise')
 new_abs_diffs_con1 = calculate_differences_with_delayed_abs(df, 'button_press_clockwise', condition=1)
@@ -846,5 +941,77 @@ for r in range(len(rots)):
 # "zero angle is the reference point from which angles are measured"
 # ax.set_theta_offset(np.pi/2)
 #ax.set_theta_direction(-1)
+plt.show()
+# %%
+
+# Polar Plot
+fig = plt.figure()
+
+# Change the projection to 'polar'
+ax = fig.add_subplot(111, projection='polar')
+
+# Get outer ylim for plotting radial lines
+ylim = ax.get_ylim()
+
+# to store values for plotting full circle lines at the end
+thetas = []
+thetas_adjusted = []
+con1s = []
+con2s = []
+con3s = []
+all_cons = []
+colors = sns.hls_palette(17)
+# colors = sns.color_palette("mako", as_cmap=True)
+
+# Get ordered list of unique target orientations
+oris = df['object_cued_rot'].unique()
+oris.sort()   
+oris = oris - 11.25
+oris = np.append(oris, oris[0])
+
+unbiased_assumption = np.full(17, 0)
+
+for i in range(len(oris)):
+    theta = np.radians(oris[i])
+    theta_adjusted = -theta + ((np.pi/2)) % (2*np.pi)
+
+    mean_diff_all = new_abs_diffs_con_all[new_abs_diffs_con_all['median_subtracted_oris']==oris[i]]['button_press_clockwise_abs_difference'].mean()
+    print(oris[i], mean_diff_all)
+    mean_diff_con1 = new_abs_diffs_con1[new_abs_diffs_con1['median_subtracted_oris']==oris[i]]['button_press_clockwise_abs_difference'].mean()
+    mean_diff_con2 = new_abs_diffs_con2[new_abs_diffs_con2['median_subtracted_oris']==oris[i]]['button_press_clockwise_abs_difference'].mean()
+    mean_diff_con3 = new_abs_diffs_con3[new_abs_diffs_con3['median_subtracted_oris']==oris[i]]['button_press_clockwise_abs_difference'].mean()
+
+    thetas.append(theta)
+    thetas_adjusted.append(theta_adjusted)
+    all_cons.append(mean_diff_all)
+    con1s.append(mean_diff_con1)
+    con2s.append(mean_diff_con2)
+    con3s.append(mean_diff_con3)
+
+    ax.plot(theta_adjusted, mean_diff_all, 'o', color=colors[1])
+    ax.plot(theta_adjusted, mean_diff_con1, 'o', color=colors[5])
+    ax.plot(theta_adjusted, mean_diff_con2, 'o', color=colors[9])
+    ax.plot(theta_adjusted, mean_diff_con3, 'o', color=colors[13])
+
+    # Add text labels for each point to inspect if needed
+    # text_positions = np.full(17, 0.55)[i]
+    # label_offset = 0.0  # Adjust this value for label position
+    # ax.text(theta_adjusted, text_positions + label_offset, str(oris[i]), fontsize=9, ha='center', va='center', color='black')
+
+
+# Move r origin outwards to have a hollow circle in the middle for ~AesTHeTicS~
+rorigin = -0.15*ylim[1]
+ax.set_rorigin(rorigin)
+
+# Plotting lines to connect dots
+ax.plot(thetas_adjusted, all_cons, '--', color='black')
+ax.plot(thetas_adjusted, con1s, '-', color=colors[5])
+ax.plot(thetas_adjusted, con2s, '-', color=colors[9])
+ax.plot(thetas_adjusted, con3s, '-', color=colors[13])
+
+ax.plot(thetas_adjusted, unbiased_assumption, color=colors[16], linestyle='dashed')
+
+# plt.legend()
+
 plt.show()
 # %%
