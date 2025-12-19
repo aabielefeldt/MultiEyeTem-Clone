@@ -6,7 +6,7 @@ import pandas as pd
 import itertools
 import os
 from pupil_utils import annotate_velocity_blinks, remove_missing_data, plot_pupil_trace_and_velocity_mad, interpolate_blinks, merge_and_rename_annotations, set_zero_to_nan
-
+from mne.io.eyelink._utils import _find_overlaps
 
 # %% Load Metadata
 df = pd.read_csv('../data/csv_files/df.csv')
@@ -74,7 +74,7 @@ annots_df_all = pd.DataFrame()
 per_epochs_annots_df = pd.DataFrame()
 annots_all = []
 
-for i in good_partis[0:2]:
+for i in good_partis[1:2]:
         
     # read file per subID
     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
@@ -128,6 +128,19 @@ for i in good_partis[0:2]:
     #########################
     # currently adds the new annotations to the old ones, could maybe also just use the new ones
 
+
+    # plot_pupil_trace_and_velocity_mad(
+    #     raw,
+    #     ch_name='pupil_right',
+    #     sigma=5,
+    #     t_start=5200,
+    #     window_duration=20,
+    #     vt_start_multiplyer=40,
+    #     vt_end_multiplyer=40,
+    #     low_v_thresh_multiplyer=1,
+    #     max_duration=0.5
+    # )
+
     raw = annotate_velocity_blinks(
         raw,
         channel_names=('pupil_left', 'pupil_right'),
@@ -135,14 +148,15 @@ for i in good_partis[0:2]:
         margin_after=0.01,
         max_duration=0.5,
         description='BAD_velo_blink',
-        sfreq=None,
         sigma=5,
         vt_start_multiplyer = 40,
         vt_end_multiplyer = 40,
         low_v_thresh_multiplyer = 1,
-        max_search_duration=0.8
         )
 
+    #########################
+    # setting all zero data points to nan
+    raw = set_zero_to_nan(raw, channel_names=('pupil_left', 'pupil_right'))
 
     #########################
     # merging and renaming consecutive blinks
@@ -154,61 +168,88 @@ for i in good_partis[0:2]:
         rename_original_to="blink_used_for_merged",
         channel_names=['pupil_right', 'pupil_left']
     )
-    #########################
-    # setting all zero data points to nan
-    raw = set_zero_to_nan(raw, channel_names=('pupil_left', 'pupil_right'))
 
+
+    # my interpolation function does not seem to work anymore if I crop the raw before.. interpoaltion function might not be able to handle the timing?
+    # the original mne interpolation function does seem to work even on cropped data
+    #raw = raw.crop(tmin=990, tmax=1310)
+    raw_annotated = raw.copy()
     #########################
     # interpolating with custom function
     raw = interpolate_blinks(raw, buffer=[0.05, 0.05], match=["BAD_velo_blink", "BAD_merged_blink"], interpolate_gaze=False, method="MonotonicCubicSpline")
-
-    #########################
+    # mne.preprocessing.eyetracking.interpolate_blinks(raw, buffer=0.1, match='BAD_blink', interpolate_gaze=False)
+    # #########################
     # removing buffer area around remaining nan data after interpolation and annotating those nans
     raw = remove_missing_data(raw, channel_names=('pupil_left', 'pupil_right'), buffer=[0.2, 0.4])
     nan_annot = mne.preprocessing.annotate_nan(raw)
     raw.set_annotations(raw.annotations + nan_annot)
 
-    #########################
-    # saving the annotated raw to maybe inspect later
-    raw_filename = f"{i}_annotated_raw.fif"
-    raw_path = os.path.join(raw_folderpath, raw_filename)
-    raw.save(raw_path, overwrite=True)
+    # #########################
+    # # saving the annotated raw to maybe inspect later
+    # raw_filename = f"{i}_annotated_raw.fif"
+    # raw_path = os.path.join(raw_folderpath, raw_filename)
+    # raw.save(raw_path, overwrite=True)
 
-    #########################
-    #########################
-    # Epoching
-    pupil_epochs_pos1 = mne.Epochs(
-        raw,
-        events_pos1,
-        event_id=pos1_pairs,
-        tmin=-0.1,
-        tmax=9,
-        baseline=None,
-        metadata=metadata_pp,
-        picks=['pupil_left', 'pupil_right'],
-        event_repeated='merge',
-        preload=True,
-        reject_by_annotation=False
-    )
+    # #########################
+    # #########################
+    # # Epoching
+    # pupil_epochs_pos1 = mne.Epochs(
+    #     raw,
+    #     events_pos1,
+    #     event_id=pos1_pairs,
+    #     tmin=-0.1,
+    #     tmax=9,
+    #     baseline=None,
+    #     metadata=metadata_pp,
+    #     picks=['pupil_left', 'pupil_right'],
+    #     event_repeated='merge',
+    #     preload=True,
+    #     reject_by_annotation=False
+    # )
     
 
-    # Save epoch in fif format to a specified folder
-    filename = f"{i}-epo.fif"
-    epochs_path = os.path.join(epochs_folderpath, filename)
-    pupil_epochs_pos1.save(epochs_path, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
+#     # Save epoch in fif format to a specified folder
+#     filename = f"{i}-epo.fif"
+#     epochs_path = os.path.join(epochs_folderpath, filename)
+#     pupil_epochs_pos1.save(epochs_path, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
 
-# creating a dataframe with all subjects sampling frequency to later select differently sampled datafiles
-freqs_df = pd.DataFrame(freqs, columns=['subID', 'frequency'])
+# # creating a dataframe with all subjects sampling frequency to later select differently sampled datafiles
+# freqs_df = pd.DataFrame(freqs, columns=['subID', 'frequency'])
 
-# saving dfs
-data_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/csv_files'
+# # saving dfs
+# data_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/csv_files'
 
-freqs_df_name = f'freqs_df.csv'
-csv_filepath = os.path.join(data_folder, freqs_df_name)
-freqs_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
-
-
+# freqs_df_name = f'freqs_df.csv'
+# csv_filepath = os.path.join(data_folder, freqs_df_name)
+# freqs_df.to_csv(csv_filepath, sep=',', index=True, encoding='utf-8')
 
 
 
+# %%
+raw_copy = raw.copy() 
+raw_copy2 = raw_copy.copy()#.crop(tmin=990, tmax=1009)
+blink_annot = raw_copy2.annotations[
+    np.isin(raw_copy2.annotations.description, ['velo_blink_interp', 'blink', 'BAD_velo_blink', 'BAD_blink', 'merged_blink_interp'])]
+# Assign filtered annotations to the copied raw object 
+raw_copy2.set_annotations(blink_annot) 
+raw_copy2.plot(scalings=1e3, picks= ['pupil_left', 'pupil_right']) # , duration=1000.1
+
+
+
+# %%
+# trying out functionality of find_overlaps
+find_overlaps = True
+overlap_threshold = 0.05
+annos_df = raw.annotations.to_data_frame(time_format=None)
+overlap_df = _find_overlaps(annos_df, max_time=overlap_threshold)
+
+# # _find_overlaps may return None for empty input
+# if df is None or len(df) == 0:
+#     if make_annotations:
+#         return Annotations(onset=[], duration=[], description=[], orig_time=orig_time)
+#     return df
+
+# df = df.sort_values("time").reset_index(drop=True)
+
+print(overlap_df)
 # %%

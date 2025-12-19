@@ -3,17 +3,13 @@ import mne
 from mne import Annotations
 from scipy.ndimage import gaussian_filter1d
 import scipy as sp
-import pandas as pd
 import matplotlib.pyplot as plt
 from mne.annotations import Annotations, _annotations_starts_stops
-from mne.preprocessing.artifact_detection import _annotations_from_mask
 from mne._fiff.constants import FIFF
 from mne.utils import logger, _check_preload, _validate_type, warn # pylint: disable=no-name-in-module
 from mne.io import BaseRaw # pylint: disable=no-name-in-module
 from mne.io.eyelink.eyelink import RawEyelink
-from scipy.signal import welch
 from scipy.stats import mstats
-from scipy.ndimage import gaussian_filter1d
 from scipy.interpolate import interp1d
 
 
@@ -24,12 +20,10 @@ def annotate_velocity_blinks(
     margin_after=0.01,
     max_duration=0.5,
     description='BAD_velo_blink',
-    sfreq=None,
-    sigma=4,
-    vt_start_multiplyer = 8,
-    vt_end_multiplyer = 8,
-    low_v_thresh_multiplyer = 1.5,
-    max_search_duration=0.5
+    sigma=5,
+    vt_start_multiplyer = 40,
+    vt_end_multiplyer = 40,
+    low_v_thresh_multiplyer = 1,
 ):
     """
     Annotate blinks based on pupil velocity profile:
@@ -41,20 +35,23 @@ def annotate_velocity_blinks(
         Raw object with pupil data.
     channel_names : tuple of str
         Names of pupil channels (e.g., ('pupil_left', 'pupil_right')).
-    velocity_percentile : float
-        Percentile to determine velocity threshold adaptively.
     margin_before : float
         Time (in seconds) to extend before blink onset.
-    margin_after : floatx
+    margin_after : float
         Time (in seconds) to extend after blink offset.
     max_duration : float
         Maximum allowable blink duration (in seconds).
     description : str
         Annotation label.
-    sfreq : float | None
-        Sampling frequency. If None, uses raw.info['sfreq'].
     sigma : float
         Sigma for Gaussian smoothing.
+    vt_start_multiplyer : float
+        Multiplier for median absolute deviation (MAD) to set blink onset threshold.
+    vt_end_multiplyer : float
+        Multiplier for median absolute deviation (MAD) to set blink dilation threshold.
+    low_v_thresh_multiplyer : float
+        Multiplier for median velocity (MED) to define stabilization (low velocity) threshold.
+
 
     Returns
     -------
@@ -63,8 +60,9 @@ def annotate_velocity_blinks(
     """
     annotations = raw.annotations
 
-    if sfreq is None:
-        sfreq = raw.info['sfreq']
+
+    sfreq = raw.info['sfreq']
+    max_search_duration = max_duration
 
     onsets, durations, descriptions, ch_names_list = [], [], [], []
 
@@ -72,7 +70,7 @@ def annotate_velocity_blinks(
         if ch_name not in raw.ch_names:
             raise ValueError(f"Channel '{ch_name}' not found in raw.")
 
-        data = raw.copy().pick(ch_name).get_data()[0]
+        data = raw.get_data(picks=ch_name)[0]
 
         if sigma>0:
             smoothed = gaussian_filter1d(data, sigma=sigma)
@@ -81,23 +79,25 @@ def annotate_velocity_blinks(
             velocity = np.gradient(data) * sfreq
 
 
-        # clipping the top 1 percent of data to not have outliers influence the threshold
+        # clipping the top 1 percent of data to not have outliers influence the threshold (winsorizing)
         velocity_clipped = mstats.winsorize(velocity, limits=[0.01, 0.01])  # clip top and bottom 1%
         abs_velocity = np.abs(velocity_clipped.data)
 
-        # now using median absolute deviation
+        # median velocity
         med = np.nanmedian(abs_velocity)
         # median absolute deviation
         mad = np.nanmedian(np.abs(abs_velocity - med))
 
-        vt_start = med + vt_start_multiplyer * mad
-        vt_end = med + vt_end_multiplyer * mad
+        vt_start = med + (vt_start_multiplyer * mad)
+        vt_end = med + (vt_end_multiplyer * mad)
         low_v_thresh = med * low_v_thresh_multiplyer
+
+        # Optionally print thresholds per participant and channel
+        print(f"{ch_name}: med={med:.2f}, mad={mad:.2f}, vt_start={vt_start:.2f}, vt_end={vt_end:.2f}, low_v_thresh={low_v_thresh:.2f}")
 
         i = 0
         while i < len(velocity) - 1:
-            found_dilation = False
-            found_end = False
+            imid = None
             
             # Blink onset: rapid constriction
             if velocity[i] < -vt_start:
@@ -111,14 +111,12 @@ def annotate_velocity_blinks(
                 dilation_indices = np.where(dilation_zone > vt_end)[0]
                 if dilation_indices.size > 0:
                     imid = dilation_indices[0] + istart
-                    found_dilation = True
 
                     # Look for stabilization
                     post_dilate_zone = velocity[imid:imid + max_search]
                     low_v_indices = np.where(np.abs(post_dilate_zone) < low_v_thresh)[0]
                     if low_v_indices.size > 0:
                         iend = low_v_indices[0] + imid
-                        found_end = True
 
                         # Validate and annotate
                         duration_sec = (iend - istart) / sfreq
@@ -131,17 +129,13 @@ def annotate_velocity_blinks(
                             durations.append(total_duration)
                             descriptions.append(description)
                             ch_names_list.append([ch_name])
-
                             i = iend - 1
                             continue  # go to next blink candidate
                 # Adaptive skip logic
-            if found_dilation:
+            if imid is not None:
                 i = imid + 1
             else:
                 i += int(sfreq * 0.01)  # skip 10 ms
-            
-    print(f"{ch_name}: med={med:.2f}, mad={mad:.2f}, vt_start={vt_start:.2f}, vt_end={vt_end:.2f}, low_v_thresh={low_v_thresh:.2f}")
-
 
     if onsets:
         new_annotations = Annotations(
@@ -191,7 +185,6 @@ def remove_missing_data(raw, channel_names=('pupil_left', 'pupil_right'), buffer
 #######################
 
 def set_zero_to_nan(raw, channel_names=('pupil_left', 'pupil_right')):
-    sfreq = raw.info['sfreq']
 
     for ch_name in channel_names:
         if ch_name not in raw.ch_names:
@@ -200,17 +193,9 @@ def set_zero_to_nan(raw, channel_names=('pupil_left', 'pupil_right')):
         ch_idx = raw.ch_names.index(ch_name)
         data = raw._data[ch_idx]
 
-        # Find zero (or near-zero) sample indices
-        zero_indices = np.where(np.isclose(data, 0, atol=1e-8))[0]
+        # mask where data is exactly (or nearly) zero
+        mask = np.isclose(data, 0, atol=1e-8)
 
-        # Build a mask with buffer around each zero index
-        mask = np.zeros_like(data, dtype=bool)
-        for i in zero_indices:
-            start = max(0, i)
-            end = min(len(data), i + 1)
-            mask[start:end] = True
-
-        # Set the masked region to NaN
         data[mask] = np.nan
     return raw
 
@@ -228,8 +213,7 @@ def plot_pupil_trace_and_velocity_mad(
     vt_start_multiplyer=8,
     vt_end_multiplyer=8,
     low_v_thresh_multiplyer=1.5,
-    max_search_duration=0.5,
-    max_duration=0.5,
+    max_duration=0.5
 ):
     """
     Plot pupil trace and velocity using Median + MAD thresholding.
@@ -242,6 +226,7 @@ def plot_pupil_trace_and_velocity_mad(
     times = raw.times
     data = raw.copy().pick(ch_name).get_data()[0]
     filename = raw.filenames
+    max_search_duration = max_duration
 
     # === Smooth and compute velocity ===
     if sigma > 0:
@@ -271,10 +256,10 @@ def plot_pupil_trace_and_velocity_mad(
     blink_spans = []
     i = 0
     max_search = int(sfreq * max_search_duration)
+    
 
     while i < len(velocity) - 1:
-        found_dilation = False
-        found_end = False
+        imid = None
 
         if velocity[i] < -vt_start:
             istart = i
@@ -284,14 +269,12 @@ def plot_pupil_trace_and_velocity_mad(
             dilation_indices = np.where(dilation_zone > vt_end)[0]
             if dilation_indices.size > 0:
                 imid = dilation_indices[0] + istart
-                found_dilation = True
 
                 # Look for low velocity
                 post_dilate_zone = velocity[imid:imid + max_search]
                 low_v_indices = np.where(np.abs(post_dilate_zone) < low_v_thresh)[0]
                 if low_v_indices.size > 0:
                     iend = low_v_indices[0] + imid
-                    found_end = True
 
                     duration_sec = (iend - istart) / sfreq
                     if duration_sec <= max_duration:
@@ -300,7 +283,7 @@ def plot_pupil_trace_and_velocity_mad(
                         continue
 
         # Skip ahead
-        if found_dilation:
+        if imid is not None:
             i = imid + 1
         else:
             i += int(sfreq * 0.01)  # skip 10 ms
@@ -370,7 +353,7 @@ def plot_pupil_trace_and_velocity_mad(
 # looks perfect to me so far
 # need to check that it works on my specific annotations (and change those in match maybe)
 
-def interpolate_blinks(raw, buffer=0.05, match="BAD_blink", interpolate_gaze=False, method="CubicSpline"):
+def interpolate_blinks(raw, buffer=0.05, match="BAD_blink", interpolate_gaze=False, method="Linear"):
     """Interpolate eyetracking signals during blinks.
 
     This function uses the timing of blink annotations to estimate missing
@@ -433,11 +416,13 @@ def interpolate_blinks(raw, buffer=0.05, match="BAD_blink", interpolate_gaze=Fal
 
     # get the blink annotations
     blink_annots = [annot for annot in raw.annotations if annot["description"] in match]
+
     if not blink_annots:
         warn(f"No annotations matching {match} found. Aborting.")
         return raw
+    
     _interpolate_blinks(
-        raw, buffer, blink_annots, match, interpolate_gaze=interpolate_gaze, method=method
+        raw, buffer, blink_annots, interpolate_gaze=interpolate_gaze, method=method
     )
 
     # remove bad from the annotation description
@@ -445,19 +430,20 @@ def interpolate_blinks(raw, buffer=0.05, match="BAD_blink", interpolate_gaze=Fal
         if desc.startswith("BAD_"):
             logger.info(f"Removing 'BAD_' from {desc} and add '_interp'.")
             raw.annotations.rename({desc: desc.replace("BAD_", "") + "_interp"})
+            
     return raw
 
 
-def _interpolate_blinks(raw, buffer, blink_annots, match, interpolate_gaze, method="Linear"):
+def _interpolate_blinks(raw, buffer, blink_annots, interpolate_gaze, method="Linear"):
     """Interpolate eyetracking signals during blinks in-place."""
 
     # function handles
     interp_funcs = {
-        "Linear": _interp_ignore_nan(np.interp),
-        "CubicSpline": _interp_ignore_nan(sp.interpolate.CubicSpline),
-        "MonotonicCubicSpline": _interp_ignore_nan(sp.interpolate.PchipInterpolator),
-        "NonCubicSpline": _interp_ignore_nan(sp.interpolate.make_interp_spline),
-        "Nearest": _interp_ignore_nan(sp.interpolate.interp1d),
+        "Linear": _interp_ignore_nan(_interp_linear),
+        "CubicSpline": _interp_ignore_nan(_interp_cubicspline),
+        "MonotonicCubicSpline": _interp_ignore_nan(_interp_pchip),
+        "NonCubicSpline": _interp_ignore_nan(_interp_make_spline),
+        "Nearest": _interp_ignore_nan(_interp_nearest),
     }
 
     logger.info("Interpolating missing data during blinks...")
@@ -476,19 +462,18 @@ def _interpolate_blinks(raw, buffer, blink_annots, match, interpolate_gaze, meth
 
         # Create an empty boolean mask
         mask = np.zeros_like(raw.times, dtype=bool)
-        starts, ends = _annotations_starts_stops(raw, match)
-        starts = np.divide(starts, raw.info["sfreq"])
-        ends = np.divide(ends, raw.info["sfreq"])
 
-        for annot, start, end in zip(blink_annots, starts, ends):
+        # for annot, start, end in zip(blink_annots, starts, ends):
+        for annot in blink_annots:
             if "ch_names" not in annot or not annot["ch_names"]:
                 msg = f"Blink annotation missing values for 'ch_names' key: {annot}"
                 raise ValueError(msg)
-            start -= pre_buffer
-            end += post_buffer
             if ch_info["ch_name"] not in annot["ch_names"]:
                 continue  # skip if the channel is not in the blink annotation
             # Update the mask for times within the current blink period
+            start = annot["onset"] - pre_buffer
+            end = annot["onset"] + annot["duration"] + post_buffer
+            
             mask |= (raw.times >= start) & (raw.times <= end)
 
         blink_indices = np.where(mask)[0]
@@ -506,7 +491,9 @@ def _interpolate_blinks(raw, buffer, blink_annots, match, interpolate_gaze, meth
         )
         # Replace the samples at the blink_indices with the interpolated values
         raw._data[ci, blink_indices] = interpolated_samples
+
         interpolated_chs.append(ch_info["ch_name"])
+        
     if interpolated_chs:
         logger.info(
             f"Interpolated {len(interpolated_chs)} channels: {interpolated_chs}"
@@ -514,28 +501,26 @@ def _interpolate_blinks(raw, buffer, blink_annots, match, interpolate_gaze, meth
     else:
         warn("No channels were interpolated.")
 
+def _interp_linear(x, xp, fp):
+    return np.interp(x, xp, fp)
 
 def _interp_cubicspline(x, xp, fp):
-    """wrapper for scipy interpolation classes"""
     Interp = sp.interpolate.CubicSpline(xp, fp)
     return Interp(x)
 
 
 def _interp_pchip(x, xp, fp):
-    """wrapper for scipy interpolation classes"""
     Interp = sp.interpolate.PchipInterpolator(xp, fp)
     return Interp(x)
 
 
 def _interp_make_spline(x, xp, fp):
-    """wrapper for scipy interpolation classes"""
     Interp = sp.interpolate.make_interp_spline(xp, fp)
     return Interp(x)
 
 
-def _interp_1d(x, xp, fp):
-    """wrapper for scipy interpolation classes"""
-    Interp = sp.interpolate.interp1d(xp, fp)
+def _interp_nearest(x, xp, fp):
+    Interp = sp.interpolate.interp1d(xp, fp, kind="nearest")
     return Interp(x)
 
 
@@ -748,3 +733,65 @@ def get_annotations_per_epoch_custom(self):
     
 
     return annot_records
+
+
+###############
+###############
+
+def apply_baseline_nan_aware(epochs, bmin=-0.1, bmax=0.0):
+    """
+    Apply baseline correction separately to 'pupil_left' and 'pupil_right'.
+
+    - Baseline = mean over [bmin, bmax] seconds (ignores NaNs).
+    - If BOTH eyes' baselines are NaN in an epoch → drop that epoch
+      (recorded in epochs.drop_log).
+    - If only one eye's baseline is NaN → that eye's trace is set to NaN
+      for the whole epoch.
+    - Returns the modified epochs (drop info is in epochs.drop_log).
+
+    Assumes epochs have exactly two channels in this order:
+        ['pupil_left', 'pupil_right']
+    """
+
+    data = epochs.get_data()  # shape: (n_epochs, 2, n_times)
+    times = epochs.times
+
+    # baseline indices
+    imin = np.where(times >= bmin)[0][0]
+    imax = np.where(times <= bmax)[0][-1] + 1
+
+    # per-eye baseline means (NaN-aware)
+    baseline_means = np.nanmean(data[:, :, imin:imax], axis=-1)  # (E, 2)
+
+    # drop epochs where both eyes' baselines are NaN
+    both_nan = np.isnan(baseline_means).all(axis=1)
+    bad_idx = np.where(both_nan)[0]
+    if bad_idx.size > 0:
+        epochs.drop(bad_idx, reason='BAD_baseline_nan_both_eyes')
+        data = epochs.get_data()
+        baseline_means = np.nanmean(data[:, :, imin:imax], axis=-1)
+
+    # if all epochs dropped, stop here
+    if data.shape[0] == 0:
+        epochs.baseline = (bmin, bmax)
+        return epochs
+
+    # subtract baseline for each eye, set to NaN if baseline mean is NaN
+    n_epochs = data.shape[0]
+    for e in range(n_epochs):
+        # left eye
+        if np.isfinite(baseline_means[e, 0]):
+            data[e, 0, :] -= baseline_means[e, 0]
+        else:
+            data[e, 0, :] = np.nan
+        # right eye
+        if np.isfinite(baseline_means[e, 1]):
+            data[e, 1, :] -= baseline_means[e, 1]
+        else:
+            data[e, 1, :] = np.nan
+
+    # write back
+    epochs._data = data
+    epochs.baseline = (bmin, bmax)
+
+    return epochs

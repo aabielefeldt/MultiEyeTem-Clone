@@ -133,19 +133,44 @@ else:
     print("The one-way ANOVA does not indicate a significant difference in accuracy among the three stimuli sets.")
 
 
-# Plot boxplots for each participant
 plt.figure(figsize=(10, 6))
 
-# FutureWarning is related to the stripplot
-sns.stripplot(x='stimuli_set', y='acc_trial_concrete_cued', data=grouped_data_stim_sets)
-# Note: is se the right choice for the errorbar?
-# "In short, when you mention ‘mean’, .aggregate() searches for a function mean belonging to pd.Series, i.e. pd.Series.mean().
-# Whereas, if you mention mean (without quotes), .aggregate() will search for a function named mean in default Python, which is unavailable and will throw a NameError exception."
-# What is the dot in the plot? Is that also some statistic already?
-sns.pointplot(x='stimuli_set', y='acc_trial_concrete_cued', data=grouped_data_stim_sets, errorbar='se', linestyles="none", markers='_', scale=2) # Note: estimator='mean', -> doesnt seem to change anything
-plt.title('Means plus SE')
-plt.xlabel('Stimuli Sets')
-plt.ylabel('Mean Accuracy')
+# Set the palette
+palette = sns.color_palette("hls", n_colors=grouped_data_stim_sets['stimuli_set'].nunique())
+
+# Boxplot (distribution summary, transparent so dots are visible)
+ax = sns.boxplot(
+    x='stimuli_set',
+    y='acc_trial_concrete_cued',
+    hue='stimuli_set',
+    data=grouped_data_stim_sets,
+    palette=palette,
+    showcaps=True,
+    showfliers=False,
+    whiskerprops={'linewidth':1.5},
+    boxprops=dict(alpha=0.5),
+    legend=False 
+)
+
+# Scatter of individual participants
+sns.stripplot(
+    x='stimuli_set',
+    y='acc_trial_concrete_cued',
+    hue='stimuli_set',
+    data=grouped_data_stim_sets,
+    palette=palette,
+    edgecolor='black',
+    linewidth=1,
+    jitter=True,
+    alpha=0.7,
+    dodge=False
+)
+ax.set_xticks(range(3))
+ax.set_xticklabels(["Stimuli Set 1", "Stimuli Set 2", "Stimuli Set 3"])
+sns.despine()
+plt.title("Participant Accuracy by Stimuli Set")
+plt.xlabel("Stimuli Set")
+plt.ylabel("Mean Accuracy")
 plt.show()
 
 
@@ -189,14 +214,54 @@ else:
     print("The one-way ANOVA does not indicate a significant difference in accuracy among the three conditions.")
 
 
-# Plot boxplots for each participant
+# # Plot boxplots for each participant
+# plt.figure(figsize=(10, 6))
+# sns.stripplot(x='items_presented', y='acc_trial_concrete_cued', data=results_acc_con)
+# sns.pointplot(x='items_presented', y='acc_trial_concrete_cued', data=results_acc_con, estimator='mean', errorbar='se',linestyles="none", color= "g")
+# plt.title('Boxplot showing accuracy per condition')
+# plt.xlabel('Load Condition')
+# plt.ylabel('Mean Accuracy')
+# plt.show()
+
+
 plt.figure(figsize=(10, 6))
-sns.stripplot(x='items_presented', y='acc_trial_concrete_cued', data=results_acc_con)
-sns.pointplot(x='items_presented', y='acc_trial_concrete_cued', data=results_acc_con, estimator='mean', errorbar='se',linestyles="none", color= "g")
-plt.title('Boxplot showing accuracy per condition')
-plt.xlabel('Load Condition')
-plt.ylabel('Mean Accuracy')
+
+# Set the palette
+palette = sns.color_palette("hls", n_colors=results_acc_con['items_presented'].nunique())
+
+# Boxplot (distribution summary, transparent so dots are visible)
+sns.boxplot(
+    x='items_presented',
+    y='acc_trial_concrete_cued',
+    hue='items_presented',
+    data=results_acc_con,
+    palette=palette,
+    showcaps=True,
+    showfliers=False,
+    whiskerprops={'linewidth':1.5},
+    boxprops=dict(alpha=0.5),
+    legend=False 
+)
+
+# Scatter of individual participants
+sns.stripplot(
+    x='items_presented',
+    y='acc_trial_concrete_cued',
+    hue='items_presented',
+    data=results_acc_con,
+    palette=palette,
+    edgecolor='black',
+    linewidth=1,
+    jitter=True,
+    alpha=0.7,
+    dodge=False
+)
+sns.despine()
+plt.title("Boxplot showing accuracy per condition")
+plt.xlabel("Load Condition")
+plt.ylabel("Mean Accuracy")
 plt.show()
+
 
 # %% 
 # Accuraccy over time 

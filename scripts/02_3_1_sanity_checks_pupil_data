@@ -10,6 +10,7 @@ import os
 from pupil_utils import annotate_velocity_blinks, remove_missing_data, plot_pupil_trace_and_velocity_mad, interpolate_blinks, merge_and_rename_annotations, set_zero_to_nan
 from scipy.ndimage import gaussian_filter1d
 from scipy.interpolate import interp1d
+from pupil_utils import apply_baseline_nan_aware
 
 
 # %%
@@ -25,7 +26,13 @@ from scipy.interpolate import interp1d
 df = pd.read_csv('../data/csv_files/df.csv')
 good_partis = df['subID'].unique()
 
-evoked_df_pos1_interpol_shifted = pd.read_csv('../data/csv_files/evoked_df_pos1_interpol_shifted.csv')
+
+# not working with evokeds but only with epochs in here?
+# evoked_df_pos1_interpol_shifted = pd.read_csv('../data/csv_files/evoked_df_pos1_interpol_shifted.csv')
+# evoked_df_uncombined = pd.read_csv('../data/csv_files/evoked_df_uncombined.csv')
+
+# evoked_df_shifted = pd.read_csv('../data/csv_files/evoked_df_shifted.csv')
+# evoked_df = pd.read_csv('../data/csv_files/evoked_df.csv')
 
 #%%
 # if qt is used as backend the kernel crashes
@@ -104,7 +111,7 @@ for i in good_partis:
 
 # %%
 # plotting all trials per subID in a plt plot for combined pupils
-for i in good_partis:
+for i in good_partis[0:4]:
     data = epochs_all_combined_nan_even_newer[epochs_all_combined_nan_even_newer['subID'] == i]
     fig, ax = plt.subplots(figsize=(10, 8))
 
@@ -124,7 +131,7 @@ for i in good_partis:
 # RP15M5, REUNMA
 
 for p in ['REUNMA']: # good_partis[1:2]
-    for i in range(20, 590, 70): #(10, 590, 10) -> for starting at 10 up to 590 in steps of 10
+    for i in range(20, 90, 10): #(10, 590, 10) -> for starting at 10 up to 590 in steps of 10
         data = epochs_all_uncombined_even_newer[epochs_all_uncombined_even_newer['subID'] == p]
         i_before = i - 20
         data = data[data['epoch'].isin(range(i_before, i))]
@@ -171,4 +178,105 @@ for p in ['8H3YTN']: # good_partis[1:2]
 
         plt.title(f'lineplot of epochs {i_before} to {i} for one subID {p}')
         plt.show()
+
+# %%
+# Checking the difference between right and left pupil size 
+# checking it only in the epochs dataframe, no baseline applied so far 
+
+epoch_uncombined_pupil_means = epochs_all_uncombined_even_newer.groupby('subID')[['pupil_left', 'pupil_right']].mean()
+
+epoch_uncombined_pupil_means["pct_diff_signed"] = (
+    (epoch_uncombined_pupil_means["pupil_left"] - epoch_uncombined_pupil_means["pupil_right"])
+    / ((epoch_uncombined_pupil_means["pupil_left"] + epoch_uncombined_pupil_means["pupil_right"]) / 2)
+) * 100
+epoch_uncombined_pupil_means["pct_diff_abs"] = epoch_uncombined_pupil_means["pct_diff_signed"].abs()
+epoch_uncombined_pupil_means
+
+# %%
+
+# need to check this on properly baselined and annotated but uncombined data...
+# actually using the baselined data is maybe not a good idea since here the difference is much bigger 
+# maybe due to the fact that it is the only difference there is, they all start at 0
+
+# how can I best measure the difference between the eyes, maybe percentage is not the best?
+# what is this comparing it to?
+# maybe better to use just true difference not percentage?
+
+
+drop_log_rows = []
+
+evoked_df_uncombined_with_bl = pd.DataFrame()
+
+for i in good_partis:
+    
+    # reading epochs per participant
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+    epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+
+    # applying baseline per eye and nan aware while dropping any epochs where the baseline period was nan in both eyes
+    pupil_epoch_bl = apply_baseline_nan_aware(pupil_epoch, bmin=-0.1, bmax=0.0)
+    baseline = pupil_epoch_bl.baseline
+    
+    # counting dropped epochs
+    sum_dropped = sum('BAD_baseline_nan_both_eyes' in entry for entry in pupil_epoch_bl.drop_log)
+    drop_log_rows.append({'subID': i, 'sum_dropped': sum_dropped})
+
+    # # combining channels
+    # pupil_ix = mne.pick_channels(pupil_epoch_bl.info["ch_names"], include=['pupil_left', 'pupil_right'])
+    # roi_dict = dict(pupils=pupil_ix)
+    # combine_nanmean = lambda data: np.nanmean(data, axis=1)
+    # pupil_epochs_combined_bl = mne.channels.combine_channels(pupil_epoch_bl, roi_dict, method=combine_nanmean)
+    
+    # # seperating per load condition
+    # con1_epochs = pupil_epochs_combined_bl["items_presented == 1"]
+    # con2_epochs = pupil_epochs_combined_bl["items_presented == 2"]
+    # con3_epochs = pupil_epochs_combined_bl["items_presented == 3"]
+
+    # # shortening the epochs based on condition (crop defaults to inclduing tmax)
+    # con1_epochs.crop(-0.1, 7)
+    # con2_epochs.crop(-0.1, 8)
+    # con3_epochs.crop(-0.1, 9)
+
+    # averaging per load condition
+    # leading to error because there are some epochs that are only nan for pupils?
+    evoked_nan_mean = lambda x: np.nanmean(x, axis=0)
+    pupil_ave = pupil_epoch_bl.average(method=evoked_nan_mean)
+    # con2_ave = con2_epochs.average(method=evoked_nan_mean)
+    # con3_ave = con3_epochs.average(method=evoked_nan_mean)
+
+    # # adding individual averaged data to dataframe including load and subID
+    # con1_ave_df = con1_ave.to_data_frame()
+    # con1_ave_df['Load'] = 1
+    # con1_ave_df['subID'] = i
+    # con2_ave_df = con2_ave.to_data_frame()
+    # con2_ave_df['Load'] = 2
+    # con2_ave_df['subID'] = i
+    # con3_ave_df = con3_ave.to_data_frame()
+    # con3_ave_df['Load'] = 3
+    # con3_ave_df['subID'] = i
+
+    pupil_ave_df = pupil_ave.to_data_frame()
+    pupil_ave_df['subID'] = i
+
+    # concatenating to evoked_df
+    evoked_df_uncombined_with_bl = pd.concat([evoked_df_uncombined_with_bl, pupil_ave_df])
+    # evoked_df = pd.concat([evoked_df, con2_ave_df])
+    # evoked_df = pd.concat([evoked_df, con3_ave_df])
+    # evoked_df['baseline_start'] = baseline[0]
+    # evoked_df['baseline_end'] = baseline[1]
+
+drop_log_df = pd.DataFrame(drop_log_rows)
+# display(drop_log_df)
+evoked_df_uncombined_with_bl = evoked_df_uncombined_with_bl.reset_index()
+display(evoked_df_uncombined_with_bl)
+
+#%%
+
+pupil_size_means = evoked_df_uncombined_with_bl.groupby('subID')[['pupil_left', 'pupil_right']].mean()
+pupil_size_means["pct_diff_signed"] = (
+    (pupil_size_means["pupil_left"] - pupil_size_means["pupil_right"])
+    / ((pupil_size_means["pupil_left"] + pupil_size_means["pupil_right"]) / 2)
+) * 100
+pupil_size_means["pct_diff_abs"] = pupil_size_means["pct_diff_signed"].abs()
 # %%

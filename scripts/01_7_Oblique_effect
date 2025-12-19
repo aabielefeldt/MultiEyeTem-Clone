@@ -24,7 +24,7 @@ figures_save_dir = '../figures'
 # Note: here I have 84 data points, probably two for each participant, that seems correct, I took a mean for the accuracy of every participant in both the cardinal and the oblique positions 
 
 # Calculate mean accuracy for each category
-mean_per_category = df.groupby('cardinal_category')['acc_trial_concrete_cued'].mean()
+mean_per_category = df.groupby('probe_ori_cat')['acc_trial_concrete_cued'].mean()
 display(mean_per_category)
 
 # %%
@@ -32,14 +32,14 @@ display(mean_per_category)
 
 grouped_data_list = []
 for i in good_partis:
-    data = df[df['subID'] == i].groupby(['cardinal_category', 'subID'])['acc_trial_concrete_cued'].mean().reset_index()
+    data = df[df['subID'] == i].groupby(['probe_ori_cat', 'subID'])['acc_trial_concrete_cued'].mean().reset_index()
     grouped_data_list.append(data)
 
-# Concatenate the list of DataFrames into a single DataFrame
+# Concatenate the list of DataFrames into a single DadftaFrame
 final_grouped_data_obli = pd.concat(grouped_data_list).reset_index()
 
-oblique_data = final_grouped_data_obli[final_grouped_data_obli['cardinal_category'] == 'oblique']['acc_trial_concrete_cued']
-cardinal_data = final_grouped_data_obli[final_grouped_data_obli['cardinal_category'] == 'cardinal']['acc_trial_concrete_cued']
+oblique_data = final_grouped_data_obli[final_grouped_data_obli['probe_ori_cat'] == 'oblique']['acc_trial_concrete_cued']
+cardinal_data = final_grouped_data_obli[final_grouped_data_obli['probe_ori_cat'] == 'cardinal']['acc_trial_concrete_cued']
 
 # Statistics
 # these have different results than the statistics below that I originally computed
@@ -65,15 +65,44 @@ else:
 
 # Stripplot + Pointplot on mean accuracy for each participant
 plt.figure(figsize=(10, 6))
-color = sns.color_palette("hls", 8)
-sns.stripplot(x='cardinal_category', y='acc_trial_concrete_cued', data=final_grouped_data_obli, color=color[5])
-sns.boxplot(x='cardinal_category', y='acc_trial_concrete_cued', data=final_grouped_data_obli, palette=color)
-# sns.pointplot(x='cardinal_category', y='acc_trial_concrete_cued', data=final_grouped_data_obli, linestyles='none', color=color[2])
+
+palette = sns.color_palette("hls", n_colors=final_grouped_data_obli['probe_ori_cat'].nunique())
+
+# Boxplot (distribution summary, transparent so dots are visible)
+sns.boxplot(
+    x='probe_ori_cat',
+    y='acc_trial_concrete_cued',
+    hue='probe_ori_cat',
+    data=final_grouped_data_obli,
+    palette=palette,
+    showcaps=True,
+    showfliers=False,
+    whiskerprops={'linewidth':1.5},
+    boxprops=dict(alpha=0.5),
+    legend=False 
+)
+
+# Scatter of individual participants
+sns.stripplot(
+    x='probe_ori_cat',
+    y='acc_trial_concrete_cued',
+    hue='probe_ori_cat',
+    data=final_grouped_data_obli,
+    palette=palette,
+    edgecolor='black',
+    linewidth=1,
+    jitter=True,
+    alpha=0.7,
+    dodge=False
+)
+sns.despine()
 plt.title('Boxplot for Each Participant')
 plt.xlabel('Cardinal vs Oblique Orientation Category')
 plt.ylabel('Mean Accuracy')
 plt.savefig(os.path.join(figures_save_dir, 'oblique_vs_cardinal_accuracy.png'))
 plt.show()
+
+
 
 
 # %%
@@ -90,25 +119,25 @@ all_p_obli_con3 = []
 # Iterate through each participant in good_partis
 for i in good_partis:
     # Group the data for the current participant
-    # data = df[df['subID'] == i].groupby(['cardinal_category'])['acc_trial_concrete_cued'].mean()
-    participant_data_obli_con = df.loc[df['subID'] == i, ['cardinal_category', 'acc_trial_concrete_cued', 'object_cued_rot', 'items_presented']]
+    # data = df[df['subID'] == i].groupby(['probe_ori_cat'])['acc_trial_concrete_cued'].mean()
+    participant_data_obli_con = df.loc[df['subID'] == i, ['probe_ori_cat', 'acc_trial_concrete_cued', 'object_cued_rot', 'items_presented']]
     #participant_data1 = df.loc[(df['subID'] == i) & (df['items_presented'] == 1), 'acc_trial_concrete_cued']
         # condition 1x
     #bp_con1 = participant_data.loc[participant_data['items_presented'] == 1].groupby('object_cued_rot')['button_press_clockwise'].agg(['mean', 'std']).reset_index()
-    acc_obli_con1 = participant_data_obli_con.loc[participant_data_obli_con['items_presented'] == 1].groupby('cardinal_category')['acc_trial_concrete_cued'].agg(['mean', 'std']).reset_index()
+    acc_obli_con1 = participant_data_obli_con.loc[participant_data_obli_con['items_presented'] == 1].groupby('probe_ori_cat')['acc_trial_concrete_cued'].agg(['mean', 'std']).reset_index()
     acc_obli_con1['subID'] = i
     acc_obli_con1['items_presented'] = 1
     all_p_obli_con1.append(acc_obli_con1)
 
     # condition 2
     #bp_con2 = participant_data.loc[participant_data['items_presented'] == 2].groupby('object_cued_rot')['button_press_clockwise'].agg(['mean', 'std']).reset_index()
-    acc_obli_con2 = participant_data_obli_con.loc[participant_data_obli_con['items_presented'] == 2].groupby('cardinal_category')['acc_trial_concrete_cued'].agg(['mean', 'std']).reset_index()
+    acc_obli_con2 = participant_data_obli_con.loc[participant_data_obli_con['items_presented'] == 2].groupby('probe_ori_cat')['acc_trial_concrete_cued'].agg(['mean', 'std']).reset_index()
     acc_obli_con2['subID'] = i
     acc_obli_con2['items_presented'] = 2
     all_p_obli_con2.append(acc_obli_con2)
 
     #bp_con3 = participant_data.loc[participant_data['items_presented'] == 3].groupby('object_cued_rot')['button_press_clockwise'].agg(['mean', 'std']).reset_index()
-    acc_obli_con3 = participant_data_obli_con.loc[participant_data_obli_con['items_presented'] == 3].groupby('cardinal_category')['acc_trial_concrete_cued'].agg(['mean', 'std']).reset_index()
+    acc_obli_con3 = participant_data_obli_con.loc[participant_data_obli_con['items_presented'] == 3].groupby('probe_ori_cat')['acc_trial_concrete_cued'].agg(['mean', 'std']).reset_index()
     acc_obli_con3['subID'] = i
     acc_obli_con3['items_presented'] = 3
     all_p_obli_con3.append(acc_obli_con3)
@@ -118,61 +147,77 @@ all_p_obli_con2_df = pd.concat(all_p_obli_con2)
 all_p_obli_con3_df = pd.concat(all_p_obli_con3)
 
 all_p_obli_con = pd.concat([all_p_obli_con1_df, all_p_obli_con2_df, all_p_obli_con3_df])
+all_p_obli_con['percentage'] = all_p_obli_con['mean']*100
 display(all_p_obli_con)
 
-# Anova
-
-# should I do a repeated measures anova here?
-# run it on the df or the all_p_obli_con
 # %%
-# Perform ANOVA
-# had to change the indexing to match the interaction in the p-unc lines but generally:
-# What do I want here? I think (but check again) that here I am using the absolute mean data (could also try the same on the general df, might be just the same) while
-# in the cardinal repulsion analysis I am using the subtracted index data, therefore removing the cardinal category factor
-result_anova_repeated = pg.rm_anova(data=all_p_obli_con, dv='mean', within=['cardinal_category', 'items_presented'], subject='subID')
-display(result_anova_repeated.round(4))
-p_value = result_anova_repeated.loc[2, 'p-unc'] # indexing the second column to only have the interaction p-value
+# Perform repeated measures ANOVA
+# performed directly on the df because same aggrevation within the function as if I would calculate the means first
+
+anova_results_repeated = pg.rm_anova(data=df, dv='acc_trial_concrete_cued', within=['probe_ori_cat', 'items_presented'], subject='subID')
+display(anova_results_repeated.round(4))
+p_value = anova_results_repeated.loc[2, 'p-unc'] # indexing the second column to only have the interaction p-value
 alpha = 0.05
 if p_value < alpha:
     print("The ANOVA indicates a significant interaction in the oblique effect depending on the laod condition.")
 else:
     print("The ANOVA does not indicate a significant interaction in the oblique effect depending on the laod condition.")
-
-# %%
-# based on the notes above, would the same analysis on the whole df have the same results? or only slight differences because the means would be calculated
-# directly and not like above on already meaned data? - if I didnt miss anything - yes this is exactly the same!
-
-try_again = pg.rm_anova(data=df, dv='acc_trial_concrete_cued', within=['cardinal_category', 'items_presented'], subject='subID')
-display(try_again.round(4))
-p_value = try_again.loc[2, 'p-unc'] # indexing the second column to only have the interaction p-value
-alpha = 0.05
-if p_value < alpha:
-    print("The ANOVA indicates a significant interaction in the oblique effect depending on the laod condition.")
-else:
-    print("The ANOVA does not indicate a significant interaction in the oblique effect depending on the laod condition.")
-
 
 # %%   
 # Box plot for all conditions for all participants
 plt.figure(figsize=(12, 8))
-sns.boxplot(x='cardinal_category', y='mean', hue='items_presented', data=all_p_obli_con, width=0.4, palette='dark:lightgray')
-plt.title('Combined Boxplot for All Participants')
+# sns.boxplot(x='items_presented', y='mean', hue='probe_ori_cat', data=all_p_obli_con, width=0.4, palette='crest')
+palette = sns.color_palette("hls", n_colors=all_p_obli_con['probe_ori_cat'].nunique())
+sns.boxplot(
+    x='items_presented',
+    y='percentage',
+    hue='probe_ori_cat',
+    width=0.4,
+    data=all_p_obli_con,
+    palette=palette,
+    showcaps=True,
+    showfliers=False,
+    whiskerprops={'linewidth':1.5},
+    boxprops=dict(alpha=0.7) 
+)
+sns.stripplot(
+    x='items_presented',
+    y='percentage',
+    hue='probe_ori_cat',
+    data=all_p_obli_con,
+    palette=palette,
+    edgecolor='black',
+    linewidth=1,
+    jitter=True,
+    alpha=0.7,
+    dodge=False,
+    legend=False
+)
+
+plt.legend(title='Probe Orientation Category')
+sns.despine()
+plt.title('Accuracy in Cardinal and Oblique Probe Items by Load Condition', fontdict={'size':16})
+plt.xlabel('Load Condition')
+plt.ylabel('Accuracy (%)')
+plt.yticks()
 plt.savefig(os.path.join(figures_save_dir, 'combined_boxplot_all_participants.png'))
 plt.show()
 
 # %% 
-#  Subtrating Accuracy of Cardinal Positions from Oblique Positions
+#  Subtrating Accuracy of Cardinal Positions from Oblique Positions 
+# this is not different from the above anova, the only thing I could use this for would be to plot the interaction
+# directly rather than plot the 3x2 plot but I dont think this would be any more straight forward 
 
 # Subtracting differences in accuracy depending on cardinal vs oblique position
 # Cardinal - Oblique Accuracy for every Load condition
 
-obli_data_con1 = df.loc[df['items_presented']==1].groupby(['subID', 'items_presented', 'cardinal_category'])[('acc_trial_concrete_cued')].mean().reset_index()
-obli_data_con2 = df.loc[df['items_presented']==2].groupby(['subID', 'items_presented', 'cardinal_category'])[('acc_trial_concrete_cued')].mean().reset_index()
-obli_data_con3 = df.loc[df['items_presented']==3].groupby(['subID', 'items_presented', 'cardinal_category'])[('acc_trial_concrete_cued')].mean().reset_index()
+obli_data_con1 = df.loc[df['items_presented']==1].groupby(['subID', 'items_presented', 'probe_ori_cat'])[('acc_trial_concrete_cued')].mean().reset_index()
+obli_data_con2 = df.loc[df['items_presented']==2].groupby(['subID', 'items_presented', 'probe_ori_cat'])[('acc_trial_concrete_cued')].mean().reset_index()
+obli_data_con3 = df.loc[df['items_presented']==3].groupby(['subID', 'items_presented', 'probe_ori_cat'])[('acc_trial_concrete_cued')].mean().reset_index()
 
-obli_data_con1_piv = obli_data_con1.pivot(index=['subID', 'items_presented'], columns='cardinal_category', values='acc_trial_concrete_cued')
-obli_data_con2_piv = obli_data_con2.pivot(index=['subID', 'items_presented'], columns='cardinal_category', values='acc_trial_concrete_cued')
-obli_data_con3_piv = obli_data_con3.pivot(index=['subID', 'items_presented'], columns='cardinal_category', values='acc_trial_concrete_cued')
+obli_data_con1_piv = obli_data_con1.pivot(index=['subID', 'items_presented'], columns='probe_ori_cat', values='acc_trial_concrete_cued')
+obli_data_con2_piv = obli_data_con2.pivot(index=['subID', 'items_presented'], columns='probe_ori_cat', values='acc_trial_concrete_cued')
+obli_data_con3_piv = obli_data_con3.pivot(index=['subID', 'items_presented'], columns='probe_ori_cat', values='acc_trial_concrete_cued')
 
 
 obli_data_con1_piv['Difference'] = obli_data_con1_piv['cardinal'].sub(obli_data_con1_piv['oblique'])
@@ -183,7 +228,7 @@ all_tables_subs = pd.concat([obli_data_con1_piv, obli_data_con2_piv, obli_data_c
 display(all_tables_subs)
 
 plt.figure(figsize=(10,6))
-sns.stripplot(data=all_tables_subs, x='items_presented', y='Difference', jitter=0.1) #(x='cardinal_category', y='acc_trial_concrete_cued', data=final_grouped_data_obli)
+sns.stripplot(data=all_tables_subs, x='items_presented', y='Difference', jitter=0.1) #(x='probe_ori_cat', y='acc_trial_concrete_cued', data=final_grouped_data_obli)
 sns.pointplot(data=all_tables_subs, x='items_presented', y='Difference')
 plt.title('Difference in Accuracy between Objects shown in Cardinal vs Oblique Positions per Load Condition')
 plt.xlabel('Load Condition')
@@ -192,8 +237,7 @@ plt.savefig(os.path.join(figures_save_dir, 'difference_accuracy_cardinal_oblique
 plt.show()
 
 # %%
-# this ANOVA compared to the one above running on "all_p_obli_con" only has one value per participant. What are 
-# the implications of this? Is the data more correct since it is only one value per participant? 
+# Anova on difference scores, same as doing it on the full df
 
 result_anova_repeated = pg.rm_anova(data=all_tables_subs, dv='Difference', within=['items_presented'], subject='subID')
 
@@ -212,7 +256,7 @@ spacing = np.arange(11.25, 360, 22.5)
 spacing_rad = np.radians(spacing)
 
 # change the above line to make it so that positive is going anticlockwise. Apparently theta is always going anticlockwise
-
+colors = sns.hls_palette(4)
 # making it a full circle
 spacing_circ = np.append(spacing_rad, spacing_rad[0])
 
@@ -245,18 +289,18 @@ oriacc2_circ = np.append(oriacc2, oriacc2[0])
 oriacc3_circ = np.append(oriacc3, oriacc3[0])
 
 # Plot the data for the general mbp
-ax.plot(-spacing_circ, acc_per_ori_circ, 'ko--')
+ax.plot(-spacing_circ, acc_per_ori_circ, color=colors[3], linewidth=2)
 
 unbiased_assumption = np.full(17, 0.5)
 
 # Plot the data for the three conditions individually
 # at the moment using -spacing_rad to make the data go in the correct (anticlockwise direction)
 # ax.plot(-spacing_circ, unbiased_assumption, color='tab:pink', linestyle='dashed')
-ax.plot(-spacing_circ, oriacc1_circ, 'bo-')
-ax.plot(-spacing_circ, oriacc2_circ, 'go-')
-ax.plot(-spacing_circ, oriacc3_circ, 'ro-')
+ax.plot(-spacing_circ, oriacc1_circ, color=colors[0], linestyle='dashed', marker='o')
+ax.plot(-spacing_circ, oriacc2_circ, color=colors[1], linestyle='dashed', marker='o')
+ax.plot(-spacing_circ, oriacc3_circ, color=colors[2], linestyle='dashed', marker='o')
 
-
+plt.legend()
 plt.title('Oblique Effect on Polar Plot by Load Condition')
 plt.savefig(os.path.join(figures_save_dir, 'polar_plot_oblique_effect.png'))
 plt.show()
@@ -315,13 +359,13 @@ plt.show()
 def calculate_differences(df, chosen_column, condition=None):
     # Step 1: Group DataFrames according to the condition
     if condition == 1:
-        df_grouped = df[df['items_presented'] == 1].groupby(['subID', 'object_cued_rot', 'cardinal_category']).agg({chosen_column: 'mean'}).reset_index()
+        df_grouped = df[df['items_presented'] == 1].groupby(['subID', 'object_cued_rot', 'probe_ori_cat']).agg({chosen_column: 'mean'}).reset_index()
     elif condition == 2:
-        df_grouped = df[df['items_presented'] == 2].groupby(['subID', 'object_cued_rot', 'cardinal_category']).agg({chosen_column: 'mean'}).reset_index()
+        df_grouped = df[df['items_presented'] == 2].groupby(['subID', 'object_cued_rot', 'probe_ori_cat']).agg({chosen_column: 'mean'}).reset_index()
     elif condition == 3:
-        df_grouped = df[df['items_presented'] == 3].groupby(['subID', 'object_cued_rot', 'cardinal_category']).agg({chosen_column: 'mean'}).reset_index()
+        df_grouped = df[df['items_presented'] == 3].groupby(['subID', 'object_cued_rot', 'probe_ori_cat']).agg({chosen_column: 'mean'}).reset_index()
     else:
-        df_grouped = df.groupby(['subID', 'object_cued_rot', 'cardinal_category']).agg({chosen_column: 'mean'}).reset_index()
+        df_grouped = df.groupby(['subID', 'object_cued_rot', 'probe_ori_cat']).agg({chosen_column: 'mean'}).reset_index()
 
     # Step 2: Initialize a list to store results
     results = []

@@ -1,0 +1,318 @@
+# %%
+# Importsconda
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.stats import zscore
+from mne.stats import permutation_cluster_1samp_test, permutation_cluster_test
+from scipy import stats
+from scipy.stats import t, ttest_rel, zscore, f
+
+# %% 
+# read evokeds and metadata
+df = pd.read_csv('../data/csv_files/df.csv')
+evoked_df_reaction_time_shifted = pd.read_csv('../data/csv_files/evoked_df_reaction_time_shifted.csv')
+
+
+# %%
+# do CPT on difference scores!
+# %%
+# Data Preparation 
+
+evoked_df_rt = evoked_df_reaction_time_shifted.copy()
+evoked_df_rt['time'] = evoked_df_rt['time'].round(3)
+
+evoked_df_rt['pupils'] = evoked_df_rt.groupby('subID')['pupils'].transform(lambda x: zscore(x, nan_policy='omit'))
+start_time, end_time = 3.0, 6.5
+evoked_df_rt= evoked_df_rt[(evoked_df_rt['time'] >= start_time) & (evoked_df_rt['time'] <= end_time)].copy()
+
+# %%
+# defining t-test statistic
+
+def paired_t(X1, X2):
+    t_vals, _ = stats.ttest_rel(X1, X2, axis=0)
+    return t_vals
+
+def independent_t(X1, X2):
+    t_vals, _ = stats.ttest_ind(X1, X2, axis=0, equal_var=False)  # Welch’s t-test
+    return t_vals
+
+
+# %%
+# 1 - Reaction time main effect (Fast vs Slow)
+# but using paired t test - should be fast
+# rewriting from Mask vs no Mask
+
+##########
+
+cluster_results = {}
+
+# evoked_df_rt_only_no_mask = evoked_df_rt[evoked_df_rt['mask']==1]
+
+# Subset the data
+df_fast = evoked_df_rt[evoked_df_rt['reaction_time'] == 'fast']
+df_slow = evoked_df_rt[evoked_df_rt['reaction_time'] == 'slow']
+
+
+# Pivot to get subjects x timepoints
+X1_df = df_fast.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+X2_df = df_slow.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+
+# Align only on time because between subjects test
+common_times = X1_df.columns.intersection(X2_df.columns)
+times = common_times.to_numpy()
+
+X1 = X1_df[common_times].values
+X2 = X2_df[common_times].values
+
+T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
+    [X1, X2],
+    n_permutations=5000,
+    threshold=2.0,        # use a lower t threshold
+    tail=0,               # two-tailed (direction of effect could go either way)
+    stat_fun=paired_t,
+    out_type='mask',
+    verbose=True
+)
+
+alpha = 0.05
+cluster_summaries = []
+
+for i, c in enumerate(clusters):
+    p_val = cluster_p_values[i]
+    if p_val < alpha:
+        time_inds = c[0]
+        t_vals = T_obs[time_inds]
+        mean_t = t_vals.mean()
+        direction = "fast > slow" if mean_t > 0 else "slow > fast"
+
+        cluster_summaries.append({
+            "cluster_id": i + 1,
+            "start_time": times[time_inds][0],
+            "end_time": times[time_inds][-1],
+            "p_value": p_val,
+            "mean_t": mean_t,
+            "direction": direction
+        })
+
+# Turn into DataFrame
+cluster_df_fast_vs_slow = pd.DataFrame(cluster_summaries)
+
+# Save to CSV
+# cluster_df_fast_vs_slow.to_csv("cluster_results.csv", index=False)
+
+display(cluster_df_fast_vs_slow)
+
+# Plot
+plt.figure(figsize=(10, 5))
+plt.plot(times, T_obs, label='T-values')
+for i_c, c in enumerate(clusters):
+    if cluster_p_values[i_c] < 0.05:
+        plt.axvspan(times[c][0], times[c][-1], color='red', alpha=0.3)
+plt.axhline(2, color='black', linestyle='--')
+plt.title(f'Cluster Permutation Test (fast vs slow)')
+plt.xlabel('Time (s)')
+plt.ylabel('T-statistic')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+times = np.array(common_times)  # make sure it's ordered
+X1_mean = X1.mean(axis=0)
+X2_mean = X2.mean(axis=0)
+
+
+plt.plot(times, X1_mean, label='fast')
+plt.plot(times, X2_mean, label='slow')
+
+
+# Highlight significant clusters
+for i_c, cluster in enumerate(clusters):
+    if cluster_p_values[i_c] < 0.05:
+        time_mask = cluster
+        plt.axvspan(times[time_mask][0], times[time_mask][-1], color='red', alpha=0.3)
+
+plt.legend()
+plt.title(f'Cluster Permutation Test Reaction Time Conditions')
+plt.xlabel('Time (s)')
+plt.ylabel('Pupil size')
+plt.show()
+
+#%%
+# Test the interaction between Load and reaction_time with a contrast based interaction test
+
+alpha = 0.05
+n_perm = 5000
+
+# Build per-load (subjects × time) for each reaction_time
+def mat_for(rt, load):
+    sub = evoked_df_rt[(evoked_df_rt['reaction_time'] == rt) & (evoked_df_rt['Load'] == load)]
+    return sub.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+
+C1, C2, C3 = mat_for('fast',1), mat_for('fast',2), mat_for('fast',3)
+I1, I2, I3 = mat_for('slow',  1), mat_for('slow',  2), mat_for('slow',  3)
+
+# Intersect subjects & times across all 6 to keep within-subjects
+common_subs = C1.index
+common_times = C1.columns
+for M in [C2, C3, I1, I2, I3]:
+    common_subs = common_subs.intersection(M.index)
+    common_times = common_times.intersection(M.columns)
+times = np.array(sorted(common_times))
+
+C1 = C1.loc[common_subs, times].to_numpy()
+C2 = C2.loc[common_subs, times].to_numpy()
+C3 = C3.loc[common_subs, times].to_numpy()
+I1 = I1.loc[common_subs, times].to_numpy()
+I2 = I2.loc[common_subs, times].to_numpy()
+I3 = I3.loc[common_subs, times].to_numpy()
+
+# Drop timepoints with any NaN across all 6
+col_ok = (~np.isnan(C1) & ~np.isnan(C2) & ~np.isnan(C3) &
+          ~np.isnan(I1) & ~np.isnan(I2) & ~np.isnan(I3)).all(axis=0)
+
+times = times[col_ok]
+C1, C2, C3 = C1[:, col_ok], C2[:, col_ok], C3[:, col_ok]
+I1, I2, I3 = I1[:, col_ok], I2[:, col_ok], I3[:, col_ok]
+
+D1 = C1 - I1  # fast–slow at load 1
+D2 = C2 - I2
+D3 = C3 - I3
+
+all_rows = []
+# 1-sample cluster permutation test vs 0 for each load condition
+for load, D in enumerate([D1, D2, D3], start=1):
+    T_obs, clusters, pvals, _ = permutation_cluster_1samp_test(
+        D, n_permutations=n_perm, threshold=None, tail=0, out_type='mask'
+    )
+    # Summarize significant clusters for this load
+    for i_c, c in enumerate(clusters):
+        p = float(pvals[i_c])
+        if p < alpha:
+            idx = np.flatnonzero(c) if isinstance(c, np.ndarray) else np.arange(len(times))[c]
+            if idx.size == 0:
+                continue
+            all_rows.append({
+                "effect": "fast − slow (per load)",
+                "load": int(load),
+                "cluster_id": int(i_c + 1),
+                "start_time": float(times[idx[0]]),
+                "end_time": float(times[idx[-1]]),
+                "duration_samps": int(idx.size),
+                "p_value": p,
+                "mean_t": float(np.mean(T_obs[idx])),
+                "n_subjects": int(D.shape[0]),
+            })
+
+
+    # Per-load visualization (T curve and significant clusters)
+    plt.figure(figsize=(10,5))
+    plt.plot(times, T_obs, label=f'Load {load}: t( fast − slow )')
+    plt.axhline(0, color='k', linestyle=':', linewidth=0.8)
+    for i_c, c in enumerate(clusters):
+        if pvals[i_c] < alpha:
+            idx = np.flatnonzero(c) if isinstance(c, np.ndarray) else np.arange(len(times))[c]
+            plt.axvspan(float(times[idx[0]]), float(times[idx[-1]]), color='red', alpha=0.3)
+    plt.xlabel("Time (s)")
+    plt.ylabel("t")
+    plt.title(f"fast − slow (Load {load}) — cluster summary")
+    plt.tight_layout()
+    plt.show()
+
+summary = pd.DataFrame(all_rows).reset_index(drop=True)
+display(summary if not summary.empty else pd.DataFrame({"note": ["No significant clusters."]}))
+summary.to_csv("clusters_fast_minus_slow_per_load.csv", index=False)
+
+
+
+# %%
+
+# Anova on interaction between load and reaction time on pupils, this and the above are not on the median split!!! 
+# ah wait no they are, split happened before during evoked creation
+
+alpha   = 0.05
+n_perm  = 5000
+
+# --- custom stat function: repeated-measures one-way ANOVA F across 3 levels ---
+def rm_oneway_F(*conds):
+    """
+    conds: sequence of arrays [X1, X2, X3], each (n_subj, n_times)
+    Returns: F-values per timepoint, shape (n_times,)
+    """
+    X = np.stack(conds, axis=1)  # (n_subj, k, n_times), k = 3
+    n, k, T = X.shape
+
+    grand = X.mean(axis=(0,1))        # (T,)
+    mean_k = X.mean(axis=0)           # (k, T)
+    mean_s = X.mean(axis=1)           # (n, T)
+
+    # SS terms for RM-ANOVA (one factor)
+    ss_factor   = n * np.sum((mean_k - grand)**2, axis=0)             # (T,)
+    ss_total    = np.sum((X - grand)**2, axis=(0,1))                  # (T,)
+    ss_subject  = k * np.sum((mean_s - grand)**2, axis=0)             # (T,)
+    ss_error    = ss_total - ss_factor - ss_subject                   # (T,)
+
+    df_factor = k - 1
+    df_error  = (k - 1) * (n - 1)
+
+    ms_factor = ss_factor / df_factor
+    ms_error  = ss_error  / df_error
+
+    F = ms_factor / ms_error
+    # Numerical guard (in case ms_error hits ~0 at rare columns)
+    F = np.where(np.isfinite(F), F, 0.0)
+    return F
+
+# --- run cluster permutation across the 3 levels (D1,D2,D3) ---
+# We use TFCE-style clustering so we don't need an F cutoff.
+# If you prefer a hard threshold, see the note below.
+X_list = [D1, D2, D3]
+
+T_obs, clusters, pvals, _ = permutation_cluster_test(
+    X_list,
+    stat_fun=rm_oneway_F,
+    n_permutations=n_perm,
+    tail=1,                         # F is one-sided (larger = stronger effect)
+    threshold=dict(start=0, step=0.2),  # TFCE (good default for F>0)
+    out_type='mask',
+    verbose=True,
+)
+
+# --- summarize significant clusters ---
+rows = []
+for i_c, c in enumerate(clusters):
+    p = float(pvals[i_c])
+    if p < alpha:
+        idx = np.flatnonzero(c) if isinstance(c, np.ndarray) else np.arange(len(times))[c]
+        if idx.size == 0:
+            continue
+        rows.append({
+            "effect": "Interaction: Load (1,2,3) on fast−slow difference",
+            "cluster_id": int(i_c + 1),
+            "start_time": float(times[idx[0]]),
+            "end_time": float(times[idx[-1]]),
+            "duration_samps": int(idx.size),
+            "p_value": p,
+            "mean_F": float(np.mean(T_obs[idx])),
+            "n_subjects": int(D1.shape[0]),
+        })
+
+summary = pd.DataFrame(rows).reset_index(drop=True)
+display(summary if not summary.empty else pd.DataFrame({"note": ["No significant clusters."]}))
+summary.to_csv("clusters_interaction_Load_on_fast_minus_slow_ANOVA.csv", index=False)
+
+# --- plot the F curve with significant clusters shaded ---
+plt.figure(figsize=(10,5))
+plt.plot(times, T_obs, label='F: Load effect on (fast−slow)')
+for i_c, c in enumerate(clusters):
+    if pvals[i_c] < alpha:
+        idx = np.flatnonzero(c) if isinstance(c, np.ndarray) else np.arange(len(times))[c]
+        plt.axvspan(float(times[idx[0]]), float(times[idx[-1]]), alpha=0.3)
+plt.xlabel("Time (s)")
+plt.ylabel("F")
+plt.title("Cluster permutation ANOVA: Load × RT interaction (no linear assumption)")
+plt.axhline(0, color='k', linestyle=':', linewidth=0.8)
+plt.tight_layout()
+plt.show()
+# %%

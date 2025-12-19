@@ -82,19 +82,12 @@ def determine_stimuli_set(row):
 df['stimuli_set'] = df.apply(determine_stimuli_set, axis=1)
 
 # %% 
-# Adding column for orientation bin
+# Adding column for orientation category of probe item
 
-# Note: am I using the orientation bins?
-# Define the orientation bins and labels
-orientation_bins = {
-    11.25: 'Ori Bin A', 33.75: 'Ori Bin B', 56.25: 'Ori Bin C', 78.75: 'Ori Bin D',
-    101.25: 'Ori Bin A', 123.75: 'Ori Bin B', 146.25: 'Ori Bin C', 168.75: 'Ori Bin D',
-    191.25: 'Ori Bin A', 213.75: 'Ori Bin B', 236.25: 'Ori Bin C', 258.75: 'Ori Bin D',
-    281.25: 'Ori Bin A', 303.75: 'Ori Bin B', 326.25: 'Ori Bin C', 348.75: 'Ori Bin D'
-}
+orientation_subset_cardinal = [348.75, 11.25, 78.75, 101.25, 168.75, 191.25, 258.75, 281.25]
 
 # Create a new column with bin labels
-df['Orientation_Bin'] = df['object_cued_rot'].map(orientation_bins)
+df['probe_ori_cat'] = df['object_cued_rot'].apply(lambda x: np.nan if pd.isna(x) else 'cardinal' if x in orientation_subset_cardinal else 'oblique')
 
 
 # %%
@@ -155,3 +148,5 @@ os.makedirs(csv_path, exist_ok=True)
 
 # Saving dataframe
 df.to_csv('../data/csv_files/df.csv', index=False)
+
+# %%

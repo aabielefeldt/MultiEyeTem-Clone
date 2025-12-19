@@ -7,7 +7,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import itertools
 import numpy as np
-from pupil_utils import annotate_velocity_blinks, remove_missing_data, plot_pupil_trace_and_velocity_mad, interpolate_blinks, merge_and_rename_annotations, set_zero_to_nan, get_annotations_per_epoch_custom
+from pupil_utils import annotate_velocity_blinks, remove_missing_data, plot_pupil_trace_and_velocity_mad, interpolate_blinks, merge_and_rename_annotations, set_zero_to_nan, get_annotations_per_epoch_custom, apply_baseline_nan_aware
 import os
 from itertools import product
 import pingouin as pg
@@ -90,7 +90,7 @@ anova_results = pg.rm_anova(
     dv='epoch_mean',         # dependent variable
     within='items_presented', # within-subjects factor
     subject='subID',          # subject identifier
-    data=mean_blinks_per_epoch_load_excluded,
+    data=mean_blinks_per_epoch_load,
     detailed=True             # for full output
 )
 
@@ -182,7 +182,13 @@ for i in good_partis:
     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
     epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
     pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
-    pupil_epoch_df = pupil_epoch.to_data_frame()
+    
+    # applying baseline per eye and nan aware while dropping any epochs where the baseline period was nan in both eyes
+    pupil_epoch_bl = apply_baseline_nan_aware(pupil_epoch, bmin=-0.1, bmax=0.0)
+    
+    pupil_epoch_df = pupil_epoch_bl.to_data_frame()
+
+
 
     # checking for all timepoints where there is nan in both pupil channels
     n_nan_points = pupil_epoch_df[['pupil_left', 'pupil_right']].isna().all(axis=1).sum()
@@ -225,6 +231,7 @@ outliers_iqr_nan_df = pd.concat(outliers_iqr_nan, ignore_index=True)
 display(outliers_iqr_nan_df)
 
 # --> Z16JQR, AGYVK9, T4LJ1R, TEPWRW are outliers in both pupil channels
+# --> TEPWRW not anymore since all nans seem to have been dropped in the baseline application
 
 #%%
 # Creating dataframe with all relevant annotations within epochs for blink statistics

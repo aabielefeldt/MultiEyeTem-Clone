@@ -1,0 +1,324 @@
+# %% 
+import numpy as np
+import mne
+from mne import Annotations
+from scipy.ndimage import gaussian_filter1d
+import scipy as sp
+import matplotlib.pyplot as plt
+from mne.annotations import Annotations, _annotations_starts_stops
+from mne._fiff.constants import FIFF
+from mne.utils import logger, verbose, _check_preload, _validate_type, warn # pylint: disable=no-name-in-module
+from mne.io import BaseRaw # pylint: disable=no-name-in-module
+from mne.io.eyelink.eyelink import RawEyelink
+from scipy.stats import mstats
+from scipy.interpolate import interp1d
+from mne.io.eyelink._utils import _find_overlaps
+
+#%%
+# pasting my blink function in here and slowly trying to adapt it to a general MNE function with different methods
+
+
+# %%
+# function from git currently proposed as outline
+
+@verbose
+def find_blinks(
+    inst,
+    *,
+    chs_src=None,
+    method="by_dropout",
+    dropout_value=None,
+    description="BAD_blink",
+    chs_dest=None,
+    verbose=None,
+    find_overlaps=False,
+    overlap_threshold=0.05
+):
+    """Find blinks in eye-tracking data and create corresponding annotations.
+
+    Parameters
+    ----------
+    inst : instance of Raw
+        The data instance to use for finding blinks. Must contain pupil channels.
+    chs_src : list | None
+        A list of channel names that will be used to find blinks. None (default) will
+        result in selecting all channels of type ``pupil``. See Notes for more
+        information.
+    method : str
+        Which method to use to find blinks in ``inst``. Currently the only supported
+        method is ``'by_dropout'`` (default), which uses the value specified via
+        ``dropout_value`` to identify blinks.
+    dropout_value : float | None
+        Which value in the data denotes a dropout. In Eyelink data, this is ``0``,
+        whereas for other eye-tracking data this may be ``np.nan``, or something else.
+        Defaults to None, which sets the ``dropout_value`` to ``np.nan``.
+    description : str
+        Which description to use for the blink annotations. Defaults to ``'BAD_blink'``.
+    chs_dest : list | None
+        A list of channel names that will be associated with the blink annotations.
+        None (default) and passing an empty lists will associate each blink annotation
+        with all channels in ``inst``.
+    %(verbose)s
+
+    Returns
+    -------
+    annots : mne.Annotations
+        The annotations objects containing blink annotations.
+
+    Notes
+    -----
+    If multiple channels are used to find blinks in ``inst``, resulting overlapping
+    blink annotations are always merged over all channels. That is, if a left and a
+    right pupil channel would be used for blink detection, and each on their own would
+    produce overlapping blink annotations with onsets ``[1.5, 1.6]`` and durations
+    ``[0.2, 0.3]``, respectively, then passing both channels into this function will
+    result in a single blink annotation with onset ``1.5`` and duration ``0.4``.
+    Note that this corresponds to the minimum onset and the maximum offset between
+    the two annotations.
+    """
+
+
+    # find only pupil channels as source channels
+    pupil_channels = []
+    for ci, ch_info in enumerate(raw.info["chs"]):
+        if ch_info["coil_type"] == FIFF.FIFFV_COIL_EYETRACK_PUPIL:
+            pupil_channels.append(raw.ch_names[ci])
+
+    annots_right = [annot for annot in raw.annotations if annot["ch_names"] in match]
+
+
+    if find_overlaps:
+        logger.info(
+            f"Merging overlapping L/R blinks using overlap_threshold={overlap_threshold}s"
+        )
+        # find overlaps requires weird format.. trying to write a version below that just uses the annotations directly
+        df = _find_overlaps(df, max_time=overlap_threshold)
+
+        # _find_overlaps may return None for empty input
+        if df is None or len(df) == 0:
+            # where does make annotations come from?
+            if make_annotations:
+                return Annotations(onset=[], duration=[], description=[], orig_time=orig_time)
+            return df
+
+        df = df.sort_values("time").reset_index(drop=True)
+
+
+    logger.info("Found blinks")
+    return
+# %%
+# my current function
+
+def annotate_velocity_blinks(
+    raw,
+    channel_names=('pupil_left', 'pupil_right'),
+    margin_before=0.01,
+    margin_after=0.01,
+    max_duration=0.5,
+    description='BAD_velo_blink',
+    sigma=5,
+    vt_start_multiplyer = 40,
+    vt_end_multiplyer = 40,
+    low_v_thresh_multiplyer = 1,
+):
+    """
+    Annotate blinks based on pupil velocity profile:
+    fast constriction -> fast dilation -> low velocity.
+
+    Parameters
+    ----------
+    raw : mne.io.Raw
+        Raw object with pupil data.
+    channel_names : tuple of str
+        Names of pupil channels (e.g., ('pupil_left', 'pupil_right')).
+    margin_before : float
+        Time (in seconds) to extend before blink onset.
+    margin_after : float
+        Time (in seconds) to extend after blink offset.
+    max_duration : float
+        Maximum allowable blink duration (in seconds).
+    description : str
+        Annotation label.
+    sigma : float
+        Sigma for Gaussian smoothing.
+    vt_start_multiplyer : float
+        Multiplier for median absolute deviation (MAD) to set blink onset threshold.
+    vt_end_multiplyer : float
+        Multiplier for median absolute deviation (MAD) to set blink dilation threshold.
+    low_v_thresh_multiplyer : float
+        Multiplier for median velocity (MED) to define stabilization (low velocity) threshold.
+
+
+    Returns
+    -------
+    raw : mne.io.Raw
+        Modified Raw object with blink annotations.
+    """
+    annotations = raw.annotations
+
+
+    sfreq = raw.info['sfreq']
+    max_search_duration = max_duration
+
+    onsets, durations, descriptions, ch_names_list = [], [], [], []
+
+    for ch_name in channel_names:
+        if ch_name not in raw.ch_names:
+            raise ValueError(f"Channel '{ch_name}' not found in raw.")
+
+        data = raw.get_data(picks=ch_name)[0]
+
+        if sigma>0:
+            smoothed = gaussian_filter1d(data, sigma=sigma)
+            velocity = np.gradient(smoothed) * sfreq
+        else:
+            velocity = np.gradient(data) * sfreq
+
+
+        # clipping the top 1 percent of data to not have outliers influence the threshold (winsorizing)
+        velocity_clipped = mstats.winsorize(velocity, limits=[0.01, 0.01])  # clip top and bottom 1%
+        abs_velocity = np.abs(velocity_clipped.data)
+
+        # median velocity
+        med = np.nanmedian(abs_velocity)
+        # median absolute deviation
+        mad = np.nanmedian(np.abs(abs_velocity - med))
+
+        vt_start = med + (vt_start_multiplyer * mad)
+        vt_end = med + (vt_end_multiplyer * mad)
+        low_v_thresh = med * low_v_thresh_multiplyer
+
+        # Optionally print thresholds per participant and channel
+        print(f"{ch_name}: med={med:.2f}, mad={mad:.2f}, vt_start={vt_start:.2f}, vt_end={vt_end:.2f}, low_v_thresh={low_v_thresh:.2f}")
+
+        i = 0
+        while i < len(velocity) - 1:
+            imid = None
+            
+            # Blink onset: rapid constriction
+            if velocity[i] < -vt_start:
+                istart = i
+                
+                # Limit search range
+                max_search = int(sfreq * max_search_duration)
+                
+                # Dilation: search after constriction
+                dilation_zone = velocity[istart:istart + max_search]
+                dilation_indices = np.where(dilation_zone > vt_end)[0]
+                if dilation_indices.size > 0:
+                    imid = dilation_indices[0] + istart
+
+                    # Look for stabilization
+                    post_dilate_zone = velocity[imid:imid + max_search]
+                    low_v_indices = np.where(np.abs(post_dilate_zone) < low_v_thresh)[0]
+                    if low_v_indices.size > 0:
+                        iend = low_v_indices[0] + imid
+
+                        # Validate and annotate
+                        duration_sec = (iend - istart) / sfreq
+                        if duration_sec <= max_duration:
+                            onset = (istart / sfreq) - margin_before
+                            onset = max(0, onset)
+                            total_duration = duration_sec + margin_before + margin_after
+
+                            onsets.append(onset)
+                            durations.append(total_duration)
+                            descriptions.append(description)
+                            ch_names_list.append([ch_name])
+                            i = iend - 1
+                            continue  # go to next blink candidate
+                # Adaptive skip logic
+            if imid is not None:
+                i = imid + 1
+            else:
+                i += int(sfreq * 0.01)  # skip 10 ms
+
+    if onsets:
+        new_annotations = Annotations(
+            onset=onsets,
+            duration=durations,
+            description=descriptions,
+            orig_time=raw.annotations.orig_time,
+            ch_names=ch_names_list
+        )
+        raw.set_annotations(annotations + new_annotations)
+    else:
+        print("No blinks detected.")
+
+    return raw
+
+
+#%%
+
+from mne._fiff.constants import FIFF
+
+
+pupil_channels = []
+for ci, ch_info in enumerate(raw.info["chs"]):
+    if ch_info["coil_type"] == FIFF.FIFFV_COIL_EYETRACK_PUPIL:
+        pupil_channels.append(raw.ch_names[ci])
+
+original = raw.annotations
+
+# blink_annots = raw.annotations[np.isin(raw.annotations.description, ['velo_blink_interp', 'blink', 'BAD_velo_blink', 'BAD_blink', 'merged_blink_interp'])]
+match=['velo_blink_interp', 'blink', 'BAD_velo_blink', 'BAD_blink', 'merged_blink_interp']
+
+all_new_annots = []
+rename_indices = []
+
+for ch in pupil_channels:
+    # Filter annotations by channel name and matching descriptions
+    relevant_idxs = [
+        i for i, ann in enumerate(original)
+        if ann["description"] in match and (ann["ch_names"] is not None and ch in pupil_channels)
+    ]
+    print(relevant_idxs)
+
+# concrete overlaps
+onset_overlaps = trial[trial['onsetright'] == trial['onset']]
+
+# raw._data[ci, blink_indices] = interpolated_samples
+# %%
+
+
+annos_df = raw.annotations.to_data_frame()
+annos_df = annos_df[annos_df['description'].isin(match)]
+annos_df_right = annos_df[annos_df.ch_names == ('pupil_right',)].reset_index(drop=True)
+annos_df_left = annos_df[annos_df.ch_names == ('pupil_left',)].reset_index(drop=True)
+
+
+annos_rl_combined = annos_df_right.join(annos_df_left, how='left', lsuffix='right')
+
+
+
+threshold = pd.Timedelta(seconds=0.05)
+
+
+# should probably sort by type first and then sort by onset, currently a BAD_blink in the right eye could be merged with a velo_blink in the left eye
+
+
+annos_rl_combined["within_threshold"] = (
+    annos_rl_combined["onsetright"] - annos_rl_combined["onset"]).abs() <= threshold
+
+display(annos_rl_combined)
+# %%
+
+sorted_idx_lr = {}
+
+for ch in pupil_channels:
+        # Filter annotations by channel name and matching descriptions
+        relevant_idxs = [
+            i for i, ann in enumerate(original)
+            if ann["description"] in match and (ann["ch_names"] is not None and ch in ann["ch_names"])
+        ]
+        if not relevant_idxs:
+            continue
+
+        # Sort by onset
+        sorted_idxs = sorted(relevant_idxs, key=lambda i: original.onset[i])
+        sorted_idx_lr.update({ch : sorted_idxs})
+
+print(sorted_idx_lr)
+# %%
+
+

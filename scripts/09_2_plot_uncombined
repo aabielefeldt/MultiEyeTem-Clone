@@ -41,3 +41,32 @@ plt.suptitle('Pupil dilation uncombined channels', y=1.1, fontsize = 20)
 plt.savefig(figure_filepath, bbox_inches = 'tight')
 
 plt.show
+
+# %%
+
+
+fig, ax = plt.subplots(figsize=(10,8))
+
+good_partis = evoked_df_uncombined['subID'].unique()
+
+for i in good_partis:
+
+    sns.lineplot(data=evoked_df_uncombined[evoked_df_uncombined['subID']==i], x='time', y='pupil_right', errorbar='se', color='red')
+    sns.lineplot(data=evoked_df_uncombined[evoked_df_uncombined['subID']==i], x='time', y='pupil_left', errorbar='se', color='green')
+
+ax.axvline(0, color='black', alpha=0.33)
+ax.axvline(1, color='black', alpha=0.66)
+ax.axvline(2, color='black')
+ax.axvline(3, color='darkblue')
+ax.axvline(6.5, color='blue')
+
+label_y = 1.01
+# Add labels above the vertical lines
+ax.text(0, ax.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+ax.text(1, ax.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+ax.text(2, ax.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+
+plt.show
+# %%

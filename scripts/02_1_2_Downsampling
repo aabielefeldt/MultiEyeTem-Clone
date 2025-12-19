@@ -88,12 +88,10 @@ for i in wrong_partis:
         margin_after=0.01,
         max_duration=0.5,
         description='BAD_velo_blink',
-        sfreq=None,
         sigma=5,
         vt_start_multiplyer = 40,
         vt_end_multiplyer = 40,
         low_v_thresh_multiplyer = 1,
-        max_search_duration=0.8
         )
 
 

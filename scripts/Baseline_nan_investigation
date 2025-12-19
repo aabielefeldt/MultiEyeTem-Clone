@@ -1,0 +1,650 @@
+# %%
+# Importsconda
+import mne
+import pandas as pd
+import numpy as np
+# %% Load Metadata
+
+df = pd.read_csv('../data/csv_files/df.csv')
+good_partis = df['subID'].unique()
+
+
+# %%
+#functions
+
+import numpy as np
+from mne.utils import logger, verbose
+nan_means_custom_function = []
+@verbose
+def rescale_nanaware(data, times, baseline, mode="mean", copy=True, picks=None, verbose=None):
+    """Rescale (baseline correct) data, ignoring NaNs in baseline window.
+
+    Drop-in replacement for mne.baseline.rescale, but uses np.nanmean/std.
+    Also prints the computed baseline mean for inspection.
+    """
+    if copy:
+        data = data.copy()
+    if verbose is not False:
+        from mne.baseline import _log_rescale
+        msg = _log_rescale(baseline, mode)
+        logger.info(msg)
+
+    if baseline is None or data.shape[-1] == 0:
+        return data
+
+    bmin, bmax = baseline
+    if bmin is None:
+        imin = 0
+    else:
+        imin = np.where(times >= bmin)[0]
+        if len(imin) == 0:
+            raise ValueError(f"bmin is too large ({bmin}), it exceeds the largest time value")
+        imin = int(imin[0])
+    if bmax is None:
+        imax = len(times)
+    else:
+        imax = np.where(times <= bmax)[0]
+        if len(imax) == 0:
+            raise ValueError(f"bmax is too small ({bmax}), it is smaller than the smallest time value")
+        imax = int(imax[-1]) + 1
+    if imin >= imax:
+        raise ValueError(f"Bad rescaling slice ({imin}:{imax}) from time values {bmin}, {bmax}")
+
+    # === nan-aware mean and std ===
+
+    mean = np.nanmean(data[..., imin:imax], axis=-1, keepdims=True)
+    mean_orig = np.mean(data[..., imin:imax], axis=-1, keepdims=True)
+    # print('mean(s):', mean)
+    #mean = np.mean(data[..., imin:imax], axis=-1, keepdims=True)
+    # Debug/inspection printout
+    #print(f"Baseline correction using mean (ignoring NaNs): shape={mean.shape}, values≈{np.mean(mean)}")
+    #print('number of nans in data', np.isnan(data).sum(axis=(0, 2)))
+
+    print('number of nans when using nan mean', np.isnan(mean).sum(axis=(0, 2)))
+    print('number of nans when using nan mean', np.isnan(mean_orig).sum(axis=(0, 2)))
+
+    nan_means_custom_function.append({'subID': i, 'nan_mean': np.isnan(mean).sum(axis=(0, 2)), 'orig_mean': np.isnan(mean_orig).sum(axis=(0, 2))})
+    print(nan_means_custom_function)
+    if mode == "mean":
+        def fun(d, m):
+            d -= m
+    elif mode == "ratio":
+        def fun(d, m):
+            d /= m
+    elif mode == "logratio":
+        def fun(d, m):
+            d /= m
+            np.log10(d, out=d)
+    elif mode == "percent":
+        def fun(d, m):
+            d -= m
+            d /= m
+    elif mode == "zscore":
+        def fun(d, m):
+            d -= m
+            d /= np.nanstd(d[..., imin:imax], axis=-1, keepdims=True)
+    elif mode == "zlogratio":
+        def fun(d, m):
+            d /= m
+            np.log10(d, out=d)
+            d /= np.nanstd(d[..., imin:imax], axis=-1, keepdims=True)
+    else:
+        raise ValueError(f"Unknown mode {mode}")
+
+    if picks is None:
+        fun(data, mean)
+    else:
+        for pi in picks:
+            fun(data[..., pi, :], mean[..., pi, :])
+
+    return data
+
+
+# %%
+# appending all epochs into one list while:
+# combining both pupil channels (using nanmean)
+# applying baseline
+# seperating by condition
+# cropping according to condition
+# averaging epochs (using nanmean)
+
+# and then shifting so that delay onset is the same for all conditions
+
+
+evoked_df = pd.DataFrame()
+
+for i in good_partis:
+    
+    # reading epochs per participant
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+    epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+
+    # print(pupil_epoch.to_data_frame().isna().sum())
+    print(" NaNs in original epochs:", np.isnan(pupil_epoch.get_data()).any())
+    # combining channels
+    pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
+    roi_dict = dict(pupils=pupil_ix)
+    combine_nanmean = lambda data: np.nanmean(data, axis=1)
+    pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method=combine_nanmean)
+
+    print(" NaNs in combined epochs:", np.isnan(pupil_epochs_combined.get_data()).any())
+    # applying baseline
+    # pupil_epochs_combined_bl = pupil_epochs_combined.apply_baseline(baseline=(-0.1, 0))
+    # baseline = pupil_epochs_combined.baseline
+
+
+    baseline=(-0.1, 0)
+    pupil_epochs_combined._data = rescale_nanaware(
+        pupil_epochs_combined._data,
+        pupil_epochs_combined.times,
+        baseline=baseline,
+        mode="mean",
+        copy=False,
+        picks=pupil_epochs_combined._detrend_picks,
+    )
+
+    pupil_epochs_combined_bl = pupil_epochs_combined
+
+    print(" NaNs in baselined epochs:", np.isnan(pupil_epochs_combined_bl.get_data()).any())
+    # seperating per load condition
+    con1_epochs = pupil_epochs_combined_bl["items_presented == 1"]
+    con2_epochs = pupil_epochs_combined_bl["items_presented == 2"]
+    con3_epochs = pupil_epochs_combined_bl["items_presented == 3"]
+
+    # shortening the epochs based on condition (crop defaults to inclduing tmax)
+    con1_epochs.crop(-0.1, 7)
+    con2_epochs.crop(-0.1, 8)
+    con3_epochs.crop(-0.1, 9)
+
+    # averaging per load condition
+    # leading to error because there are some epochs that are only nan for pupils?
+    evoked_nan_mean = lambda x: np.nanmean(x, axis=0)
+    con1_ave = con1_epochs.average(method=evoked_nan_mean)
+    con2_ave = con2_epochs.average(method=evoked_nan_mean)
+    con3_ave = con3_epochs.average(method=evoked_nan_mean)
+
+    # adding individual averaged data to dataframe including load and subID
+    con1_ave_df = con1_ave.to_data_frame()
+    con1_ave_df['Load'] = 1
+    con1_ave_df['subID'] = i
+    con2_ave_df = con2_ave.to_data_frame()
+    con2_ave_df['Load'] = 2
+    con2_ave_df['subID'] = i
+    con3_ave_df = con3_ave.to_data_frame()
+    con3_ave_df['Load'] = 3
+    con3_ave_df['subID'] = i
+
+    # concatenating to evoked_df
+    evoked_df = pd.concat([evoked_df, con1_ave_df])
+    evoked_df = pd.concat([evoked_df, con2_ave_df])
+    evoked_df = pd.concat([evoked_df, con3_ave_df])
+    evoked_df['baseline_start'] = baseline[0]
+    evoked_df['baseline_end'] = baseline[1]
+
+# evoked_df = evoked_df.reset_index()
+
+# evoked_df.to_csv('../data/csv_files/evoked_df.csv', index=False)
+
+# %%
+
+# shifting the conditions so that the epochs that are epoched on pos1 are time-locked to the test onset
+evoked_df_shifted = evoked_df.copy()
+evoked_df_shifted.loc[evoked_df_shifted['Load']==1, 'time'] +=2
+evoked_df_shifted.loc[evoked_df_shifted['Load']==2, 'time'] +=1
+evoked_df_shifted.loc[evoked_df_shifted['Load']==3, 'time'] +=0
+
+
+
+# %%
+mask_partis = df[df['mask']==1]['subID'].unique().tolist()
+nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
+# Adding column for mask
+evoked_df_shifted['mask'] = evoked_df_shifted['subID'].apply(
+    lambda x: 1 if x in mask_partis else 0)
+
+
+#%%
+# saving
+#evoked_df_shifted.to_csv('../data/csv_files/evoked_df_shifted.csv', index=False)
+# %%
+# There are baseline periods that completely consist of nans, therefore in those instances even using nan-mean doesnt improve the situation
+# !!! pandas mean already ignores NaNs so no need to change to nan mean for this plotting and summary function!!
+# still need to adapt baseline function though and figure out what to do if baseline period is nan (which if not set to nan would also be zero so 
+# not really a nan problem but just a data problem)
+
+all_baseline_means = pd.DataFrame()
+
+for i in good_partis:
+    
+    # reading epochs per participant
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+    epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+
+    # combining channels
+    pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
+    roi_dict = dict(pupils=pupil_ix)
+    combine_nanmean = lambda data: np.nanmean(data, axis=1)
+    pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method=combine_nanmean)
+    # pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method='mean')
+
+    # cropping to baseline period
+    pupil_epochs_combined.crop(tmin=-0.1, tmax=0, include_tmax=True)
+
+    pupil_epochs_combined_df = pupil_epochs_combined.to_data_frame()
+    pupil_epochs_combined_df['subID'] = i
+
+    print('len of data and number of nans within this participants baseline period', len(pupil_epochs_combined_df), pupil_epochs_combined_df['pupils'].isna().sum())
+
+
+    mean_list = []
+    for l, k in enumerate(np.unique(pupil_epochs_combined_df['epoch'])):
+        baseline_mean = pupil_epochs_combined_df[pupil_epochs_combined_df['epoch']== l]['pupils'].mean()
+        mean_list.append(({'subID': i, 'baseline_mean': baseline_mean, 'epoch': k}))
+
+    baseline_df = pd.DataFrame(mean_list)
+    baseline_df['baseline_mean_centered'] = baseline_df['baseline_mean'] - baseline_df['baseline_mean'].median()
+    all_baseline_means = pd.concat([all_baseline_means, baseline_df[['baseline_mean', 'baseline_mean_centered', 'subID', 'epoch']]], ignore_index=True)
+
+
+# %%
+# this is to show how many baseline periods are completely nan for each subID
+# does not take into account the baseline periods where some or most of the data used was nan, meaning there might be more baseline periods where there
+# was less data used for the calculated mean than would be expected
+summary_baseline_nans = []
+summary_baseline_nans = pd.DataFrame(all_baseline_means.groupby('subID')['baseline_mean'].apply(lambda x: x.isna().sum()).reset_index())
+summary_baseline_nans['percentage of all epochs'] = (summary_baseline_nans['baseline_mean'] / 576 * 100).round(3)
+display(summary_baseline_nans)
+# %%
+# using nan means in calculating the mean for the baseline period hardly changes anything, it seems like in most cases
+# if there are nans in the baseline period, the whole baseline period is nan
+pd.DataFrame(nan_means_custom_function)
+
+
+# %% 
+# checking what uncombined pupil channels do (with and without baseline)
+
+
+drop_log_rows = []
+
+evoked_df = pd.DataFrame()
+
+for i in good_partis:
+    
+    # reading epochs per participant
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+    epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+
+    # print(pupil_epoch.to_data_frame().isna().sum())
+    
+    # # combining channels
+    # pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
+    # roi_dict = dict(pupils=pupil_ix)
+    # combine_nanmean = lambda data: np.nanmean(data, axis=1)
+    # pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method=combine_nanmean)
+
+    pupil_epochs_combined = pupil_epoch
+
+    # # ---------- NEW: mark & drop epochs with baseline fully NaN ----------
+    # # define your baseline window
+    # bmin, bmax = -0.1, 0.0
+    # # find time indices for baseline
+    # imin = np.where(pupil_epochs_combined.times >= bmin)[0][0]
+    # imax = np.where(pupil_epochs_combined.times <= bmax)[0][-1] + 1
+
+    # # get data and slice baseline (shape: n_epochs, n_channels=1, n_times_bl)
+    # dat = pupil_epochs_combined.get_data()
+    # bl = dat[..., imin:imax]
+
+    # # epochs where *every* sample in the baseline is NaN (for any channel; here channel=1)
+    # #fully_nan_epochs = np.any(np.all(np.isnan(bl), axis=-1), axis=1)
+    # # dropping epochs currently for baseline periods with any nans in them since otherwise I also need to adapt the function to use nanmean
+    # fully_nan_epochs = np.any(np.isnan(bl), axis=-1)
+    # bad_epoch_indices = np.where(fully_nan_epochs)[0]
+
+    # if bad_epoch_indices.size > 0:
+    #     pupil_epochs_combined.drop(bad_epoch_indices, reason='BAD_baseline_nan')
+    #     print(f"{i}: dropped {len(bad_epoch_indices)} epoch(s) with fully-NaN baseline in 'pupils'")
+
+    #     row = {
+    #     'subID': i,
+    #     'num_bad_epochs': int(bad_epoch_indices.size),
+    #     'bad_epoch_indices': bad_epoch_indices.tolist(),  # store as list for CSV/JSON
+    #     }
+
+    #     drop_log_rows.append(row)
+
+    
+
+    # applying baseline
+    # pupil_epochs_combined_bl = pupil_epochs_combined.apply_baseline(baseline=(-0.1, 0))
+    # baseline = pupil_epochs_combined.baseline
+
+    pupil_epochs_combined_bl = pupil_epochs_combined
+
+    # seperating per load condition
+    con1_epochs = pupil_epochs_combined_bl["items_presented == 1"]
+    con2_epochs = pupil_epochs_combined_bl["items_presented == 2"]
+    con3_epochs = pupil_epochs_combined_bl["items_presented == 3"]
+
+    # shortening the epochs based on condition (crop defaults to inclduing tmax)
+    con1_epochs.crop(-0.1, 7)
+    con2_epochs.crop(-0.1, 8)
+    con3_epochs.crop(-0.1, 9)
+
+    # averaging per load condition
+    # leading to error because there are some epochs that are only nan for pupils?
+    evoked_nan_mean = lambda x: np.nanmean(x, axis=0)
+    con1_ave = con1_epochs.average(method=evoked_nan_mean)
+    con2_ave = con2_epochs.average(method=evoked_nan_mean)
+    con3_ave = con3_epochs.average(method=evoked_nan_mean)
+
+    # adding individual averaged data to dataframe including load and subID
+    con1_ave_df = con1_ave.to_data_frame()
+    con1_ave_df['Load'] = 1
+    con1_ave_df['subID'] = i
+    con2_ave_df = con2_ave.to_data_frame()
+    con2_ave_df['Load'] = 2
+    con2_ave_df['subID'] = i
+    con3_ave_df = con3_ave.to_data_frame()
+    con3_ave_df['Load'] = 3
+    con3_ave_df['subID'] = i
+
+    # concatenating to evoked_df
+    evoked_df = pd.concat([evoked_df, con1_ave_df])
+    evoked_df = pd.concat([evoked_df, con2_ave_df])
+    evoked_df = pd.concat([evoked_df, con3_ave_df])
+    # evoked_df['baseline_start'] = baseline[0]
+    # evoked_df['baseline_end'] = baseline[1]
+
+drop_log_df = pd.DataFrame(drop_log_rows, columns=['subID', 'num_bad_epochs', 'bad_epoch_indices'])
+
+evoked_df = evoked_df.reset_index()
+
+# evoked_df.to_csv('../data/csv_files/evoked_df.csv', index=False)
+
+# %%
+
+# shifting the conditions so that the epochs that are epoched on pos1 are time-locked to the test onset
+evoked_df_shifted = evoked_df.copy()
+evoked_df_shifted.loc[evoked_df_shifted['Load']==1, 'time'] +=2
+evoked_df_shifted.loc[evoked_df_shifted['Load']==2, 'time'] +=1
+evoked_df_shifted.loc[evoked_df_shifted['Load']==3, 'time'] +=0
+
+
+
+# %%
+mask_partis = df[df['mask']==1]['subID'].unique().tolist()
+nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
+# Adding column for mask
+evoked_df_shifted['mask'] = evoked_df_shifted['subID'].apply(
+    lambda x: 1 if x in mask_partis else 0)
+
+
+# %%
+import seaborn as sns
+import matplotlib.pyplot as plt
+from scipy.stats import zscore
+# evoked_df_shifted['pupils'] = evoked_df_shifted.groupby('subID')['pupils'].transform(
+#     lambda x: zscore(x, nan_policy='omit')
+# )
+# evoked_df_shifted['pupil_right'] = evoked_df_shifted.groupby('subID')['pupil_right'].transform(
+#     lambda x: zscore(x, nan_policy='omit')
+# )
+# evoked_df_shifted['pupil_left'] = evoked_df_shifted.groupby('subID')['pupil_left'].transform(
+#     lambda x: zscore(x, nan_policy='omit')
+# )
+for i in good_partis[10:15]:
+    evoked_df_shifted_sub = evoked_df_shifted[evoked_df_shifted['subID']==i]
+    with sns.plotting_context(context='paper', font_scale=1.5): 
+        
+        fig, ax = plt.subplots(figsize=(10,8))
+
+        sns.lineplot(data=evoked_df_shifted_sub, x='time', y='pupil_left', hue='Load', palette='crest', errorbar='se', ax=ax)
+        sns.lineplot(data=evoked_df_shifted_sub, x='time', y='pupil_right', hue='Load', palette='crest', errorbar='se', ax=ax)
+
+        sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
+        
+        ax.axvline(0, color='black', alpha=0.33)
+        ax.axvline(1, color='black', alpha=0.66)
+        ax.axvline(2, color='black')  
+        ax.axvline(3, color='darkblue')  
+        ax.axvline(6.5, color='blue')  
+
+        # Define y-coordinate for labels (as a fraction of the plot height)
+        label_y = 1.05
+
+        # Add labels above the vertical lines
+        ax.text(0, ax.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+        ax.text(1, ax.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+        ax.text(2, ax.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+        ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+        ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+
+        # Set x-axis to show all whole numbers within range
+        x_ticks = np.arange(int(evoked_df_shifted_sub['time'].min()), int(evoked_df_shifted_sub['time'].max()) + 1, 1)
+        ax.set_xticks(x_ticks)
+        ax.set_xticklabels(x_ticks)
+
+        # Increase font size of x and y tick labels
+        ax.tick_params(axis='x', labelsize=14)
+        ax.tick_params(axis='y', labelsize=14)
+
+        # Adding a title
+        plt.suptitle(f'Pupil dilation across conditions for subID {i}', y=1.15, fontsize = 20)
+        # plt.title('', y=1.25, color='blue', alpha=0.4)
+        
+        # Adding a legend
+        ax.legend(loc='upper right', fontsize=12)
+        new_labels = ['Load 1', 'Load 2', 'Load 3']
+        for t, l in zip(ax.get_legend().texts, new_labels):
+            t.set_text(l)
+# %%
+
+# %%
+# if qt is used as backend the kernel crashes
+mne.viz.set_browser_backend('matplotlib')
+
+
+
+for i in good_partis[0:1]:
+        
+    # read file per subID
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
+    eyelink_file = folder_path + "/" + i + ".asc"
+    raw = mne.io.read_raw_eyelink(eyelink_file)
+
+
+
+# %%
+
+# new evoked creation with baselining per channel first and then nan sensitive combining of channels
+
+# %%
+import mne
+import pandas as pd
+import numpy as np
+
+# Load metadata
+df = pd.read_csv('../data/csv_files/df.csv')
+good_partis = df['subID'].unique()
+
+drop_log_rows = []
+evoked_df = pd.DataFrame()
+
+# ---- params ----
+bmin, bmax = -0.1, 0.0  # baseline window
+
+for i in good_partis:
+    # read epochs per participant (2 channels: 'pupil_left', 'pupil_right')
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+    epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+
+    # indices of the two eye channels (robust even if channel order changes)
+    ch_names = pupil_epoch.ch_names
+    ix_left  = ch_names.index('pupil_left')
+    ix_right = ch_names.index('pupil_right')
+    eye_idx = [ix_left, ix_right]
+
+    # get data & times
+    data = pupil_epoch.get_data()        # shape (E, 2, T)
+    times = pupil_epoch.times
+
+    # baseline indices
+    imin = np.where(times >= bmin)[0][0]
+    imax = np.where(times <= bmax)[0][-1] + 1
+
+    # --- compute per-eye baseline means (NaN-aware) ---
+    bl_mean = np.nanmean(data[:, eye_idx, imin:imax], axis=-1, keepdims=True)  # (E,2,1)
+    bl_mean_s = bl_mean.squeeze(-1)  # (E,2)
+
+    # --- drop epochs where BOTH eyes have baseline fully NaN ---
+    both_nan = np.all(np.isnan(bl_mean_s), axis=1)  # (E,)
+    bad_epoch_indices = np.where(both_nan)[0]
+    if bad_epoch_indices.size > 0:
+        pupil_epoch.drop(bad_epoch_indices, reason='BAD_baseline_nan_both_eyes')
+        drop_log_rows.append({
+            'subID': i,
+            'num_bad_epochs': int(bad_epoch_indices.size),
+            'bad_epoch_indices': bad_epoch_indices.tolist(),
+        })
+        # refresh after drop
+        data = pupil_epoch.get_data()
+        # recompute baseline means since E changed
+        bl_mean = np.nanmean(data[:, eye_idx, imin:imax], axis=-1, keepdims=True)
+        bl_mean_s = bl_mean.squeeze(-1)
+
+    # --- subtract baseline per eye where finite; else null that eye for the whole epoch ---
+    E = data.shape[0]
+    for e in range(E):
+        # left eye
+        if np.isfinite(bl_mean_s[e, 0]):
+            data[e, ix_left, :] = data[e, ix_left, :] - bl_mean[e, 0, 0]
+        else:
+            data[e, ix_left, :] = np.nan
+        # right eye
+        if np.isfinite(bl_mean_s[e, 1]):
+            data[e, ix_right, :] = data[e, ix_right, :] - bl_mean[e, 1, 0]
+        else:
+            data[e, ix_right, :] = np.nan
+
+    # write back baselined data
+    pupil_epoch._data = data
+
+    # --- combine eyes with nanmean into single 'pupils' channel ---
+    roi_dict = dict(pupils=eye_idx)
+    combine_nanmean = lambda x: np.nanmean(x, axis=1)  # average across the 2 eye channels
+    pupil_epochs_combined_bl = mne.channels.combine_channels(
+        pupil_epoch, roi_dict, method=combine_nanmean
+    )
+    # store baseline window for provenance
+    pupil_epochs_combined_bl.baseline = (bmin, bmax)
+
+    # --- separate by condition ---
+    con1_epochs = pupil_epochs_combined_bl["items_presented == 1"]
+    con2_epochs = pupil_epochs_combined_bl["items_presented == 2"]
+    con3_epochs = pupil_epochs_combined_bl["items_presented == 3"]
+
+    # --- crop by condition (tmax inclusive by default) ---
+    con1_epochs.crop(-0.1, 7)
+    con2_epochs.crop(-0.1, 8)
+    con3_epochs.crop(-0.1, 9)
+
+    # --- average per condition (NaN-aware) ---
+    evoked_nan_mean = lambda x: np.nanmean(x, axis=0)
+    con1_ave = con1_epochs.average(method=evoked_nan_mean)
+    con2_ave = con2_epochs.average(method=evoked_nan_mean)
+    con3_ave = con3_epochs.average(method=evoked_nan_mean)
+
+    # --- collect into tidy DF ---
+    con1_ave_df = con1_ave.to_data_frame()
+    con1_ave_df['Load'] = 1
+    con1_ave_df['subID'] = i
+
+    con2_ave_df = con2_ave.to_data_frame()
+    con2_ave_df['Load'] = 2
+    con2_ave_df['subID'] = i
+
+    con3_ave_df = con3_ave.to_data_frame()
+    con3_ave_df['Load'] = 3
+    con3_ave_df['subID'] = i
+
+    evoked_df = pd.concat([evoked_df, con1_ave_df, con2_ave_df, con3_ave_df], ignore_index=True)
+
+# summarize drops
+drop_log_df = pd.DataFrame(drop_log_rows, columns=['subID', 'num_bad_epochs', 'bad_epoch_indices'])
+
+# clean index
+evoked_df = evoked_df.reset_index(drop=True)
+
+# %%
+# shifting the conditions so that the epochs that are epoched on pos1 are time-locked to the test onset
+evoked_df_shifted = evoked_df.copy()
+evoked_df_shifted.loc[evoked_df_shifted['Load']==1, 'time'] +=2
+evoked_df_shifted.loc[evoked_df_shifted['Load']==2, 'time'] +=1
+evoked_df_shifted.loc[evoked_df_shifted['Load']==3, 'time'] +=0
+
+
+
+# %%
+mask_partis = df[df['mask']==1]['subID'].unique().tolist()
+nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
+# Adding column for mask
+evoked_df_shifted['mask'] = evoked_df_shifted['subID'].apply(
+    lambda x: 1 if x in mask_partis else 0)
+
+
+
+# (optional) save
+# evoked_df.to_csv('../data/csv_files/evoked_df.csv', index=False)
+# drop_log_df.to_csv('../data/csv_files/drop_log_summary.csv', index=False)
+
+
+# %%
+with sns.plotting_context(context='paper', font_scale=1.5): 
+    
+    fig, ax = plt.subplots(figsize=(10,8))
+
+    sns.lineplot(data=evoked_df_shifted_old, x='time', y='pupils', hue='Load', palette='crest', errorbar='se', ax=ax)
+    # sns.lineplot(data=evoked_df_shifted, x='time', y='pupil_right', hue='Load', palette='crest', errorbar='se', ax=ax)
+
+    sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
+    
+    ax.axvline(0, color='black', alpha=0.33)
+    ax.axvline(1, color='black', alpha=0.66)
+    ax.axvline(2, color='black')  
+    ax.axvline(3, color='darkblue')  
+    ax.axvline(6.5, color='blue')  
+
+    # Define y-coordinate for labels (as a fraction of the plot height)
+    label_y = 1.05
+
+    # Add labels above the vertical lines
+    ax.text(0, ax.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+    ax.text(1, ax.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+    ax.text(2, ax.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+    ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+    ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+
+    # Set x-axis to show all whole numbers within range
+    x_ticks = np.arange(int(evoked_df_shifted['time'].min()), int(evoked_df_shifted['time'].max()) + 1, 1)
+    ax.set_xticks(x_ticks)
+    ax.set_xticklabels(x_ticks)
+
+    # Increase font size of x and y tick labels
+    ax.tick_params(axis='x', labelsize=14)
+    ax.tick_params(axis='y', labelsize=14)
+
+    # Adding a title
+    plt.suptitle(f'Pupil dilation across conditions for subID {i}', y=1.15, fontsize = 20)
+    # plt.title('', y=1.25, color='blue', alpha=0.4)
+    
+    # Adding a legend
+    ax.legend(loc='upper right', fontsize=12)
+    new_labels = ['Load 1', 'Load 2', 'Load 3']
+    for t, l in zip(ax.get_legend().texts, new_labels):
+        t.set_text(l)
+# %%

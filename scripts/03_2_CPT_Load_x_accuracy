@@ -99,7 +99,7 @@ for i, c in enumerate(clusters):
 cluster_df_correct_vs_false = pd.DataFrame(cluster_summaries)
 
 # Save to CSV
-cluster_df_correct_vs_false.to_csv("cluster_results.csv", index=False)
+# cluster_df_correct_vs_false.to_csv("cluster_results.csv", index=False)
 
 display(cluster_df_correct_vs_false)
 
@@ -143,9 +143,6 @@ plt.show()
 
 alpha = 0.05
 n_perm = 5000
-
-
-
 
 # Build per-load (subjects × time) for each accuracy
 def mat_for(acc, load):
@@ -256,3 +253,5 @@ plt.tight_layout()
 plt.show()
 
 
+
+# %%

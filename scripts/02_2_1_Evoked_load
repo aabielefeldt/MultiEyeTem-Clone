@@ -3,6 +3,7 @@
 import mne
 import pandas as pd
 import numpy as np
+from pupil_utils import apply_baseline_nan_aware
 # %% Load Metadata
 
 df = pd.read_csv('../data/csv_files/df.csv')
@@ -19,6 +20,12 @@ good_partis = df['subID'].unique()
 # and then shifting so that delay onset is the same for all conditions
 
 
+
+##########
+# this is still combining the pupils first right?
+########
+drop_log_rows = []
+
 evoked_df = pd.DataFrame()
 
 for i in good_partis:
@@ -28,18 +35,21 @@ for i in good_partis:
     epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
     pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
 
-    # print(pupil_epoch.to_data_frame().isna().sum())
+    # applying baseline per eye and nan aware while dropping any epochs where the baseline period was nan in both eyes
+    pupil_epoch_bl = apply_baseline_nan_aware(pupil_epoch, bmin=-0.1, bmax=0.0)
+    baseline = pupil_epoch_bl.baseline
     
+    # counting dropped epochs
+    sum_dropped = sum('BAD_baseline_nan_both_eyes' in entry for entry in pupil_epoch_bl.drop_log)
+    drop_log_rows.append({'subID': i, 'sum_dropped': sum_dropped})
+
     # combining channels
-    pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
+    pupil_ix = mne.pick_channels(pupil_epoch_bl.info["ch_names"], include=['pupil_left', 'pupil_right'])
     roi_dict = dict(pupils=pupil_ix)
     combine_nanmean = lambda data: np.nanmean(data, axis=1)
-    pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method=combine_nanmean)
-
-    # applying baseline
-    pupil_epochs_combined_bl = pupil_epochs_combined.apply_baseline(baseline=(-0.1, 0))
-    baseline = pupil_epochs_combined.baseline
-
+    pupil_epochs_combined_bl = mne.channels.combine_channels(pupil_epoch_bl, roi_dict, method=combine_nanmean)
+    
+    
     # seperating per load condition
     con1_epochs = pupil_epochs_combined_bl["items_presented == 1"]
     con2_epochs = pupil_epochs_combined_bl["items_presented == 2"]
@@ -75,8 +85,10 @@ for i in good_partis:
     evoked_df['baseline_start'] = baseline[0]
     evoked_df['baseline_end'] = baseline[1]
 
+drop_log_df = pd.DataFrame(drop_log_rows)
+display(drop_log_df)
 evoked_df = evoked_df.reset_index()
-
+display(evoked_df)
 evoked_df.to_csv('../data/csv_files/evoked_df.csv', index=False)
 
 # %%

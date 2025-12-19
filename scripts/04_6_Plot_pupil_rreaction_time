@@ -1,0 +1,183 @@
+# %%
+# Importsconda
+import mne
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from scipy.stats import t, ttest_rel, zscore, f
+
+# %% 
+# read evokes seperated by oblique vs cardinal
+evoked_df_reaction_time_shifted = pd.read_csv('../data/csv_files/evoked_df_reaction_time_shifted.csv')
+
+df = pd.read_csv('../data/csv_files/df.csv')
+good_partis = df['subID'].unique()
+mask_partis = df[df['mask']==1]['subID'].unique().tolist()
+nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
+
+
+# %%
+
+# Z-score within each subject (across all times and trials)
+evoked_df_reaction_time_shifted['pupils'] = evoked_df_reaction_time_shifted.groupby('subID')['pupils'].transform(
+    lambda x: zscore(x, nan_policy='omit')
+)
+
+#%%
+
+with sns.plotting_context(context='paper', font_scale=1.5): 
+    
+    fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(12, 10), sharex=True, sharey=True)
+    # fig, ax = plt.subplots(figsize=(10,8))
+    categories = ['Cardinal', 'Oblique']
+    rt_group = ['fast', 'slow']
+    load_conditions = [1, 2, 3]
+
+    for i, load in enumerate(load_conditions):
+        ax = axes[i]
+        subset = evoked_df_reaction_time_shifted[(evoked_df_reaction_time_shifted['Load']== load)]
+        # !! no sigsubset for load and mask
+        #sig_subset = sig_results_shifted_cardinal_category[(sig_results_shifted_cardinal_category['Load']== load) & (sig_results_shifted_cardinal_category['mask'] == mask)]
+        sns.lineplot(data=subset, x='time', y='pupils', palette='tab10', hue='reaction_time', errorbar='se', ax=ax, legend='full')
+        # sns.lineplot(data=evoked_df_only_Oblique_shifted[evoked_df_only_Oblique_shifted['Cardinal_Category']==category and evoked_df_only_Oblique_shifted['Load']==3], x='time', y='pupils', palette='crest', hue='Load', errorbar='se', ax=ax, legend='full')
+        # evoked_df_only_Oblique_shifted.loc[evoked_df_only_Oblique_shifted['Load']==3
+        # sns.lineplot(data=evoked_df_only_Oblique_shifted[evoked_df_only_Oblique_shifted['Cardinal_Category']=='Oblique'], x='time', y='pupils', hue='Load', errorbar='se', ax=ax)
+        sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
+
+        if i == 0:
+            ax.set_title(f"Reaction time")
+        else:
+            ax.set_ylabel(f"Load {load}")
+        
+        ax.axvline(0, color='black', alpha=0.33)
+        ax.axvline(1, color='black', alpha=0.66)
+        ax.axvline(2, color='black')  
+        ax.axvline(3, color='darkblue')  
+        ax.axvline(6.5, color='blue')  
+
+        # Define y-coordinate for labels (as a fraction of the plot height)
+        label_y = 1.05
+
+        # Add labels above the vertical lines
+        ax.text(0, ax.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+        ax.text(1, ax.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+        ax.text(2, ax.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+        ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+        ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+
+        # # add significance dots
+        # sig = sig_subset['time'].values
+        # y_sig = [ax.get_ylim()[0]] * len(sig) 
+        # ax.plot(sig, y_sig, ".", color='red', label='p < 0.05')
+
+        # Highlighting the baseline window
+        baseline = (evoked_df_reaction_time_shifted.at[0, 'baseline_start'], evoked_df_reaction_time_shifted.at[0, 'baseline_end'])
+        baseline_str = '_'.join(map(str, baseline))
+        # Include window that was used for the baseline
+        # maybe remove here because misleading with shifted data
+        # ax.axvspan(baseline[0], baseline[1], ymin=0, ymax=1, color='blue', alpha=0.4)
+
+        # Set x-axis to show all whole numbers within range
+        x_ticks = np.arange(int(evoked_df_reaction_time_shifted['time'].min()), int(evoked_df_reaction_time_shifted['time'].max()) + 1, 1)
+        ax.set_xticks(x_ticks)
+        ax.set_xticklabels(x_ticks)
+
+        # Increase font size of x and y tick labels
+        ax.tick_params(axis='x', labelsize=14)
+        ax.tick_params(axis='y', labelsize=14)
+
+        # Adding a legend
+        ax.legend(loc='best', fontsize=12)
+    # new_labels = ['Cardinal - Load 1', 'Cardinal - Load 2', 'Cardinal - Load 3', 'Oblique - Load 1', 'Oblique - Load 2', 'Oblique - Load 3']
+    # for t, l in zip(ax.get_legend().texts, new_labels):
+    #     t.set_text(l)
+    # ax.set_title(f'{mask}', y=1.2, fontsize=16)
+
+    # Adding a title
+    plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize = 20)
+    #plt.title(f'Applied baseline {baseline}', y=1.25, color='blue', alpha=0.4)
+    
+    
+
+    plt.show()
+
+    # Save the figure
+    name=f"pupil_fig_reaction_time.png"
+    figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures'
+    figure_filepath = os.path.join(figures_folder, name)
+
+    plt.savefig(figure_filepath, bbox_inches = 'tight')
+
+
+# %%
+all_rt_diffs = []
+
+for i in good_partis:
+    sub = evoked_df_reaction_time_shifted[evoked_df_reaction_time_shifted['subID']== i]
+    for load in [1,2,3]:
+        load_df = sub[sub['Load']==load]
+        pivot = load_df.pivot_table(index="time", columns="reaction_time", values="pupils")
+        diff = (pivot["fast"] - pivot["slow"]).reset_index().rename(columns={0: "rt_diff"})
+        diff["subID"] = i
+        diff['Load'] = load
+        all_rt_diffs.append(diff)
+
+
+all_rt_diffs = pd.concat(all_rt_diffs, ignore_index=True)
+display(all_rt_diffs)
+# %%
+
+start_time, end_time = 3.0, 6.5
+rt_diffs_timewindow = all_rt_diffs[(all_rt_diffs['time'] >= start_time) & (all_rt_diffs['time'] <= end_time)].copy()
+
+with sns.plotting_context(context='paper', font_scale=1.5): 
+    
+    fig, ax = plt.subplots(figsize=(10,8))
+
+    sns.lineplot(data=rt_diffs_timewindow, x='time', y='rt_diff', hue='Load', palette='crest', errorbar='se', ax=ax)
+
+    sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
+    
+    # ax.axvline(0, color='black', alpha=0.33)
+    # ax.axvline(1, color='black', alpha=0.66)
+    # ax.axvline(2, color='black')  
+    # ax.axvline(3, color='darkblue')  
+    # ax.axvline(6.5, color='blue')  
+
+    # Define y-coordinate for labels (as a fraction of the plot height)
+    label_y = 1.05
+
+    # Add labels above the vertical lines
+    # ax.text(0, ax.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+    # ax.text(1, ax.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+    # ax.text(2, ax.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+    # ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+    # ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+ 
+    # Set x-axis to show all whole numbers within range
+    x_ticks = np.arange(int(rt_diffs_timewindow['time'].min()), int(rt_diffs_timewindow['time'].max()) + 1, 1)
+    ax.set_xticks(x_ticks)
+    ax.set_xticklabels(x_ticks)
+
+    # Increase font size of x and y tick labels
+    ax.tick_params(axis='x', labelsize=14)
+    ax.tick_params(axis='y', labelsize=14)
+
+    # Adding a title
+    plt.suptitle('Pupil dilation differences between median split reaction time', y=1.15, fontsize = 20)
+    plt.title(f'z-scored', y=1.25, color='blue', alpha=0.4)
+    
+    # Adding a legend
+    ax.legend(loc='upper right', fontsize=12)
+    new_labels = ['Load 1', 'Load 2', 'Load 3']
+    for t, l in zip(ax.get_legend().texts, new_labels):
+        t.set_text(l)
+
+    # Save the figure
+    # name=f"pupil_fig_shifted.png"
+    # figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures'
+    # figure_filepath = os.path.join(figures_folder, name)
+
+    plt.savefig(figure_filepath, bbox_inches = 'tight')
+# %%

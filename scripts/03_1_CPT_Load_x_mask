@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from mne.stats import permutation_cluster_test, f_oneway
+from mne.stats import permutation_cluster_test, f_oneway, permutation_cluster_1samp_test
 from scipy import stats
 from scipy.ndimage import gaussian_filter1d
 from scipy.stats import t, ttest_rel, zscore, f, ttest_ind
@@ -123,12 +123,12 @@ for i, c in enumerate(clusters):
         })
 
 # Turn into DataFrame
-cluster_df_mask_vs_nomask = pd.DataFrame(cluster_summaries)
+cluster_results_mask_vs_nomask = pd.DataFrame(cluster_summaries)
 
 # Save to CSV
-cluster_df_mask_vs_nomask.to_csv("cluster_results.csv", index=False)
+cluster_results_mask_vs_nomask.to_csv('../data/csv_files/cluster_results_mask_vs_nomask.csv', index=False)
 
-display(cluster_df_mask_vs_nomask)
+display(cluster_results_mask_vs_nomask)
 
 # Plot
 plt.figure(figsize=(10, 5))
@@ -232,7 +232,7 @@ for i, c in enumerate(clusters):
 
 # Save to DataFrame
 cluster_df = pd.DataFrame(cluster_summaries)
-cluster_df.to_csv("cluster_results_load.csv", index=False)
+# cluster_df.to_csv("cluster_results_load.csv", index=False)
 
 display(cluster_df)
 
@@ -341,7 +341,7 @@ for mask in [0,1]:
 
     # Save to DataFrame
     cluster_df = pd.DataFrame(cluster_summaries)
-    cluster_df.to_csv("cluster_results_load_by_mask.csv", index=False)
+    # cluster_df.to_csv("cluster_results_load_by_mask.csv", index=False)
 
     display(cluster_df)
 
@@ -534,8 +534,8 @@ for mask in [0, 1]:
 
 # Save combined summary across masks
 posthoc_df = pd.DataFrame(all_rows).sort_values(["mask","contrast","start_time"]).reset_index(drop=True)
-posthoc_df.to_csv("posthoc_load_pairwise_clusters_by_mask.csv", index=False)
-print("\nSaved → posthoc_load_pairwise_clusters_by_mask.csv")
+# posthoc_df.to_csv("posthoc_load_pairwise_clusters_by_mask.csv", index=False)
+
 print(posthoc_df if not posthoc_df.empty else "No significant post-hoc clusters.")
 
 
@@ -607,7 +607,7 @@ for label, (XA, XB) in pairs.items():
         out_type='mask',
         verbose=True
     )
-    print(cluster_p_values)
+    print(cluster_p_values.round(3))
     # Summarize significant clusters
     alpha = 0.05
     n_times = len(times)
@@ -687,8 +687,8 @@ plt.show()
 
 # Save combined summary across
 posthoc_df = pd.DataFrame(all_rows).sort_values(["contrast","start_time"]).reset_index(drop=True)
-posthoc_df.to_csv("posthoc_load_pairwise_clusters.csv", index=False)
-print("\nSaved → posthoc_load_pairwise_clusters.csv")
+# posthoc_df.to_csv("posthoc_load_pairwise_clusters.csv", index=False)
+
 print(posthoc_df if not posthoc_df.empty else "No significant post-hoc clusters.")
 
 
@@ -713,8 +713,8 @@ time_decimals = 3  # round times to align (important!)
 # DATA PREP
 # delay_time_window must have: subID, time, pupils, Load (1/2/3), mask (0/1)
 # -------------------------------------------------------------------
-df = delay_time_window.copy()
-df['time'] = df['time'].round(time_decimals)
+delay_time_window_copy = delay_time_window.copy()
+delay_time_window_copy['time'] = delay_time_window_copy['time'].round(time_decimals)
 
 # We'll compute the contrast separately within each mask group (different subjects),
 # then compare those contrasts between groups (independent t cluster test).
@@ -722,7 +722,7 @@ df['time'] = df['time'].round(time_decimals)
 contrasts = {}  # mask_val -> (subjects_index, times_array, contrast_matrix)
 
 for mask_val in [0, 1]:
-    df_m = df[df['mask'] == mask_val]
+    df_m = delay_time_window_copy[delay_time_window_copy['mask'] == mask_val]
 
     # Build per-load subject×time tables (aggregate duplicates at same time!)
     P1 = (df_m[df_m['Load'] == 1]
@@ -827,8 +827,8 @@ for i_c, c in enumerate(clusters):
         })
 
 summary_df = pd.DataFrame(rows)
-summary_df.to_csv("interaction_mask_by_load_contrast_clusters.csv", index=False)
-print("Saved → interaction_mask_by_load_contrast_clusters.csv")
+# summary_df.to_csv("interaction_mask_by_load_contrast_clusters.csv", index=False)
+
 display(summary_df if not summary_df.empty else pd.DataFrame({"note":["No significant clusters."]}))
 
 # -------------------------------------------------------------------
@@ -876,8 +876,7 @@ plt.tight_layout()
 plt.show()
 
 # %%
-from mne.stats import permutation_cluster_1samp_test
-from scipy.stats import t
+# Whats this?
 
 df_post = delay_time_window.copy()
 df_m = df_post
@@ -948,7 +947,7 @@ for i_c, c in enumerate(clusters):
 
 summary = pd.DataFrame(rows).reset_index(drop=True)
 display(summary)
-summary.to_csv("clusters_LoadxAccuracy_linearTrend_interaction_FIXED.csv", index=False)
+# summary.to_csv("clusters_LoadxAccuracy_linearTrend_interaction_FIXED.csv", index=False)
 
         
 # Plot t-curve with correctly shaded clusters
@@ -972,7 +971,7 @@ plt.show()
 
 
 # %%
-import scipy.stats as stats
+
 
 # Example: mean pupil in Load 3 delay window per subject
 mean_pupil = X3.mean(axis=1)   # (n_sub,)

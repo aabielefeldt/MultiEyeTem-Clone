@@ -91,11 +91,11 @@ plt.show()
 
 
 # %%
-# Histogram of pupil sizes per subID per timepoint during baseline period
+# Histogram of pupil sizes per subID per timepoint during baseline period and combined histogram for all subIDs and combined histogram for all subIDs median centered
 
 all_baseline_means = pd.DataFrame()
 
-for i in good_partis:
+for i in good_partis[0:10]:
     
     # reading epochs per participant
     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
@@ -114,6 +114,9 @@ for i in good_partis:
     pupil_epochs_combined_df = pupil_epochs_combined.to_data_frame()
     pupil_epochs_combined_df['subID'] = i
 
+    print('len of data and number of nans within this participants baseline period', len(pupil_epochs_combined_df), pupil_epochs_combined_df['pupils'].isna().sum())
+
+
     mean_list = []
     for l, k in enumerate(np.unique(pupil_epochs_combined_df['epoch'])):
         baseline_mean = pupil_epochs_combined_df[pupil_epochs_combined_df['epoch']== l]['pupils'].mean()
@@ -121,7 +124,7 @@ for i in good_partis:
 
     baseline_df = pd.DataFrame(mean_list)
     baseline_df['baseline_mean_centered'] = baseline_df['baseline_mean'] - baseline_df['baseline_mean'].median()
-    all_baseline_means = pd.concat([all_baseline_means, baseline_df[['baseline_mean', 'baseline_mean_centered', 'subID']]], ignore_index=True)
+    all_baseline_means = pd.concat([all_baseline_means, baseline_df[['baseline_mean', 'baseline_mean_centered', 'subID', 'epoch']]], ignore_index=True)
 
 
     plt.figure()
@@ -152,3 +155,5 @@ plt.legend()
 plt.show()
 
 
+
+# %%

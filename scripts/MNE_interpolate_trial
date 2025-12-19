@@ -1,0 +1,71 @@
+# %%
+
+import mne
+from mne.annotations import Annotations, _annotations_starts_stops
+import numpy as np
+
+# %%
+fpath = mne.datasets.sample.data_path() / "MEG" / "sample" / "sample_audvis_raw.fif"
+raw = mne.io.read_raw_fif(fpath)
+print(raw.first_time)
+
+
+# %%
+
+# %%
+events = mne.find_events(raw)
+sfreq = raw.info['sfreq']
+
+
+annotations = mne.annotations_from_events(events, sfreq)
+raw.set_annotations(annotations)
+
+print(raw.annotations)
+#print(raw.events)
+#%%
+# similar to my interpolation function, setting start and end based on annotation onsets
+mask = np.zeros_like(raw.times, dtype=bool)
+match = ['1']
+ones_annots = [annot for annot in raw.annotations if annot["description"] in match]
+
+for annot in ones_annots:
+    # Update the mask for times within the current blink period
+    start = annot["onset"]
+    end = annot["onset"] + annot["duration"]
+    print(start,end)
+    print(raw.time_as_index(start))
+    print(raw.time_as_index(end))
+    
+    mask |= (raw.times >= start) & (raw.times <= end)
+
+
+#%%
+# starts and ends from annotations_starts_stops function
+# .. very different results, why?
+# maybe connected to sfreq?
+# or to the fact that the first sample isnt zero?
+starts, ends = _annotations_starts_stops(raw, "1")
+# print(starts*sfreq, ends*sfreq)
+# #above is the same as below with time_as_index
+# print(raw.time_as_index(starts))
+print(starts,ends)
+# %%
+# %%
+# if qt is used as backend the kernel crashes
+mne.viz.set_browser_backend('matplotlib')
+
+raw_copy = raw.copy() 
+raw_copy2 = raw_copy.copy()#.crop(tmin=990, tmax=1009)
+# blink_annot = raw_copy2.annotations[
+   # np.isin(raw_copy2.annotations.description, ['velo_blink_interp', 'blink', 'BAD_velo_blink', 'BAD_blink'])]
+# Assign filtered annotations to the copied raw object 
+#raw_copy2.set_annotations(blink_annot) 
+raw_copy2.plot(duration=50, picks= ['MEG 0313', 'STI 004',
+ 'STI 005',
+ 'STI 006',
+ 'STI 014',
+ 'STI 015']) # 
+# %%
+anno_df = raw.annotations.to_data_frame(time_format=None)
+anno_df
+# %%
