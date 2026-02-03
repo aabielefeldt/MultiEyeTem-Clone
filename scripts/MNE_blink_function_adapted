@@ -295,12 +295,42 @@ threshold = pd.Timedelta(seconds=0.05)
 
 
 # should probably sort by type first and then sort by onset, currently a BAD_blink in the right eye could be merged with a velo_blink in the left eye
-
+# but also this is probably not ideal anyway because it very much depends on the sorting of the columsn, this, I think only compares the onset columns when they are in the same row, if there are
+# however more blinks in one eye, all future comparisons are off
 
 annos_rl_combined["within_threshold"] = (
     annos_rl_combined["onsetright"] - annos_rl_combined["onset"]).abs() <= threshold
 
 display(annos_rl_combined)
+
+# %% 
+# updated version of the dataframe logic above, still not ideal probably because depending on the same row ?
+annos_df = raw.annotations.to_data_frame()
+match2 = ['velo_blink_interp', 'blink', 'BAD_velo_blink', 'BAD_blink', 'merged_blink_interp']
+dict_len = {}
+for i in match2:
+    
+    annos_df_desc = annos_df[annos_df['description']==i]
+    annos_df_right = annos_df_desc[annos_df_desc.ch_names == ('pupil_right',)].reset_index(drop=True)
+    annos_df_left = annos_df_desc[annos_df_desc.ch_names == ('pupil_left',)].reset_index(drop=True)
+
+
+    annos_rl_combined = annos_df_right.join(annos_df_left, how='left', lsuffix='right')
+
+
+
+    threshold = pd.Timedelta(seconds=0.05)
+
+
+    # should probably sort by type first and then sort by onset, currently a BAD_blink in the right eye could be merged with a velo_blink in the left eye
+
+
+    annos_rl_combined["within_threshold"] = (
+        annos_rl_combined["onsetright"] - annos_rl_combined["onset"]).abs() <= threshold
+    print(annos_rl_combined)
+    desc = i
+    length = len(annos_rl_combined)
+    dict_len.update({desc:length})
 # %%
 
 sorted_idx_lr = {}
@@ -322,3 +352,352 @@ print(sorted_idx_lr)
 # %%
 
 
+import numpy as np
+
+def match_annotations_one_to_one(
+    annotations,
+    pupil_channels,
+    match=(
+        "velo_blink_interp",
+        "blink",
+        "BAD_velo_blink",
+        "BAD_blink",
+        "merged_blink_interp",
+    ),
+    tol_seconds=0.05,
+):
+    """
+    Returns one-to-one matches between the first two channels (in pupil_channels order)
+    that have relevant annotations.
+
+    Match criteria:
+      - same description
+      - abs(onset difference) <= tol_seconds
+
+    Output:
+      matched_pairs: list of (idx_chA, idx_chB) where each is an index into `annotations`
+      info: dict with some useful extras (channels used, unmatched, etc.)
+    """
+    match_set = set(match)
+
+    # --- collect relevant indices per channel, grouped by description ---
+    by_ch_desc = {}
+    for ch in pupil_channels:
+        desc_map = {d: [] for d in match_set}
+        for i, ann in enumerate(annotations):
+            if ann.get("description") not in match_set:
+                continue
+            ch_names = ann.get("ch_names")
+            if ch_names is None or ch not in ch_names:
+                continue
+            desc_map[ann["description"]].append(i)
+
+        # sort each description's indices by onset
+        for d in match_set:
+            desc_map[d].sort(key=lambda idx: annotations.onset[idx])
+
+        # keep only if there is at least one relevant index
+        if any(len(v) for v in desc_map.values()):
+            by_ch_desc[ch] = desc_map
+
+    present = [ch for ch in pupil_channels if ch in by_ch_desc]
+    if len(present) < 2:
+        return [], {"channels_used": present, "reason": "Fewer than 2 channels with relevant annotations"}
+
+    chA, chB = present[0], present[1]
+
+    matched_pairs = []
+    unmatched_A = []
+    unmatched_B = []
+
+    # --- one-to-one matching per description using a two-pointer walk ---
+    for desc in match_set:
+        idxsA = by_ch_desc[chA][desc]
+        idxsB = by_ch_desc[chB][desc]
+
+        onA = np.asarray(annotations.onset)[idxsA]
+        onB = np.asarray(annotations.onset)[idxsB]
+
+        i = j = 0
+        while i < len(idxsA) and j < len(idxsB):
+            dt = onB[j] - onA[i]
+
+            if abs(dt) <= tol_seconds:
+                # match -> consume both (one-to-one)
+                matched_pairs.append((int(idxsA[i]), int(idxsB[j])))
+                i += 1
+                j += 1
+            elif dt < -tol_seconds:
+                # B is earlier -> B can't match this A (too early), advance B
+                j += 1
+            else:
+                # A is earlier -> A can't match this B (too early), advance A
+                i += 1
+
+        # leftovers are unmatched for that description
+        unmatched_A.extend(map(int, idxsA[i:]))
+        unmatched_B.extend(map(int, idxsB[j:]))
+
+    info = {
+        "channels_used": (chA, chB),
+        "tol_seconds": tol_seconds,
+        "n_matches": len(matched_pairs),
+        "unmatched": {chA: unmatched_A, chB: unmatched_B},
+    }
+
+    return matched_pairs, info
+
+# %%
+pairs, info = match_annotations_one_to_one(
+    raw.annotations,
+    pupil_channels=pupil_channels,
+    tol_seconds=0.05
+)
+
+print(info)
+print(pairs[:10])   # list of (idx_left, idx_right) indices into raw.annotations
+
+
+# %% same as above just not as a function to try out stuff
+
+######
+# this probably doesnt work right since it just matches all identical onsets from 
+annotations = raw.annotations
+pupil_channels = []
+for ci, ch_info in enumerate(raw.info["chs"]):
+    if ch_info["coil_type"] == FIFF.FIFFV_COIL_EYETRACK_PUPIL:
+        pupil_channels.append(raw.ch_names[ci])
+match=(
+    "velo_blink_interp",
+    "blink",
+    "BAD_velo_blink",
+    "BAD_blink",
+    "merged_blink_interp",
+)
+tol_seconds=0.05
+matched_pairs = []
+unmatched_A = []
+unmatched_B = []
+
+match_set = set(match)
+
+# --- collect relevant indices per channel, grouped by description ---
+by_ch_desc = {}
+for ch in pupil_channels:
+    desc_map = {d: [] for d in match_set}
+    #print(desc_map)
+    for i, ann in enumerate(annotations):
+        if ann.get("description") not in match_set:
+            continue
+        ch_names = ann.get("ch_names")
+        if ch_names is None or ch not in ch_names:
+            continue
+        desc_map[ann["description"]].append(i)
+
+    # sort each description's indices by onset
+    for d in match_set:
+        #print('d', d)
+        desc_map[d].sort(key=lambda idx: annotations.onset[idx])
+        
+    # keep only if there is at least one relevant index
+    if any(len(v) for v in desc_map.values()):
+        by_ch_desc[ch] = desc_map
+
+present = [ch for ch in pupil_channels if ch in by_ch_desc]
+# if len(present) < 2:
+#     return [], {"channels_used": present, "reason": "Fewer than 2 channels with relevant annotations"}
+
+chA, chB = present[0], present[1]
+print(chA, chB)
+# --- one-to-one matching per description using a two-pointer walk ---
+for desc in match_set:
+    idxsA = by_ch_desc[chA][desc]
+    print('idxsA:', idxsA)
+    idxsB = by_ch_desc[chB][desc]
+    print('idxsB:', idxsB)
+
+    onA = np.asarray(annotations.onset)[idxsA]
+    print('onA:', onA)
+    print('onB:', onB)
+    onB = np.asarray(annotations.onset)[idxsB]
+
+    i = j = 0
+    while i < len(idxsA) and j < len(idxsB):
+        print('i,j:', i, j)
+        dt = onB[j] - onA[i]
+        print('dt:', dt)
+        if abs(dt) <= tol_seconds:
+            # match -> consume both (one-to-one)
+            matched_pairs.append((int(idxsA[i]), int(idxsB[j])))
+            i += 1
+            j += 1
+        elif dt < -tol_seconds:
+            # B is earlier -> B can't match this A (too early), advance B
+            j += 1
+        else:
+            # A is earlier -> A can't match this B (too early), advance A
+            i += 1
+
+    # leftovers are unmatched for that description
+    unmatched_A.extend(map(int, idxsA[i:]))
+    unmatched_B.extend(map(int, idxsB[j:]))
+
+info = {
+    "channels_used": (chA, chB),
+    "tol_seconds": tol_seconds,
+    "n_matches": len(matched_pairs),
+    "unmatched": {chA: unmatched_A, chB: unmatched_B},
+}
+
+# %%
+# not sure if the above is working
+idx = [
+    i for i, chs in enumerate(raw.annotations.ch_names)
+    if chs is not None and "pupil_right" in chs
+]
+
+annos_right = raw.annotations[idx]
+
+idx = [
+    i for i, chs in enumerate(raw.annotations.ch_names)
+    if chs is not None and "pupil_left" in chs
+]
+
+annos_left = raw.annotations[idx]
+
+print(annos_left.onset[49] -annos_right.onset[50])
+
+# the result is not under the threshold??
+# ah but that is because I am looking at all the annotations, still need to look at only the filtered descriptions
+
+
+# %%
+# does not work yet I think
+import numpy as np
+import mne
+
+def merge_matched_pairs_into_new_annotations(
+    raw,
+    matches,
+    new_description=None,
+    keep_channel_names=True,
+    strategy="union",  # "union" or "left" or "right" or "midpoint"
+):
+    """
+    Creates a new annotation per match and deletes the two originals used.
+
+    Parameters
+    ----------
+    raw : mne.io.Raw
+        The Raw object whose annotations will be modified.
+    matches : list[dict]
+        Output from match_annotations_one_to_one_records(...).
+        Must contain idxA, idxB, onsetA, onsetB, durationA, durationB, desc, ch_namesA, ch_namesB.
+    new_description : str or None
+        If None, uses the original desc from the match record (matches[k]["desc"]).
+        If str, uses that for all merged annotations (e.g. "blink_both_eyes").
+    keep_channel_names : bool
+        If True, merged annotation gets combined ch_names from both sides.
+        If False, merged annotation uses ch_names=None.
+    strategy : str
+        How to set onset/duration:
+          - "union": onset=min(onsets), end=max(ends), duration=end-onset  (recommended)
+          - "left": use left onset/duration
+          - "right": use right onset/duration
+          - "midpoint": onset=mean(onsets), duration=min(durationA, durationB)
+
+    Returns
+    -------
+    raw : mne.io.Raw
+        Same raw object, with updated annotations.
+    summary : dict
+        Counts + indices deleted/created.
+    """
+
+    annotations = raw.annotations
+    n_before = len(annotations)
+
+    # ---- Build merged annotations fields ----
+    new_onset = []
+    new_duration = []
+    new_desc = []
+    new_ch_names = []
+
+    to_delete = set()
+
+    for m in matches:
+        idxA, idxB = m["idxA"], m["idxB"]
+        to_delete.add(idxA)
+        to_delete.add(idxB)
+
+        onsetA, durA = m["onsetA"], m["durationA"]
+        onsetB, durB = m["onsetB"], m["durationB"]
+        endA = onsetA + durA
+        endB = onsetB + durB
+
+        desc = new_description if new_description is not None else m["desc"]
+
+        if strategy == "union":
+            onset = min(onsetA, onsetB)
+            end = max(endA, endB)
+            duration = max(0.0, end - onset)
+        elif strategy == "left":
+            onset, duration = onsetA, durA
+        elif strategy == "right":
+            onset, duration = onsetB, durB
+        elif strategy == "midpoint":
+            onset = 0.5 * (onsetA + onsetB)
+            duration = min(durA, durB)
+        else:
+            raise ValueError(f"Unknown strategy: {strategy}")
+
+        if keep_channel_names:
+            chs = []
+            for side in ("ch_namesA", "ch_namesB"):
+                v = m.get(side)
+                if v:
+                    chs.extend(list(v))
+            # unique, stable order
+            chs = list(dict.fromkeys(chs))  # uses dict keys order; safe if you haven't overwritten dict!
+            ch_names = chs if len(chs) else None
+        else:
+            ch_names = None
+
+        new_onset.append(onset)
+        new_duration.append(duration)
+        new_desc.append(desc)
+        new_ch_names.append(ch_names)
+
+    # ---- Create the new Annotations object ----
+    new_ann = mne.Annotations(
+        onset=new_onset,
+        duration=new_duration,
+        description=new_desc,
+        ch_names=new_ch_names
+    )
+
+    # ---- Delete originals then append merged ----
+    # IMPORTANT: delete expects indices relative to current annotations
+    # convert set -> sorted list; deleting in descending order is safe in many APIs,
+    # but MNE's Annotations.delete accepts an array and handles it.
+    del_idx = np.array(sorted(to_delete), dtype=int)
+    annotations2 = annotations.copy()
+    annotations2.delete(del_idx)
+
+    # add merged annotations
+    annotations2 = annotations2 + new_ann
+
+    # optional: sort by onset (handy for cleanliness)
+    order = np.argsort(annotations2.onset)
+    annotations2 = annotations2[order]
+
+    raw.set_annotations(annotations2)
+
+    summary = {
+        "n_before": n_before,
+        "n_deleted": int(len(del_idx)),
+        "n_created": int(len(new_ann)),
+        "n_after": len(raw.annotations),
+        "deleted_indices": del_idx,
+    }
+    return raw, summary

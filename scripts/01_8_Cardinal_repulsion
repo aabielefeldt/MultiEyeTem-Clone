@@ -89,10 +89,10 @@ for i in range(len(oris)):
 
 
 # Plotting lines to connect dots
-ax.plot(thetas_adjusted, all_cons, '--', color='black')
-ax.plot(thetas_adjusted, con1s, '-', color=colors[5])
-ax.plot(thetas_adjusted, con2s, '-', color=colors[9])
-ax.plot(thetas_adjusted, con3s, '-', color=colors[13])
+ax.plot(thetas_adjusted, all_cons, '--', color='black', label='all loads average')
+ax.plot(thetas_adjusted, con1s, '-', color=colors[5], label='load 1')
+ax.plot(thetas_adjusted, con2s, '-', color=colors[9], label='load 2')
+ax.plot(thetas_adjusted, con3s, '-', color=colors[13], label='load 3')
 
 ax.plot(thetas_adjusted, unbiased_assumption, color=colors[16], linestyle='dashed')
 
@@ -198,6 +198,7 @@ for condition in conditions:
             # Calculate the difference and append to the list
             difference_all_con = value_x_all_con - value_y_all_con
             differences_all_con.append(difference_all_con)
+            #print(i, value_x_all_con, value_y_all_con, difference_all_con, differences_all_con)
 
         mean_difference_all_con = np.mean(differences_all_con)
         combined_con_difs.append((i, mean_difference_all_con))
@@ -278,6 +279,121 @@ plt.xlabel('Items Presented')
 plt.ylabel('Mean Cardinal Repulsion at Cardinal Positions')
 plt.title('Stripplot of Cardinal Repulsion Indices for Different Conditions')
 plt.show()
+
+
+#%%
+# Maybe try to run analysis if the cardinal bias differs with accuracy
+
+grouped_accuracy_bias = []
+
+df_grouped_all_con = df.groupby(['subID', 'acc_trial_concrete_cued', 'object_cued_rot'])['button_press_clockwise'].mean().reset_index()
+
+for i in good_partis:
+    participant_grp_all_con = df_grouped_all_con.groupby('subID', as_index=False)
+    participant_data_all_con = participant_grp_all_con.get_group(i)
+    differences_all_con = []
+
+    for acc in [0,1]:
+        acc_grps = participant_data_all_con.groupby('acc_trial_concrete_cued', as_index=False)
+        current_acc = acc_grps.get_group(acc)
+
+        for ori_x, ori_y in orientation_pairs:
+            value_x_all_con = current_acc.loc[current_acc['object_cued_rot'] == ori_x, 'button_press_clockwise'].mean()
+            value_y_all_con = current_acc.loc[current_acc['object_cued_rot'] == ori_y, 'button_press_clockwise'].mean()
+
+            # Calculate the difference and append to the list
+            difference_all_con = value_x_all_con - value_y_all_con
+            differences_all_con.append(difference_all_con)
+
+        mean_difference_all_con = np.mean(differences_all_con)
+        grouped_accuracy_bias.append((i, mean_difference_all_con, acc))
+
+grouped_accuracy_bias_df = pd.DataFrame(grouped_accuracy_bias, columns=['subID', 'Mean_Difference', 'accuracy'])
+
+anova_results = pg.rm_anova(data=grouped_accuracy_bias_df, dv='Mean_Difference', within='accuracy', subject='subID')
+display(anova_results)
+
+# -> Cardinal Bias seems to differ with accuracy (Could this be just due to load because load changes accuracy and changes cardinal repulsion)
+
+# Create a boxplot
+sns.stripplot(data=grouped_accuracy_bias_df, x='accuracy', y='Mean_Difference')
+sns.pointplot(data=grouped_accuracy_bias_df, x='accuracy', y='Mean_Difference', estimator='mean', linestyles='none')
+plt.xlabel('Accuracy')
+plt.ylabel('Mean Cardinal Repulsion at Cardinal Positions')
+plt.title('Stripplot of Cardinal Repulsion Indices within correct vs false trials')
+plt.show()
+
+#%%
+# try to run analysis testing if the cardinal bias differs with accuracy and load (interaction?)
+
+# There are nans in the df created below :/ 
+# This is because accuracy can be NaN and then button_press_clockwise is also NaN
+# but still .. if I am only looping over acc groups 0 and 1, how do the nans end up here?
+# grouped_accuracy_bias_load_df[grouped_accuracy_bias_load_df.isna().any(axis=1)]
+
+# for some participants, there are just no trials where all the conditions below are true because they for example didn't have
+# any inaccurate trials on orientatio 281.25 in load 1
+# df[(df['subID']=='Z16JQR') & (df['items_presented']==1) & (df['acc_trial_concrete_cued']==0) & (df['object_cued_rot']==281.25)]
+
+df["acc_trial_concrete_cued"].value_counts(dropna=False)
+
+grouped_accuracy_bias_load = []
+
+df_grouped_all_con = df.groupby(['subID', 'items_presented', 'acc_trial_concrete_cued', 'object_cued_rot'])['button_press_clockwise'].mean().reset_index()
+
+conditions = np.sort(df['items_presented'].unique())
+
+for i in good_partis:
+    participant_grp_all_con = df_grouped_all_con.groupby('subID', as_index=False)
+    participant_data_all_con = participant_grp_all_con.get_group(i)
+
+    for condition in conditions:
+        condition_grps = participant_data_all_con.groupby('items_presented', as_index=False)
+        current_condition = condition_grps.get_group(condition)
+
+        for acc in [0,1]:
+            acc_grps = current_condition.groupby('acc_trial_concrete_cued', as_index=False)
+            current_acc = acc_grps.get_group(acc)
+            
+            
+            differences_all_con = []
+
+            for ori_x, ori_y in orientation_pairs:
+                # print(i, ori_x, participant_data_all_con.loc[participant_data_all_con['object_cued_rot'] == ori_x, 'button_press_clockwise'])
+                #print('number of ori_x values', i, len(participant_data_all_con.loc[participant_data_all_con['object_cued_rot'] == ori_x, 'button_press_clockwise']))
+                #print('number of ori_y values', i, len(participant_data_all_con.loc[participant_data_all_con['object_cued_rot'] == ori_y, 'button_press_clockwise']))
+                value_x_all_con = current_acc.loc[current_acc['object_cued_rot'] == ori_x, 'button_press_clockwise'].mean()
+                print(i, condition, acc, value_x_all_con)
+                value_y_all_con = current_acc.loc[current_acc['object_cued_rot'] == ori_y, 'button_press_clockwise'].mean()
+
+                # Calculate the difference and append to the list
+                difference_all_con = value_x_all_con - value_y_all_con
+                differences_all_con.append(difference_all_con)
+                # print(i, value_x_all_con, value_y_all_con, difference_all_con, differences_all_con)
+
+            mean_difference_all_con = np.mean(differences_all_con)
+            grouped_accuracy_bias_load.append((i, condition, acc, mean_difference_all_con))
+
+grouped_accuracy_bias_load_df = pd.DataFrame(grouped_accuracy_bias_load, columns=['subID', 'items_presented', 'accuracy', 'Mean_Difference'])
+display(grouped_accuracy_bias_load_df)
+
+' %%'
+
+# This is not ideal though since the number of trials contributing to the mean cardinal scores for false trials is much lower than for correct trials
+plt.figure(figsize=(10, 6))
+sns.stripplot(data=grouped_accuracy_bias_load_df, x='items_presented', y='Mean_Difference', hue='accuracy', legend='full', palette=['red', 'green'],)
+# sns.pointplot(data=grouped_accuracy_bias_load_df, x='items_presented', y='Mean_Difference', hue='accuracy', palette=['red', 'green'], estimator='mean', linestyles='none')
+sns.boxplot(data=grouped_accuracy_bias_load_df, x='items_presented', y='Mean_Difference', hue='accuracy', palette=['red', 'green'])
+plt.legend()
+
+#%%
+######################################
+# Check all scripts below and decide if any of that is useful and still needed
+
+
+
+
+
 
 
 
@@ -1015,3 +1131,211 @@ ax.plot(thetas_adjusted, unbiased_assumption, color=colors[16], linestyle='dashe
 
 plt.show()
 
+
+
+# %%
+####################
+# completeley new idea using Gipetto 
+
+import numpy as np
+import pandas as pd
+
+# ============================================================
+# 1) Helpers: circular distance + nearest cardinal axis (0/90/180/270)
+# ============================================================
+
+CARDINALS = np.array([0.0, 90.0, 180.0, 270.0])
+
+def wrap360(theta):
+    """Wrap degrees into [0, 360). Works on scalars or numpy arrays/Series."""
+    return np.mod(theta, 360.0)
+
+def circ_dist_deg(a, b):
+    """
+    Circular distance between angles a and b in degrees, in [0, 180].
+    a, b can be arrays/Series.
+    """
+    a = wrap360(a)
+    b = wrap360(b)
+    d = np.abs(a - b)
+    return np.minimum(d, 360.0 - d)
+
+def nearest_cardinal_axis(theta_mem):
+    """
+    For each theta_mem (deg), return nearest cardinal axis (0/90/180/270)
+    and distance to it.
+    """
+    theta_mem = wrap360(theta_mem)
+    # dist to each cardinal: shape (n, 4)
+    dists = np.stack([circ_dist_deg(theta_mem, c) for c in CARDINALS], axis=1)
+    idx = np.argmin(dists, axis=1)
+    axis = CARDINALS[idx]
+    dmin = dists[np.arange(len(theta_mem)), idx]
+    return axis, dmin
+
+
+# ============================================================
+# 2) Trial-level "away from cardinal" coding from button press
+#    Your columns:
+#      - object_cued_rot: memorized/original orientation (deg)
+#      - button_press_clockwise: 1=CW, 0=CCW
+#    Optional:
+#      - object_test_rot_cued: probe orientation shown (deg)
+#      - acc_trial_concrete_cued: accuracy (0/1)
+# ============================================================
+
+def add_cardinal_bias_columns(df,
+                              mem_col="object_cued_rot",
+                              press_col="button_press_clockwise",
+                              eps_deg=1.0):
+    """
+    Adds:
+      - nearest_cardinal (deg)
+      - dist_to_cardinal (deg)
+      - away_cardinal (0/1): whether chosen direction moves AWAY from the nearest cardinal
+      - bias_signed (deg): + if away, - if toward (magnitude in degrees for eps step)
+    Uses a tiny step eps_deg in the chosen direction from the memorized orientation.
+    """
+    out = df.copy()
+
+    theta_mem = wrap360(out[mem_col].to_numpy(dtype=float))
+    axis, d_mem = nearest_cardinal_axis(theta_mem)
+
+    # Map button press to direction: CW=+1, CCW=-1
+    dir_resp = np.where(out[press_col].to_numpy() == 1, 1.0, -1.0)
+
+    theta_step = wrap360(theta_mem + eps_deg * dir_resp)
+    d_step = circ_dist_deg(theta_step, axis)
+
+    away = (d_step > d_mem).astype(int)     # 1 = away, 0 = toward
+    # If you want to treat exact ties (rare) as NA:
+    ties = np.isclose(d_step, d_mem, atol=1e-12)
+    away = away.astype("float")
+    away[ties] = np.nan
+
+    out["nearest_cardinal"] = axis
+    out["dist_to_cardinal"] = d_mem
+    out["away_cardinal"] = away
+    out["bias_signed"] = (d_step - d_mem)   # >0 away, <0 toward (in "eps degrees" units)
+    return out
+
+
+# --- apply to your df ---
+df2 = add_cardinal_bias_columns(df,
+                                mem_col="object_cued_rot",
+                                press_col="button_press_clockwise",
+                                eps_deg=1.0)
+
+# Quick sanity checks
+print(df2[["object_cued_rot", "nearest_cardinal", "dist_to_cardinal",
+           "button_press_clockwise", "away_cardinal", "bias_signed"]].head())
+
+
+# ============================================================
+# 3) Aggregate like your snippet, but now for AWAY bias
+#    (mean away_cardinal = proportion of responses that move away from cardinal)
+# ============================================================
+
+mbp_bias = (
+    df2.groupby(["object_cued_rot", "items_presented"])["away_cardinal"]
+       .mean()
+       .reset_index(name="p_away")
+)
+
+mbp_bias_all = (
+    df2.groupby("object_cued_rot")["away_cardinal"]
+       .mean()
+       .reset_index(name="p_away")
+)
+
+mbp_bias_con1 = mbp_bias[mbp_bias["items_presented"] == 1]
+mbp_bias_con2 = mbp_bias[mbp_bias["items_presented"] == 2]
+mbp_bias_con3 = mbp_bias[mbp_bias["items_presented"] == 3]
+
+mbp_bias_all.round(4).to_csv("../data/csv_files/p_away_by_orientation.csv", index=False)
+
+
+# ============================================================
+# 4) Model: Does bias vary with load and/or accuracy?
+#    Best practice is a trial-level logistic model.
+#
+#    statsmodels options:
+#      A) GEE (logistic) with participant clusters (robust; very practical)
+#      B) BinomialBayesMixedGLM (true random effects; a bit more complex)
+#
+#    Below is A) GEE, which is usually the easiest and solid.
+# ============================================================
+
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+
+# ---- you need a participant id column name here ----
+# Common names: "participant", "subj", "subject", "ppid" etc.
+subject = "subID"  # <- CHANGE THIS to your actual column name
+
+# Prepare modeling frame
+model_df = df2.copy()
+
+# Keep only rows with away_cardinal defined (drop ties if any)
+model_df = model_df.dropna(subset=["away_cardinal"])
+
+# Keep only rows with defined accuracy
+model_df = model_df.dropna(subset=["acc_trial_concrete_cued"])
+
+# Ensure predictors are treated as categorical where appropriate
+model_df["items_presented"] = model_df["items_presented"].astype("category")
+model_df["accuracy"] = model_df["acc_trial_concrete_cued"].astype(int)
+
+
+# Optional: include distance to cardinal as covariate (often important)
+# model_df["dist_to_cardinal_z"] = (model_df["dist_to_cardinal"] - model_df["dist_to_cardinal"].mean()) / model_df["dist_to_cardinal"].std()
+
+# --- GEE logistic with participant clusters ---
+# This tests: away_cardinal ~ load * accuracy (+ optional covariate dist_to_cardinal)
+# Remove accuracy terms if you don't have accuracy available.
+gee_formula = "away_cardinal ~ C(items_presented) * accuracy + dist_to_cardinal"
+# If you prefer without distance covariate:
+# gee_formula = "away_cardinal ~ C(items_presented) * accuracy"
+
+gee = smf.gee(
+    formula=gee_formula,
+    groups=model_df[subject],
+    data=model_df,
+    family=sm.families.Binomial()
+)
+gee_res = gee.fit()
+print(gee_res.summary())
+
+# Interpreting coefficients:
+# Positive coef => higher log-odds of "away" responses (more repulsion away from cardinal).
+# Use odds ratios:
+odds_ratios = np.exp(gee_res.params)
+print("\nOdds ratios:\n", odds_ratios)
+
+
+# ============================================================
+# 5) If you want participant-level ANOVA-style summaries:
+#    Compute per-participant proportions then use ordinary stats.
+#    (Less ideal than trial-level GEE/GLMM, but sometimes useful for plots.)
+# ============================================================
+
+# Per participant × load × accuracy mean away
+if "acc_trial_concrete_cued" in df2.columns:
+    subj_bias = (
+        df2.dropna(subset=["away_cardinal"])
+           .groupby([subject, "items_presented", "acc_trial_concrete_cued"])["away_cardinal"]
+           .mean()
+           .reset_index(name="p_away")
+    )
+    subj_bias.to_csv("../data/csv_files/p_away_by_subj_load_accuracy.csv", index=False)
+
+# Per participant × load mean away (collapsed over accuracy)
+subj_bias_load = (
+    df2.dropna(subset=["away_cardinal"])
+       .groupby([subject, "items_presented"])["away_cardinal"]
+       .mean()
+       .reset_index(name="p_away")
+)
+subj_bias_load.to_csv("../data/csv_files/p_away_by_subj_load.csv", index=False)
+
+# %%

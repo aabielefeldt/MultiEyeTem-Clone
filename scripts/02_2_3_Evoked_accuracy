@@ -134,7 +134,7 @@ evoked_df_accuracy_shifted.loc[evoked_df_accuracy_shifted['Load']==3, 'time'] +=
 
 # %%
 # adding mask to the evoked dataframe
-evoked_df_accuracy_shifted = pd.read_csv('../data/csv_files/evoked_df_accuracy_shifted.csv')
+
 # %%
 mask_partis = df[df['mask']==1]['subID'].unique().tolist()
 nomask_partis = df[df['mask']==0]['subID'].unique().tolist()

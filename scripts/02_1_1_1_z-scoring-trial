@@ -1,0 +1,251 @@
+# %%
+# Importsconda
+import mne
+import numpy as np
+import pandas as pd
+import itertools
+import os
+from pupil_utils import annotate_velocity_blinks, remove_missing_data, plot_pupil_trace_and_velocity_mad, interpolate_blinks, merge_and_rename_annotations, set_zero_to_nan
+
+
+# %% Load Metadata
+df = pd.read_csv('../data/csv_files/df.csv')
+good_partis = df['subID'].unique()
+
+# %%
+# if qt is used as backend the kernel crashes
+mne.viz.set_browser_backend('matplotlib')
+
+# %%
+# Trigger Dictionary
+# these were set in the original experiment script, additional pairs were also set in the experiment except for "fixation", "saccade", and "BAD_blink". 
+# Not sure if it is necessary to add them here because they are not relevant for what I am using the trigger_dict for 
+
+n_objects = ['obj1', 'obj2', 'obj3']
+n_positions = ['pos1', 'pos2', 'pos3']
+n_orientations = [f'ori{i}' for i in range(1, 17)]
+
+# Generate combinations of the three conditions
+combinations = itertools.product(n_positions, n_objects, n_orientations)
+
+# Create a dictionary to store the combinations
+trigger_dict = {}
+
+# Populate the dictionary with formatted combinations
+for idx, combo in enumerate(combinations, start=1):
+    trigger_dict['_'.join(combo)] = idx
+
+additional_pairs = {
+    "onset_concrete_cued_left": 220,
+    "onset_concrete_cued_right": 221,
+    "left_button_press": 241,
+    "right_button_press": 242,
+    "feedback_cued_item": 244,
+    "mask": 245,
+    "beginning/end_of_task": 246,
+    "fixation": 247,
+    "saccade": 248,
+    "BAD_blink": 249
+}
+
+trigger_dict.update(additional_pairs)
+
+# Extract values with "pos1" in the key, and key-value pairs
+values_with_pos1 = [trigger_dict[key] for key in trigger_dict if "pos1" in key]
+pos1_pairs = {key: trigger_dict[key] for key in trigger_dict if "pos1" in key}
+
+# %% 
+# creating folder for epochs
+datafolder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data"
+folder_name_epochs = f"Epochs_zscored"
+epochs_folderpath = os.path.join(datafolder_path, folder_name_epochs)
+os.makedirs(epochs_folderpath, exist_ok=True)
+
+# creating folder to save annotated raws
+folder_name_raws = f"final_annotated_raw_cache_from_epoch"
+raw_folderpath = os.path.join(datafolder_path, folder_name_raws)
+os.makedirs(raw_folderpath, exist_ok=True)
+
+#  %%
+# Creating epochs timelocked to pos1
+
+
+for i in good_partis[2:3]:
+        
+    # read file per subID
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/data_eyelink"
+    eyelink_file = folder_path + "/" + i + ".asc"
+    raw = mne.io.read_raw_eyelink(eyelink_file)
+
+    # Drop gaze channels
+    # still a comma after the remaining channels in annotations
+    drop_chs = ['xpos_right', 'xpos_left', 'ypos_right', 'ypos_left']
+    raw.drop_channels(drop_chs)
+
+    metadata_pp = df.loc[(df['subID'] == i)]
+    
+
+    #########################
+    # Does the Custom Mapping intefer with the blink interpolations at all?
+    
+    # Create Custom Mapping to map annotations found to event ids that match the triggers used
+    # does this overwrite the new_annots? -> apparently not
+    annotations = raw.annotations
+
+    custom_mapping = {}
+    # Generate mapping for annotations with integer descriptions
+    max_id = 0
+    for description in annotations.description:
+        if description.isdigit():
+            event_id = int(description)
+            custom_mapping[description] = event_id
+            if event_id > max_id:
+                max_id = event_id
+    next_event_id = max_id + 1
+    # Add non-numeric descriptions with unique event IDs
+    for description in annotations.description:
+        if not description.isdigit():
+            if description not in custom_mapping:  # Ensure each description is only mapped once
+                custom_mapping[description] = next_event_id
+                next_event_id += 1
+    sorted_custom_mapping = dict(sorted(custom_mapping.items(), key=lambda item: int(item[0]) if item[0].isdigit() else float('inf')))
+
+    # Get events from annotations using the custom mapping 
+    events_from_annot, event_dict = mne.events_from_annotations(
+        raw, event_id=sorted_custom_mapping)
+
+    # necessary events per participant - these are only those events that are also present in the event_id=pos1_pairs
+    # this might be done better in the newest version of mne. 
+    events_pos1 = events_from_annot[np.isin(events_from_annot, [values_with_pos1])[:, -1]]
+
+    #########################
+    # currently adds the new annotations to the old ones, could maybe also just use the new ones
+
+    raw = annotate_velocity_blinks(
+        raw,
+        channel_names=('pupil_left', 'pupil_right'),
+        margin_before=0.01,
+        margin_after=0.01,
+        max_duration=0.5,
+        description='BAD_velo_blink',
+        sigma=5,
+        vt_start_multiplyer = 40,
+        vt_end_multiplyer = 40,
+        low_v_thresh_multiplyer = 1,
+        )
+
+
+    #########################
+    # merging and renaming consecutive blinks
+    raw = merge_and_rename_annotations(
+        raw,
+        match=["BAD_velo_blink"],
+        min_gap_sec=0.1,
+        new_description="BAD_merged_blink",
+        rename_original_to="blink_used_for_merged",
+        channel_names=['pupil_right', 'pupil_left']
+    )
+    #########################
+    # setting all zero data points to nan
+    raw = set_zero_to_nan(raw, channel_names=('pupil_left', 'pupil_right'))
+
+    #########################
+    # interpolating with custom function
+    raw = interpolate_blinks(raw, buffer=[0.05, 0.05], match=["BAD_velo_blink", "BAD_merged_blink"], interpolate_gaze=False, method="MonotonicCubicSpline")
+
+    #########################
+    # removing buffer area around remaining nan data after interpolation and annotating those nans
+    raw = remove_missing_data(raw, channel_names=('pupil_left', 'pupil_right'), buffer=[0.2, 0.4])
+    nan_annot = mne.preprocessing.annotate_nan(raw)
+    raw.set_annotations(raw.annotations + nan_annot)
+
+
+
+    # # ---- z-score per subject on cleaned continuous data (NaN-aware) ----
+    # picks = mne.pick_channels(raw.ch_names, include=['pupil_left', 'pupil_right'])
+    # X = raw.get_data(picks=picks)  # shape (2, n_times)
+
+    # mu = np.nanmean(X, axis=1, keepdims=True)
+    # sd = np.nanstd(X, axis=1, keepdims=True)
+    # sd[sd == 0] = np.nan  # safety
+
+    # raw._data[picks, :] = (X - mu) / sd
+
+
+    ########################
+    ########################
+    # Epoching
+    pupil_epochs_pos1 = mne.Epochs(
+        raw,
+        events_pos1,
+        event_id=pos1_pairs,
+        tmin=-0.1,
+        tmax=9,
+        baseline=None,
+        metadata=metadata_pp,
+        picks=['pupil_left', 'pupil_right'],
+        event_repeated='merge',
+        preload=True,
+        reject_by_annotation=False
+    )
+    
+
+    # Save epoch in fif format to a specified folder
+    filename = f"{i}_zscored-epo.fif"
+    epochs_path = os.path.join(epochs_folderpath, filename)
+    #pupil_epochs_pos1.save(epochs_path, overwrite=True, split_size='1.8GB', split_naming='bids', verbose=None)
+
+
+
+
+
+
+# %%
+# Scaling thing:
+
+all_values = []
+
+for j,i in enumerate(good_partis):
+
+    print(j)
+    # read file per subID
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/final_annotated_raw_cache_from_epoch"
+    raw_fif = folder_path + "/" + i + "_annotated_raw.fif"
+    raw = mne.io.read_raw_fif(raw_fif)
+
+    drop_chs = ['DIN', 'x_head', 'y_head', 'distance']
+    raw.drop_channels(drop_chs)
+    
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+    epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+
+
+    raw_mean = np.nanmean(raw.get_data())
+    raw_max = np.nanmax(raw.get_data())
+    raw_min = np.nanmin(raw.get_data())
+
+    epoch_mean = np.nanmean(pupil_epoch.get_data())
+    epoch_max = np.nanmax(pupil_epoch.get_data())
+    epoch_min = np.nanmin(pupil_epoch.get_data())
+
+    all_values.append([i, raw_mean, raw_max, raw_min, epoch_mean, epoch_max, epoch_min])
+
+
+# %%
+all_values_df = pd.DataFrame(all_values, columns=['subID', 'raw_mean', 'raw_max', 'raw_min', 'epoch_mean', 'epoch_max', 'epoch_min']).round(3)
+all_values_df.to_csv('../data/csv_files/all_values_df.csv', index=False)
+
+# %%
+for col in all_values_df.columns[1:]:
+    print(col)
+    print('max', all_values_df[f'{col}'].max())
+    print('min', all_values_df[f'{col}'].min())
+    print('mean', all_values_df[f'{col}'].mean())
+
+# some outliers (especially in the raw, which is already annotated and therefore cleaned[interpolated, 0s to Nans..])
+# but all other values seem to be sort of in the expexted range of 800-2000
+# even though the mean of all subjects epoch mean is 802.. so just about in the range
+
+
+# %%

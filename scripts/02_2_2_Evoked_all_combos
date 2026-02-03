@@ -51,6 +51,10 @@ for i in good_partis:
             print(f"Skipping {combo} for subject {i} due to missing data")
             continue
         
+#####
+# !!
+# check if the below cropping makes sense..
+
         # Infer Load from number of non-'n' letters in combo (e.g., 'cnn' → 2 → Load = 1)
         n_items_presented = 3 - combo.count('n')
         load = n_items_presented
@@ -69,11 +73,10 @@ for i in good_partis:
         evoked_df_all_combos = pd.concat([evoked_df_all_combos, evoked_df])
 
 drop_log_df = pd.DataFrame(drop_log_rows)
-display(drop_log_df)
 
-# Reset index and save
-evoked_df_all_combos = evoked_df_all_combos.reset_index()
-evoked_df_all_combos.to_csv('../data/csv_files/evoked_df_all_combos.csv', index=False)
+# # Reset index and save
+# evoked_df_all_combos = evoked_df_all_combos.reset_index()
+# evoked_df_all_combos.to_csv('../data/csv_files/evoked_df_all_combos.csv', index=False)
 
 
 # %%

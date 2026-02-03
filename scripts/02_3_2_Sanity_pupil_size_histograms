@@ -157,3 +157,85 @@ plt.show()
 
 
 # %%
+# Histogram of pupil sizes per subID per timepoint seperarted by load during baseline period and combined histogram for all subIDs and combined histogram for all subIDs median centered
+
+all_baseline_means = pd.DataFrame()
+
+for i in good_partis[0:10]:
+    
+    # reading epochs per participant
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+    epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+
+    # combining channels
+    pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
+    roi_dict = dict(pupils=pupil_ix)
+    combine_nanmean = lambda data: np.nanmean(data, axis=1)
+    pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method=combine_nanmean)
+
+    # cropping to baseline period
+    pupil_epochs_combined.crop(tmin=-0.1, tmax=0, include_tmax=True)
+
+
+    con1_epochs = pupil_epochs_combined["items_presented == 1"]
+    con2_epochs = pupil_epochs_combined["items_presented == 2"]
+    con3_epochs = pupil_epochs_combined["items_presented == 3"]
+
+    con1_ave_df = con1_epochs.to_data_frame()
+    con1_ave_df['Load'] = 1
+    con1_ave_df['subID'] = i
+    con2_ave_df = con2_epochs.to_data_frame()
+    con2_ave_df['Load'] = 2
+    con2_ave_df['subID'] = i
+    con3_ave_df = con3_epochs.to_data_frame()
+    con3_ave_df['Load'] = 3
+    con3_ave_df['subID'] = i
+
+    pupil_epochs_combined = [con1_ave_df, con2_ave_df, con3_ave_df]
+    pupil_epochs_combined_df = pd.concat(pupil_epochs_combined)
+
+    print('len of data and number of nans within this participants baseline period', len(pupil_epochs_combined_df), pupil_epochs_combined_df['pupils'].isna().sum())
+
+    mean_list = []
+    for load in [1,2,3]:
+        load_epochs = pupil_epochs_combined_df[pupil_epochs_combined_df['Load']== load]
+        for l, k in enumerate(np.unique(load_epochs['epoch'])):
+
+            baseline_mean = load_epochs[load_epochs['epoch']== l]['pupils'].mean()
+            
+            mean_list.append(({'subID': i, 'baseline_mean': baseline_mean, 'epoch': k, 'Load': load}))
+
+    baseline_df = pd.DataFrame(mean_list)
+    baseline_df['baseline_mean_centered'] = baseline_df['baseline_mean'] - baseline_df['baseline_mean'].median()
+    all_baseline_means = pd.concat([all_baseline_means, baseline_df[['baseline_mean', 'baseline_mean_centered', 'subID', 'epoch', 'Load']]], ignore_index=True)
+
+
+    # plt.figure()
+    # plt.title(f'SubID {i} - distribution of pupil size during periods used for baseline ')
+    # sns.histplot(data=baseline_df, bins=50, stat='density', x='baseline_mean', hue='Load', legend=True)
+    # plt.show()
+
+    # # Save the figure
+    # name=f"pupil_size_histogram_during_baseline_{i}.png"
+    # figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures/baseline_pupil_size'
+    # figure_filepath = os.path.join(figures_folder, name)
+    # plt.savefig(figure_filepath, bbox_inches = 'tight')
+
+# Plot of distribution of all baseline means
+plt.figure()
+plt.title("Baseline pupil size (raw, all participants)")
+sns.histplot(data=all_baseline_means, x='baseline_mean', hue='Load', bins=50)
+plt.xlabel("Mean pupil size during baseline")
+plt.show()
+
+# Plot of distribution of all centered baseline means
+plt.figure()
+plt.title("Baseline pupil size (centered per subject)")
+sns.histplot(data=all_baseline_means, x='baseline_mean_centered', hue='Load', bins=50)
+plt.axvline(0, color='gray', linestyle='--', label='Subject median = 0')
+plt.xlabel("Centered baseline pupil size")
+plt.legend()
+plt.show()
+
+# %%

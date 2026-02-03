@@ -12,7 +12,14 @@ from scipy.ndimage import gaussian_filter1d
 from scipy.stats import t, ttest_rel, zscore, f, ttest_ind
 
 
+#%%
+#####
+# Which evoked should I be using below? 
+# Am I combining main effects of load and mask in here and therefore do not need a seperate script just for load effects?
+# Can I do the main effects of load using the evoked_all_combos_shifted like below or is that a mistake? Or is it just the same as evoked_df_shifted anyway?
+# results on load condition are similar using either evoked but should still make sure probably
 
+####
 # %% 
 # read evokes seperated by oblique vs cardinal
 df = pd.read_csv('../data/csv_files/df.csv')
@@ -21,56 +28,73 @@ mask_partis = df[df['mask']==1]['subID'].unique().tolist()
 nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
 
 evoked_df_shifted = pd.read_csv('../data/csv_files/evoked_df_shifted.csv')
-evoked_df_only_cardinal_shifted = pd.read_csv('../data/csv_files/evoked_df_only_cardinal_shifted.csv')
-evoked_df_all_combos_shifted = pd.read_csv('../data/csv_files/evoked_df_all_combos_shifted.csv')
-sig_results_shifted_cardinal_category = pd.read_csv('../data/csv_files/sig_results_shifted_cardinal_category.csv')
+evoked_df_shifted = evoked_df_shifted.drop(columns=['index'])
+#evoked_df_shifted_z = pd.read_csv('../data/csv_files/evoked_df_shifted_z.csv')
+#evoked_df_shifted_zscored_epochs = pd.read_csv('../data/csv_files/evoked_df_shifted_zscored_epochs.csv')
+#evoked_df_shifted_zscored_epochs = evoked_df_shifted_zscored_epochs.drop(columns=['index'])
+
+#evoked_df_only_cardinal_shifted = pd.read_csv('../data/csv_files/evoked_df_only_cardinal_shifted.csv')
+#evoked_df_all_combos_shifted = pd.read_csv('../data/csv_files/evoked_df_all_combos_shifted.csv')
+
+
+#sig_results_shifted_cardinal_category = pd.read_csv('../data/csv_files/sig_results_shifted_cardinal_category.csv')
 
 # %% Rounding the time of all to be identical between participants, ultimately move this to where the evoked dfs are created
 evoked_df_shifted['time'] = evoked_df_shifted['time'].round(3)
-evoked_df_only_cardinal_shifted['time'] = evoked_df_only_cardinal_shifted['time'].round(3)
-evoked_df_all_combos_shifted['time'] = evoked_df_all_combos_shifted['time'].round(3)
+#evoked_df_only_cardinal_shifted['time'] = evoked_df_only_cardinal_shifted['time'].round(3)
+#evoked_df_all_combos_shifted['time'] = evoked_df_all_combos_shifted['time'].round(3)
+#evoked_df_shifted_zscored_epochs['time'] = evoked_df_shifted_zscored_epochs['time'].round(3)
 
 
+
+#%%
+# Data preparation for tests:
+
+# exluding participant?
+# blink_outlier_subIDs = ['GJL7U8'] # , 'Z16JQR', 'AGYVK9', 'T4LJ1R', 'TEPWRW'
+# evoked_df_all_combos_shifted_excluded = evoked_df_shifted[~evoked_df_shifted['subID'].isin(blink_outlier_subIDs)]
+# evoked_df_shifted['pupils_z'] = evoked_df_shifted.groupby('subID')['pupils'].transform(lambda x: zscore(x, nan_policy='omit'))
+
+ 
+
+start_time = 3
+end_time = 6.5
+# check wether timing is correct, looks in the data like conditions are starting at -0.1, 0.9 and 1.9 
+# time_value_counts = evoked_df_shifted_zscored_epochs['time'].value_counts()
+
+# delay_time_window = evoked_df_all_combos_shifted_excluded[(evoked_df_all_combos_shifted_excluded['time'] >= start_time) & (evoked_df_all_combos_shifted_excluded['time'] <= end_time)]
+# delay_time_window = evoked_df_all_combos_shifted[(evoked_df_all_combos_shifted['time'] >= start_time) & (evoked_df_all_combos_shifted['time'] <= end_time)]
+
+delay_time_window = evoked_df_shifted[(evoked_df_shifted['time'] >= start_time) & (evoked_df_shifted['time'] <= end_time)]
+
+# z-scoring data
+# delay_time_window = delay_time_window.copy()
+# not_downsampled = ['KJN4WD'] 
+# evoked_df_shifted_zscored_epochs = evoked_df_shifted_zscored_epochs[~evoked_df_shifted_zscored_epochs['subID'].isin(not_downsampled)]
+# delay_time_window = evoked_df_shifted_zscored_epochs[(evoked_df_shifted_zscored_epochs['time'] >= start_time) & (evoked_df_shifted_zscored_epochs['time'] <= end_time)]
+
+# Z-score within each subject (across all times and averaged conditions)
 # %%
-# defining t-test statistic
+# defining t-test statistics and parameters for all tests
 
 def paired_t(X1, X2):
     t_vals, _ = stats.ttest_rel(X1, X2, axis=0)
     return t_vals
 
 def independent_t(X1, X2):
-    t_vals, _ = stats.ttest_ind(X1, X2, axis=0, equal_var=False)  # Welch’s t-test
+    t_vals, _ = stats.ttest_ind(X1, X2, axis=0, equal_var=True)  # equal_var=False = Welch’s t-test vs equal_var=True -> pooled-variance t-test (Student’s t), use Welch only when groups are very unequal
     return t_vals
 
-#%%
-# Data preparation for tests:
 
-# exluding participant?
-blink_outlier_subIDs = ['GJL7U8'] # , 'Z16JQR', 'AGYVK9', 'T4LJ1R', 'TEPWRW'
-evoked_df_all_combos_shifted_excluded = evoked_df_shifted[~evoked_df_shifted['subID'].isin(blink_outlier_subIDs)]
-
-
-start_time = 3
-end_time = 6.5
-delay_time_window = evoked_df_all_combos_shifted_excluded[(evoked_df_all_combos_shifted_excluded['time'] >= start_time) & (evoked_df_all_combos_shifted_excluded['time'] <= end_time)]
-delay_time_window = evoked_df_all_combos_shifted[(evoked_df_all_combos_shifted['time'] >= start_time) & (evoked_df_all_combos_shifted['time'] <= end_time)]
-
-# z-scoring data
-delay_time_window = delay_time_window.copy()
-
-# Z-score within each subject (across all times and trials)
-delay_time_window['pupils'] = delay_time_window.groupby('subID')['pupils'].transform(
-    lambda x: zscore(x, nan_policy='omit')
-)
-
-
+seed = 42
 #%%
 
-# 1 - Mask vs no Mask
-# cluster permutation on mask (is the difference between mask and non mask data significant) 
-# does this only work as long as there is the same number of subIDs in both groups? Do I at least need to report that if it isnt? 
-# would probably be statistically iffy if groups are different size
+## 1 - Mask vs no Mask
 ##########
+
+# using t-test (student's t) because more intepretable than f-test, using tcrit caluclated from function, two-tailed (tail=0), seed=42 to make result reproducible (42 is convention[meaning of life])
+# should all be correct
+
 
 cluster_results = {}
 
@@ -90,14 +114,20 @@ times = common_times.to_numpy()
 X1 = X1_df[common_times].values
 X2 = X2_df[common_times].values
 
+# threshold for independent samples t-test (students t)
+# not for f-test
+n1 = X1.shape[0]
+n2 = X2.shape[0]
+tcrit = t.ppf(1 - 0.025, df = (n1+n2-2))
 
-
+# this had different results when using t-test, why?
 T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
     [X1, X2],
-    n_permutations=1000,
-    threshold=2.0,        # use a lower t threshold
-    tail=0,               # two-tailed (direction of effect could go either way)
+    n_permutations=10000,
+    threshold=tcrit,        
+    tail=0,               # 0 = two-tailed (direction of effect could go either way), tail=0 is ignored on f-test, needs to be one-tailed
     stat_fun=independent_t,
+    seed=seed,     
     out_type='mask',
     verbose=True
 )
@@ -107,20 +137,20 @@ cluster_summaries = []
 
 for i, c in enumerate(clusters):
     p_val = cluster_p_values[i]
-    if p_val < alpha:
-        time_inds = c[0]
-        t_vals = T_obs[time_inds]
-        mean_t = t_vals.mean()
-        direction = "Mask > No Mask" if mean_t > 0 else "No Mask > Mask"
 
-        cluster_summaries.append({
-            "cluster_id": i + 1,
-            "start_time": times[time_inds][0],
-            "end_time": times[time_inds][-1],
-            "p_value": p_val,
-            "mean_t": mean_t,
-            "direction": direction
-        })
+    time_inds = c[0]
+    t_vals = T_obs[time_inds]
+    mean_t = t_vals.mean()
+    direction = "Mask > No Mask" if mean_t > 0 else "No Mask > Mask"
+
+    cluster_summaries.append({
+        "cluster_id": i + 1,
+        "start_time": times[time_inds][0],
+        "end_time": times[time_inds][-1],
+        "p_value": p_val,
+        "mean_t": mean_t,
+        "direction": direction
+    })
 
 # Turn into DataFrame
 cluster_results_mask_vs_nomask = pd.DataFrame(cluster_summaries)
@@ -166,226 +196,420 @@ plt.ylabel('Pupil size')
 plt.show()
 
 # %%
-# 2.1 - Load Conditions
-# cluster permutation test only on load within delay time window
+# 2.1 - Linear main effect of Load
+# One-sample cluster test on a planned contrast.
+# probably the most reasonable main effect of load analysis in my case
+# a linear trend contrast cluster test against zero.
+# “Is the average difference between high and low load (per subject) reliably non-zero?” - answer no, there is a reliable difference
+# might compare this to the planned contrast test above, both are apparently reasonable
+# results are also relatively similar to results of the more complicated omnibus test (similar significant clusters, p-values are much more significant for omnibus test though)
 
-cluster_results = {}
+df_post = delay_time_window.copy()
+df_post['time'] = df_post['time'].round(3)
+df_m = df_post
 
-# Subset the data
-df_load1 = delay_time_window[delay_time_window['Load'] == 1]
-df_load2 = delay_time_window[delay_time_window['Load'] == 2]
-df_load3 = delay_time_window[delay_time_window['Load'] == 3]
+# Build subject×time tables per load
+P1 = df_m[df_m['Load'] == 1].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+P2 = df_m[df_m['Load'] == 2].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+P3 = df_m[df_m['Load'] == 3].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
 
-# Pivot to get subjects x timepoints
-X1_df = df_load1.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-X2_df = df_load2.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-X3_df = df_load3.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+# Align subjects and timepoints across ALL three loads (within-subjects!)
+common_subs  = P1.index.intersection(P2.index).intersection(P3.index)
+common_times = P1.columns.intersection(P2.columns).intersection(P3.columns)
+common_times = np.array(sorted(common_times))
 
-# Align subjects and timepoints
-common_subs = X1_df.index.intersection(X2_df.index).intersection(X3_df.index)
-common_times = X1_df.columns.intersection(X2_df.columns).intersection(X3_df.columns)
+X1 = P1.loc[common_subs, common_times].to_numpy()
+X2 = P2.loc[common_subs, common_times].to_numpy()
+X3 = P3.loc[common_subs, common_times].to_numpy()
+times = common_times
 
-X1 = X1_df.loc[common_subs, common_times].to_numpy()
-X2 = X2_df.loc[common_subs, common_times].to_numpy()
-X3 = X3_df.loc[common_subs, common_times].to_numpy()
+# X1, X2, X3 already aligned: (subjects × time)
+w = np.array([-1, 0, 1])  # linear contrast weights
 
-times = common_times.to_numpy()
+# Compute per-subject contrast time series
+X_lin = w[0]*X1 + w[1]*X2 + w[2]*X3   # shape (n_sub × n_time)
 
-T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
-    [X1, X2, X3],
-    n_permutations=1000,
-    threshold=None,        # None for f_test?
-    tail=1,               # two-tailed
-    stat_fun=f_oneway,
-    out_type='mask',
-    verbose=True
+# Cluster test vs 0
+n_sub = X_lin.shape[0]
+tcrit = t.ppf(1 - 0.025, df=n_sub-1)
+
+T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
+    X_lin,
+    threshold=tcrit,
+    n_permutations=5000,
+    tail=0,         # two-tailed
+    seed=seed,
+    out_type='mask'
 )
 
-
+print(clusters)
+print(cluster_p_values)
 
 alpha = 0.05
-cluster_summaries = []
-
-for i, c in enumerate(clusters):
-    p_val = cluster_p_values[i]
-    if p_val < alpha:
-        time_inds = c[0]
-        F_vals = T_obs[time_inds]
-        mean_F = F_vals.mean()
-
-        # Extract descriptive means of each condition inside cluster
-        load_means = {
-            "mean_load1": np.nanmean(X1[:, time_inds]),
-            "mean_load2": np.nanmean(X2[:, time_inds]),
-            "mean_load3": np.nanmean(X3[:, time_inds]),
-        }
-        cluster_entry = {
-            "cluster_id": i + 1,
-            "start_time": times[time_inds][0],
-            "end_time": times[time_inds][-1],
-            "p_value": p_val,
-            "mean_F": mean_F,
-        }
-        cluster_entry.update(load_means)
-
-        cluster_summaries.append(cluster_entry)
-
-# Save to DataFrame
-cluster_df = pd.DataFrame(cluster_summaries)
-# cluster_df.to_csv("cluster_results_load.csv", index=False)
-
-display(cluster_df)
-
-# Plot
-plt.figure(figsize=(10, 5))
-plt.plot(times, T_obs, label='T-values')
+rows = []
 for i_c, c in enumerate(clusters):
-    if cluster_p_values[i_c] < 0.05:
-        plt.axvspan(times[c][0], times[c][-1], color='red', alpha=0.3)
-plt.axhline(0, color='black', linestyle='--')
-plt.title(f'Cluster Permutation Test Load)')
-plt.xlabel('Time (s)')
-plt.ylabel('T-statistic')
+    p = float(cluster_p_values[i_c])
+    if p < alpha:
+        # c is a boolean mask (out_type='mask'); if it's a slice tuple, adapt accordingly
+        if isinstance(c, np.ndarray):
+            idx = np.flatnonzero(c)
+        else:
+            idx = np.arange(len(times))[c]
+
+        if idx.size == 0:
+            continue
+
+
+        start_t = float(times[idx[0]])
+        end_t   = float(times[idx[-1]])
+        mean_t  = float(np.mean(T_obs[idx]))
+        dur     = int(idx.size)
+
+        rows.append({
+            "effect": "linear trend",
+            "cluster_id": int(i_c + 1),
+            "start_time": start_t,
+            "end_time": end_t,
+            "duration_samps": dur,
+            "p_value": p,
+            "mean_t": mean_t,
+            "n_subjects": int(X_lin.shape[0]),
+        })
+
+summary = pd.DataFrame(rows).reset_index(drop=True)
+display(summary)
+# summary.to_csv("clusters_LoadxAccuracy_linearTrend_interaction_FIXED.csv", index=False)
+
+        
+# Plot t-curve with correctly shaded clusters
+plt.figure(figsize=(10,5))
+plt.plot(times, T_obs, label='t (load trend)')
+plt.axhline(0, color='k', linestyle=':', linewidth=0.8)
+
+for i_c, c in enumerate(clusters):
+    if cluster_p_values[i_c] < alpha:
+        if isinstance(c, np.ndarray):
+            idx = np.flatnonzero(c)
+        else:
+            idx = np.arange(len(times))[c]
+        plt.axvspan(float(times[idx[0]]), float(times[idx[-1]]), color='red', alpha=0.3)
+
+plt.xlabel("Time (s)")
+plt.ylabel("t") 
+plt.title("Linear trend of load effect")
+plt.tight_layout()
+plt.show()
+
+# %%
+# 2.2 - Load Conditions Main Effect Omnibus Test
+# cluster permutation test only on load within delay time window
+# new version which should work but I still need to understand 
+# much faster because its not using a statsmodel f test but a custom one
+# shuffles condition labels within each subject only
+
+alpha = 0.05
+n_perm = 1000
+rng = np.random.default_rng(42)
+
+# ---------- Build subject × time matrices ----------
+df = delay_time_window.copy()
+df['time'] = df['time'].round(3)
+
+X1_df = df[df['Load'] == 1].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+X2_df = df[df['Load'] == 2].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+X3_df = df[df['Load'] == 3].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+
+common_subs  = X1_df.index.intersection(X2_df.index).intersection(X3_df.index)
+common_times = X1_df.columns.intersection(X2_df.columns).intersection(X3_df.columns)
+times = np.array(sorted(common_times))
+
+X1 = X1_df.loc[common_subs, times].to_numpy()
+X2 = X2_df.loc[common_subs, times].to_numpy()
+X3 = X3_df.loc[common_subs, times].to_numpy()
+
+# Drop NaNs (important)
+ok_rows = (~np.isnan(X1) & ~np.isnan(X2) & ~np.isnan(X3)).all(axis=1)
+ok_cols = (~np.isnan(X1) & ~np.isnan(X2) & ~np.isnan(X3)).all(axis=0)
+X1, X2, X3 = X1[ok_rows][:, ok_cols], X2[ok_rows][:, ok_cols], X3[ok_rows][:, ok_cols]
+times = times[ok_cols]
+
+n_sub, n_times = X1.shape
+print("Aligned shape:", X1.shape)
+
+# Stack: (subjects, loads, time)
+X = np.stack([X1, X2, X3], axis=1)
+
+# ---------- Fast repeated-measures F ----------
+def rm_f_stat(X):
+    """
+    X shape: (n_subjects, k=3 loads, n_times)
+    returns: F values, shape (n_times,)
+    """
+    n, k, _ = X.shape
+
+    subj_mean  = X.mean(axis=1, keepdims=True)          # (n,1,t)
+    cond_mean  = X.mean(axis=0, keepdims=True)          # (1,k,t)
+    grand_mean = X.mean(axis=(0,1), keepdims=True)      # (1,1,t)
+
+    # SS for Load (condition) effect
+    SS_load = n * np.sum((cond_mean - grand_mean)**2, axis=1)   # (1,t)
+    SS_load = SS_load.reshape(-1)                                # -> (t,)
+
+    # SS error (subject × condition interaction)
+    SS_error = np.sum((X - subj_mean - cond_mean + grand_mean)**2, axis=(0,1))  # (t,)
+
+    df_load  = k - 1
+    df_error = (n - 1) * df_load
+
+    MS_load  = SS_load / df_load
+    MS_error = SS_error / df_error
+
+    F = MS_load / MS_error
+    return np.asarray(F).reshape(-1)  # ensure (t,)
+
+
+# ---------- Observed F ----------
+F_obs = rm_f_stat(X)
+
+df_load = 2
+df_error = (n_sub - 1) * df_load
+F_thresh = f.ppf(1 - alpha, df_load, df_error)
+
+# ---------- Cluster finder ----------
+def find_clusters(mask):
+    idx = np.flatnonzero(mask)
+    if idx.size == 0:
+        return []
+    clusters = []
+    start = idx[0]
+    prev = idx[0]
+    for i in idx[1:]:
+        if i == prev + 1:
+            prev = i
+        else:
+            clusters.append((start, prev))
+            start = i
+            prev = i
+    clusters.append((start, prev))
+    return clusters
+
+supra = F_obs > F_thresh
+clusters_obs = find_clusters(supra)
+cluster_mass_obs = np.array([F_obs[s:e+1].sum() for s,e in clusters_obs])
+
+# ---------- Permutations ----------
+max_cluster_mass = np.zeros(n_perm)
+
+for p in range(n_perm):
+    Xp = X.copy()
+    for s in range(n_sub):
+        Xp[s] = Xp[s, rng.permutation(3), :]
+    Fp = rm_f_stat(Xp)
+    supra_p = Fp > F_thresh
+    cl_p = find_clusters(supra_p)
+    max_cluster_mass[p] = max([Fp[s:e+1].sum() for s,e in cl_p], default=0)
+
+# ---------- Cluster p-values ----------
+cluster_pvals = np.array([
+    (np.sum(max_cluster_mass >= m) + 1) / (n_perm + 1)
+    for m in cluster_mass_obs
+])
+
+# ---------- Summaries ----------
+rows = []
+for i, (s,e) in enumerate(clusters_obs):
+    if cluster_pvals[i] < 0.05:
+        rows.append({
+            "cluster_id": i+1,
+            "start_time": times[s],
+            "end_time": times[e],
+            "p_value": cluster_pvals[i],
+            "mean_F": F_obs[s:e+1].mean(),
+            "mean_load1": X1[:, s:e+1].mean(),
+            "mean_load2": X2[:, s:e+1].mean(),
+            "mean_load3": X3[:, s:e+1].mean(),
+            "n_subjects": n_sub
+        })
+
+cluster_df = pd.DataFrame(rows)
+cluster_df.to_csv("cluster_results_load_omnibus_fast.csv", index=False)
+display(cluster_df if not cluster_df.empty else "No significant load clusters.")
+
+# ---------- Plots ----------
+plt.figure(figsize=(10,5))
+plt.plot(times, F_obs, label="F (Load)")
+plt.axhline(F_thresh, linestyle='--', label='cluster threshold')
+for i,(s,e) in enumerate(clusters_obs):
+    if cluster_pvals[i] < 0.05:
+        plt.axvspan(times[s], times[e], color='red', alpha=0.3)
+plt.xlabel("Time (s)")
+plt.ylabel("F-statistic")
+plt.title("Omnibus Load effect (repeated-measures cluster permutation)")
 plt.legend()
 plt.tight_layout()
 plt.show()
 
-times = np.array(common_times)  # make sure it's ordered
-X1_mean = X1.mean(axis=0)
-X2_mean = X2.mean(axis=0)
-X3_mean = X3.mean(axis=0)
+# %%
+# 2.2 Load conditions main effect/post-hoc pairwise comparison cluster tests ---
+# fixed, now using permutation_cluster_1samp_test for within subjects design, which uses t-test against zero under
+# the hood to test whether the mean differences between conditions are different from zero across subjects
+# mathematically equivalent to ttest_rel, subtraction for difference curve just happens internally with ttest_rel
+# either use this or finicky self written omnibus f-test or linear contrast test
+# 
 
-plt.plot(times, X1_mean, label='Load 1')
-plt.plot(times, X2_mean, label='Load 2')
-plt.plot(times, X3_mean, label='Load 3')
 
-# Highlight significant clusters
-for i_c, cluster in enumerate(clusters):
-    if cluster_p_values[i_c] < 0.05:
-        time_mask = cluster
-        plt.axvspan(times[time_mask][0], times[time_mask][-1], color='red', alpha=0.3)
+# Safety copy and ensure common time grid
+df_post = delay_time_window.copy()
+df_post['time'] = df_post['time'].round(3)
 
-plt.legend()
-plt.title('Cluster Permutation Test Load Conditions')
-plt.xlabel('Time (s)')
-plt.ylabel('Pupil size')
-plt.show()
+alpha = 0.05
+n_perm = 5000
 
-#%%
+all_rows = []  # to collect summaries across both mask groups
 
-# 2.2 - Load Conditions (seperated by mask)
-# cluster permutation test only on load within delay time window but this time also seperating by mask
-##########
 
-for mask in [0,1]:
-    delay_time_window_mask = delay_time_window[delay_time_window['mask'] == mask]
+print(f"\n=== Post-hoc Load tests ===")
+df_m = df_post
 
-    cluster_results = {}
+# Build subject×time tables per load
+P1 = df_m[df_m['Load'] == 1].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+P2 = df_m[df_m['Load'] == 2].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+P3 = df_m[df_m['Load'] == 3].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
 
-    # Subset the data
-    df_load1 = delay_time_window_mask[delay_time_window_mask['Load'] == 1]
-    df_load2 = delay_time_window_mask[delay_time_window_mask['Load'] == 2]
-    df_load3 = delay_time_window_mask[delay_time_window_mask['Load'] == 3]
+# Align subjects and timepoints across ALL three loads (within-subjects!)
+common_subs  = P1.index.intersection(P2.index).intersection(P3.index)
+common_times = P1.columns.intersection(P2.columns).intersection(P3.columns)
+common_times = np.array(sorted(common_times))
 
-    # Pivot to get subjects x timepoints
-    X1_df = df_load1.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-    X2_df = df_load2.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-    X3_df = df_load3.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+X1 = P1.loc[common_subs, common_times].to_numpy()
+X2 = P2.loc[common_subs, common_times].to_numpy()
+X3 = P3.loc[common_subs, common_times].to_numpy()
+times = common_times
 
-    # Align subjects and timepoints
-    common_subs = X1_df.index.intersection(X2_df.index).intersection(X3_df.index)
-    common_times = X1_df.columns.intersection(X2_df.columns).intersection(X3_df.columns)
+# Drop rows/cols with any NaNs across the three loads
+row_ok = (~np.isnan(X1) & ~np.isnan(X2) & ~np.isnan(X3)).all(axis=1)
+col_ok = (~np.isnan(X1) & ~np.isnan(X2) & ~np.isnan(X3)).all(axis=0)
+X1, X2, X3 = X1[row_ok][:, col_ok], X2[row_ok][:, col_ok], X3[row_ok][:, col_ok]
+times = times[col_ok]
+common_subs = common_subs[row_ok]
 
-    X1 = X1_df.loc[common_subs, common_times].to_numpy()
-    X2 = X2_df.loc[common_subs, common_times].to_numpy()
-    X3 = X3_df.loc[common_subs, common_times].to_numpy()
+print("Aligned shapes:", X1.shape, X2.shape, X3.shape)  # (n_subjects, n_times)
 
-    times = common_times.to_numpy()
+# Pairwise comparisons (A - B); positive mean_diff => A > B
+pairs = {
+    "L2_minus_L1": (X2, X1),
+    "L3_minus_L2": (X3, X2),
+    "L3_minus_L1": (X3, X1),
+}
 
-    T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
-        [X1, X2, X3],
-        n_permutations=10000,
-        threshold=None,        # None for f_test?
-        tail=1,               # two-tailed (direction of effect could go either way)
-        stat_fun=f_oneway,
-        out_type='mask',
-        verbose=True
+for label, (XA, XB) in pairs.items():
+    Xdiff = XA - XB                       # (n_subjects, n_times)
+    n_sub = Xdiff.shape[0]
+    tcrit = t.ppf(1 - 0.025, df=n_sub - 1)  # two-tailed cluster-forming threshold
+
+    T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
+        Xdiff,
+        n_permutations=n_perm,
+        threshold=tcrit,
+        tail=0,
+        seed=seed,
+        out_type="mask",
+        verbose=True,
     )
 
+    print(cluster_p_values.round(3))
+    # Summarize significant clusters
     alpha = 0.05
-    cluster_summaries = []
+    n_times = len(times)
 
-    for i, c in enumerate(clusters):
-        p_val = cluster_p_values[i]
-        if p_val < alpha:
-            time_inds = c[0]
-            F_vals = T_obs[time_inds]
-            mean_F = F_vals.mean()
-
-            # Extract descriptive means of each condition inside cluster
-            load_means = {
-                "mean_load1": np.nanmean(X1[:, time_inds]),
-                "mean_load2": np.nanmean(X2[:, time_inds]),
-                "mean_load3": np.nanmean(X3[:, time_inds]),
-            }
-            cluster_entry = {
-                "cluster_id": i + 1,
-                "start_time": times[time_inds][0],
-                "end_time": times[time_inds][-1],
-                "p_value": p_val,
-                "mean_F": mean_F,
-            }
-            cluster_entry.update(load_means)
-
-            cluster_summaries.append(cluster_entry)
-
-    # Save to DataFrame
-    cluster_df = pd.DataFrame(cluster_summaries)
-    # cluster_df.to_csv("cluster_results_load_by_mask.csv", index=False)
-
-    display(cluster_df)
-
-
-        # Plot
-    plt.figure(figsize=(10, 5))
-    plt.plot(times, T_obs, label='T-values')
+    # ---- Summarize significant clusters (no helper) ----
     for i_c, c in enumerate(clusters):
-        if cluster_p_values[i_c] < 0.05:
-            plt.axvspan(times[c][0], times[c][-1], color='red', alpha=0.3)
-    plt.axhline(2, color='black', linestyle='--')
-    plt.title(f'Cluster Permutation Test (Mask {mask})')
-    plt.xlabel('Time (s)')
-    plt.ylabel('T-statistic')
+        p = float(cluster_p_values[i_c])
+        if p < alpha:
+            # Build a boolean time mask regardless of cluster type
+            if isinstance(c, np.ndarray):
+                time_mask = c  # already boolean mask over time
+            else:
+                # c is a tuple containing a slice (or a slice)
+                s = c[0] if isinstance(c, tuple) else c
+                time_mask = np.zeros(n_times, dtype=bool)
+                time_mask[s] = True
+
+            t_vals = T_obs[time_mask]
+            mean_t = float(np.mean(t_vals))
+
+            # Effect (A - B) averaged within the cluster (paired contrast)
+            # Here XA and XB are the two arrays you tested (e.g., X3 and X1)
+            mean_diff = float(np.nanmean(Xdiff[:, time_mask]))
+
+            # Cluster bounds for reporting
+            idx = np.flatnonzero(time_mask)
+            t_start = float(times[idx[0]])
+            t_end   = float(times[idx[-1]])
+
+            all_rows.append({
+                "contrast": label,
+                "cluster_id": int(i_c + 1),
+                "start_time": t_start,
+                "end_time": t_end,
+                "p_value": p,
+                "mean_t": mean_t,
+                "mean_diff": mean_diff,
+                "n_subjects": int(XA.shape[0])
+            })
+
+    # ---- Plot t-curve and shade ALL significant clusters (no helper) ----
+    plt.figure(figsize=(10, 5))
+    plt.plot(times, T_obs, label='t-values')
+    plt.axhline(0, color='k', linestyle='--', linewidth=0.8)
+
+    for i_c, c in enumerate(clusters):
+        if cluster_p_values[i_c] < alpha:
+            if isinstance(c, np.ndarray):
+                time_mask = c
+            else:
+                s = c[0] if isinstance(c, tuple) else c
+                time_mask = np.zeros(n_times, dtype=bool)
+                time_mask[s] = True
+
+            idx = np.flatnonzero(time_mask)
+            if idx.size:  # safety
+                plt.axvspan(times[idx[0]], times[idx[-1]], color='red', alpha=0.3, zorder=0)
+
+    plt.title(f"Post-hoc {label} (paired cluster test)")
+    plt.xlabel("Time (s)")
+    plt.ylabel("t-statistic")
     plt.legend()
     plt.tight_layout()
     plt.show()
 
-    times = np.array(common_times)  # make sure it's ordered
-    X1_mean = X1.mean(axis=0)
-    X2_mean = X2.mean(axis=0)
-    X3_mean = X3.mean(axis=0)
+# Optional: show condition means for reference
+plt.figure(figsize=(10, 5))
+plt.plot(times, X1.mean(axis=0), label='Load 1')
+plt.plot(times, X2.mean(axis=0), label='Load 2')
+plt.plot(times, X3.mean(axis=0), label='Load 3')
+plt.title(f"Condition means")
+plt.xlabel("Time (s)")
+plt.ylabel("Mean pupil")
+plt.legend()
+plt.tight_layout()
+plt.show()
 
-    plt.plot(times, X1_mean, label='Load 1')
-    plt.plot(times, X2_mean, label='Load 2')
-    plt.plot(times, X3_mean, label='Load 3')
+# Save combined summary across
+posthoc_df = pd.DataFrame(all_rows).sort_values(["contrast","start_time"]).reset_index(drop=True)
+# posthoc_df.to_csv("posthoc_load_pairwise_clusters.csv", index=False)
 
-    # Highlight significant clusters
-    for i_c, cluster in enumerate(clusters):
-        if cluster_p_values[i_c] < 0.05:
-            time_mask = cluster
-            plt.axvspan(times[time_mask][0], times[time_mask][-1], color='red', alpha=0.3)
+display(posthoc_df if not posthoc_df.empty else "No significant post-hoc clusters.")
 
-    plt.legend()
-    plt.title(f'Cluster Permutation Test Load Conditions. Mask = {mask}')
-    plt.xlabel('Time (s)')
-    plt.ylabel('Pupil size')
-    plt.show()
+#%%
+# 2.3 - Load Conditions (seperated by mask)
+# pairwise cluster tests for Load, split by mask ---
 
-# %%
-# --- Post-hoc pairwise cluster tests for Load, split by mask ---
-# Expects: delay_time_window with columns ['subID','time','pupils','Load','mask']
-# Tip: ensure delay_time_window['time'] is already rounded to a common grid (e.g., .round(3))
-
+# also fixed, using permutation_cluster_1samp_test instead now
+# still - is this useful? maybe to show that even though there is a difference in mask conditions, load effects were seen 
+# in all mask and load combinations
+# if there is no difference between the mask conditions, is it still useful to check within each mask condition for 
+# the load effect? would I have to do more tests to deal with multiple comparisons?
 
 # Safety copy and ensure common time grid
 df_post = delay_time_window.copy()
@@ -422,16 +646,6 @@ for mask in [0, 1]:
     times = times[col_ok]
     common_subs = common_subs[row_ok]
 
-    print("Aligned shapes:", X1.shape, X2.shape, X3.shape)  # (n_subjects, n_times)
-    if X1.shape[0] < 5 or X1.shape[1] < 5:
-        print(f"mask={mask}: Not enough data after alignment; skipping.")
-        continue
-
-    # Define paired t for MNE
-    def paired_t(A, B):
-        t_vals, _ = ttest_rel(A, B, axis=0)
-        return t_vals
-
     # Pairwise comparisons (A - B); positive mean_diff => A > B
     pairs = {
         "L2_minus_L1": (X2, X1),
@@ -440,20 +654,21 @@ for mask in [0, 1]:
     }
 
     for label, (XA, XB) in pairs.items():
-        n_sub = XA.shape[0]
-        tcrit = t.ppf(1 - 0.025, df=n_sub - 1)  # two-tailed 5%
-        print(f"\nmask={mask} | {label}: n={n_sub}, tcrit≈{tcrit:.2f}, timepoints={XA.shape[1]}")
+        Xdiff = XA - XB                       # (n_subjects, n_times)
+        n_sub = Xdiff.shape[0]
+        tcrit = t.ppf(1 - 0.025, df=n_sub - 1)  # two-tailed cluster-forming threshold
 
-        T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
-            [XA, XB],
-            stat_fun=paired_t,
+        T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
+            Xdiff,
             n_permutations=n_perm,
             threshold=tcrit,   # cluster-forming threshold
             tail=0,            # two-tailed
+            seed=seed,
             out_type='mask',
             verbose=True
         )
-        print(cluster_p_values)
+
+        print(cluster_p_values.round(3))
         # Summarize significant clusters
         alpha = 0.05
         n_times = len(times)
@@ -476,7 +691,7 @@ for mask in [0, 1]:
 
                 # Effect (A - B) averaged within the cluster (paired contrast)
                 # Here XA and XB are the two arrays you tested (e.g., X3 and X1)
-                mean_diff = float(np.nanmean(XA[:, time_mask] - XB[:, time_mask]))
+                mean_diff = float(np.nanmean(Xdiff[:, time_mask]))
 
                 # Cluster bounds for reporting
                 idx = np.flatnonzero(time_mask)
@@ -536,183 +751,35 @@ for mask in [0, 1]:
 posthoc_df = pd.DataFrame(all_rows).sort_values(["mask","contrast","start_time"]).reset_index(drop=True)
 # posthoc_df.to_csv("posthoc_load_pairwise_clusters_by_mask.csv", index=False)
 
-print(posthoc_df if not posthoc_df.empty else "No significant post-hoc clusters.")
+display(posthoc_df if not posthoc_df.empty else "No significant post-hoc clusters.")
 
 
-# %%
-# --- Post-hoc pairwise cluster tests for Load ---
-# trying the same but no seperation by mask
 
-# Safety copy and ensure common time grid
-df_post = delay_time_window.copy()
-df_post['time'] = df_post['time'].round(3)
-
-alpha = 0.05
-n_perm = 5000
-
-all_rows = []  # to collect summaries across both mask groups
-
-
-print(f"\n=== Post-hoc Load tests ===")
-df_m = df_post
-
-# Build subject×time tables per load
-P1 = df_m[df_m['Load'] == 1].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-P2 = df_m[df_m['Load'] == 2].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-P3 = df_m[df_m['Load'] == 3].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-
-# Align subjects and timepoints across ALL three loads (within-subjects!)
-common_subs  = P1.index.intersection(P2.index).intersection(P3.index)
-common_times = P1.columns.intersection(P2.columns).intersection(P3.columns)
-common_times = np.array(sorted(common_times))
-
-X1 = P1.loc[common_subs, common_times].to_numpy()
-X2 = P2.loc[common_subs, common_times].to_numpy()
-X3 = P3.loc[common_subs, common_times].to_numpy()
-times = common_times
-
-# Drop rows/cols with any NaNs across the three loads
-row_ok = (~np.isnan(X1) & ~np.isnan(X2) & ~np.isnan(X3)).all(axis=1)
-col_ok = (~np.isnan(X1) & ~np.isnan(X2) & ~np.isnan(X3)).all(axis=0)
-X1, X2, X3 = X1[row_ok][:, col_ok], X2[row_ok][:, col_ok], X3[row_ok][:, col_ok]
-times = times[col_ok]
-common_subs = common_subs[row_ok]
-
-print("Aligned shapes:", X1.shape, X2.shape, X3.shape)  # (n_subjects, n_times)
-
-
-# Define paired t for MNE
-def paired_t(A, B):
-    t_vals, _ = ttest_rel(A, B, axis=0)
-    return t_vals
-
-# Pairwise comparisons (A - B); positive mean_diff => A > B
-pairs = {
-    "L2_minus_L1": (X2, X1),
-    "L3_minus_L2": (X3, X2),
-    "L3_minus_L1": (X3, X1),
-}
-
-for label, (XA, XB) in pairs.items():
-    n_sub = XA.shape[0]
-    tcrit = t.ppf(1 - 0.025, df=n_sub - 1)  # two-tailed 5%
-    print(f"\n {label}: n={n_sub}, tcrit≈{tcrit:.2f}, timepoints={XA.shape[1]}")
-
-    T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
-        [XA, XB],
-        stat_fun=paired_t,
-        n_permutations=n_perm,
-        threshold=tcrit,   # cluster-forming threshold
-        tail=0,            # two-tailed
-        out_type='mask',
-        verbose=True
-    )
-    print(cluster_p_values.round(3))
-    # Summarize significant clusters
-    alpha = 0.05
-    n_times = len(times)
-
-    # ---- Summarize significant clusters (no helper) ----
-    for i_c, c in enumerate(clusters):
-        p = float(cluster_p_values[i_c])
-        if p < alpha:
-            # Build a boolean time mask regardless of cluster type
-            if isinstance(c, np.ndarray):
-                time_mask = c  # already boolean mask over time
-            else:
-                # c is a tuple containing a slice (or a slice)
-                s = c[0] if isinstance(c, tuple) else c
-                time_mask = np.zeros(n_times, dtype=bool)
-                time_mask[s] = True
-
-            t_vals = T_obs[time_mask]
-            mean_t = float(np.mean(t_vals))
-
-            # Effect (A - B) averaged within the cluster (paired contrast)
-            # Here XA and XB are the two arrays you tested (e.g., X3 and X1)
-            mean_diff = float(np.nanmean(XA[:, time_mask] - XB[:, time_mask]))
-
-            # Cluster bounds for reporting
-            idx = np.flatnonzero(time_mask)
-            t_start = float(times[idx[0]])
-            t_end   = float(times[idx[-1]])
-
-            all_rows.append({
-                "contrast": label,
-                "cluster_id": int(i_c + 1),
-                "start_time": t_start,
-                "end_time": t_end,
-                "p_value": p,
-                "mean_t": mean_t,
-                "mean_diff": mean_diff,
-                "n_subjects": int(XA.shape[0])
-            })
-
-    # ---- Plot t-curve and shade ALL significant clusters (no helper) ----
-    plt.figure(figsize=(10, 5))
-    plt.plot(times, T_obs, label='t-values')
-    plt.axhline(0, color='k', linestyle='--', linewidth=0.8)
-
-    for i_c, c in enumerate(clusters):
-        if cluster_p_values[i_c] < alpha:
-            if isinstance(c, np.ndarray):
-                time_mask = c
-            else:
-                s = c[0] if isinstance(c, tuple) else c
-                time_mask = np.zeros(n_times, dtype=bool)
-                time_mask[s] = True
-
-            idx = np.flatnonzero(time_mask)
-            if idx.size:  # safety
-                plt.axvspan(times[idx[0]], times[idx[-1]], color='red', alpha=0.3, zorder=0)
-
-    plt.title(f"Post-hoc {label} (paired cluster test)")
-    plt.xlabel("Time (s)")
-    plt.ylabel("t-statistic")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-
-# Optional: show condition means for reference
-plt.figure(figsize=(10, 5))
-plt.plot(times, X1.mean(axis=0), label='Load 1')
-plt.plot(times, X2.mean(axis=0), label='Load 2')
-plt.plot(times, X3.mean(axis=0), label='Load 3')
-plt.title(f"Condition means")
-plt.xlabel("Time (s)")
-plt.ylabel("Mean pupil")
-plt.legend()
-plt.tight_layout()
-plt.show()
-
-# Save combined summary across
-posthoc_df = pd.DataFrame(all_rows).sort_values(["contrast","start_time"]).reset_index(drop=True)
-# posthoc_df.to_csv("posthoc_load_pairwise_clusters.csv", index=False)
-
-print(posthoc_df if not posthoc_df.empty else "No significant post-hoc clusters.")
 
 
 # %%
 # Mask x Load interaction
-# not using 2x3 factorial anova design anymore because apparently error-prone with between and within subjects and different 
-# number of subjects per group
-# now using "contrast-based interaction cluster test (Mask × Load)"
+# contrast-based interaction cluster test (Mask × Load)
+
+# the linear trend in this case is the same as a high-low contrast (L3 - L1) in my case (but wouldn't if there were four or more levels)
+# using and framing it as a linear trend is still reasonable and conceptually good
+
+# I am looking at the load difference within each mask group as a collapse linear contrast (one difference curve per subject)
+# then I am running a students t test comparing the difference curve in the two independent groups
+
+# Since there is no significant interaction, meaning the differences between loads are roughly the same for mask and no mask
+# groups, this might mean that using both groups collapsed together is fine?
 
 
-
-# -------------------------------------------------------------------
 # CONFIG
-# -------------------------------------------------------------------
 alpha = 0.05
 n_perm = 10000
 two_tailed = 0     # two-tailed test
-use_linear_trend = True  # False -> contrast = L3 - L1; True -> contrast = [-1, 0, +1]·[L1,L2,L3]
 time_decimals = 3  # round times to align (important!)
 
-# -------------------------------------------------------------------
+
 # DATA PREP
 # delay_time_window must have: subID, time, pupils, Load (1/2/3), mask (0/1)
-# -------------------------------------------------------------------
 delay_time_window_copy = delay_time_window.copy()
 delay_time_window_copy['time'] = delay_time_window_copy['time'].round(time_decimals)
 
@@ -725,12 +792,9 @@ for mask_val in [0, 1]:
     df_m = delay_time_window_copy[delay_time_window_copy['mask'] == mask_val]
 
     # Build per-load subject×time tables (aggregate duplicates at same time!)
-    P1 = (df_m[df_m['Load'] == 1]
-          .pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean'))
-    P2 = (df_m[df_m['Load'] == 2]
-          .pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean'))
-    P3 = (df_m[df_m['Load'] == 3]
-          .pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean'))
+    P1 = (df_m[df_m['Load'] == 1].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean'))
+    P2 = (df_m[df_m['Load'] == 2].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean'))
+    P3 = (df_m[df_m['Load'] == 3].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean'))
 
     # Align subjects & timepoints WITHIN this mask group (within-subject contrast)
     common_subs  = P1.index.intersection(P2.index).intersection(P3.index)
@@ -746,13 +810,9 @@ for mask_val in [0, 1]:
     X1, X2, X3 = X1[:, col_ok], X2[:, col_ok], X3[:, col_ok]
     common_times = common_times[col_ok]
 
-    # Build the within-subject Load contrast
-    if use_linear_trend:
-        # Weights: [-1, 0, +1]·[L1, L2, L3]  (tests monotonic increase with load)
-        C = (-1.0)*X1 + 0.0*X2 + (1.0)*X3
-    else:
-        # Simple high-vs-low contrast: L3 - L1
-        C = X3 - X1
+    # Build the within-subject Load contrast (as linear trend even though it is the same as L3-L1 in this case)
+    # Weights: [-1, 0, +1]·[L1, L2, L3]  (tests monotonic increase with load)
+    C = (-1.0)*X1 + 0.0*X2 + (1.0)*X3
 
     contrasts[mask_val] = (common_subs, common_times, C)
 
@@ -772,13 +832,9 @@ C_mask = reindex_to_times(contrasts[1][2], contrasts[1][1], times)  # mask==1
 
 print(f"[Interaction via Load contrast] n_no={C_no.shape[0]}, n_mask={C_mask.shape[0]}, T={len(times)}")
 
-# -------------------------------------------------------------------
-# Define independent Welch t for cluster test
-# -------------------------------------------------------------------
-def independent_t(XA, XB):
-    t_vals, _ = ttest_ind(XA, XB, axis=0, equal_var=False)
-    return t_vals
-
+n1 = C_no.shape[0]
+n2 = C_mask.shape[0]
+tcrit = t.ppf(1 - 0.025, df = (n1+n2-2))
 # -------------------------------------------------------------------
 # Cluster permutation test: Does the Load contrast differ by Mask?
 # -------------------------------------------------------------------
@@ -786,7 +842,7 @@ T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
     [C_mask, C_no],
     stat_fun=independent_t,
     n_permutations=n_perm,
-    threshold=2.0,     # let MNE choose a cluster-forming threshold for t
+    threshold=tcrit,     # let MNE choose a cluster-forming threshold for t
     tail=two_tailed,    # two-tailed
     out_type='mask',
     verbose=True
@@ -821,7 +877,7 @@ for i_c, c in enumerate(clusters):
             "mean_t": float(np.mean(t_vals)),
             "mean_contrast_mask": mean_contrast_mask,
             "mean_contrast_nomask": mean_contrast_no,
-            "contrast_type": ("linear_trend [-1,0,+1]" if use_linear_trend else "L3 - L1"),
+            "contrast_type": ("linear_trend [-1,0,+1]"),
             "n_mask": int(C_mask.shape[0]),
             "n_nomask": int(C_no.shape[0]),
         })
@@ -867,111 +923,18 @@ for i_c, c in enumerate(clusters):
             s = c[0] if isinstance(c, tuple) else c
             time_mask = np.zeros(n_times, dtype=bool); time_mask[s] = True
         idx = np.flatnonzero(time_mask)
-        plt.axvspan(times[idx[0]], times[idx[-1]], color='red', alpha=0.2)
-plt.title(f"Group mean Load contrast ({'linear trend' if use_linear_trend else 'L3−L1'})")
+        plt.axvspan(times[idx[0]], times[idx[-1]], color='red', alpha=0.3)
+plt.title(f"Group mean Load contrast ({'linear trend'})")
 plt.xlabel("Time (s)")
 plt.ylabel("Contrast value")
 plt.legend()
 plt.tight_layout()
 plt.show()
 
-# %%
-# Whats this?
-
-df_post = delay_time_window.copy()
-df_m = df_post
-
-# Build subject×time tables per load
-P1 = df_m[df_m['Load'] == 1].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-P2 = df_m[df_m['Load'] == 2].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-P3 = df_m[df_m['Load'] == 3].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-
-# Align subjects and timepoints across ALL three loads (within-subjects!)
-common_subs  = P1.index.intersection(P2.index).intersection(P3.index)
-common_times = P1.columns.intersection(P2.columns).intersection(P3.columns)
-common_times = np.array(sorted(common_times))
-
-X1 = P1.loc[common_subs, common_times].to_numpy()
-X2 = P2.loc[common_subs, common_times].to_numpy()
-X3 = P3.loc[common_subs, common_times].to_numpy()
-times = common_times
-
-# X1, X2, X3 already aligned: (subjects × time)
-w = np.array([-1, 0, 1])  # linear contrast weights
-
-# Compute per-subject contrast time series
-X_lin = w[0]*X1 + w[1]*X2 + w[2]*X3   # shape (n_sub × n_time)
-
-# Cluster test vs 0
-n_sub = X_lin.shape[0]
-tcrit = t.ppf(1 - 0.025, df=n_sub-1)
-
-T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
-    X_lin,
-    threshold=tcrit,
-    n_permutations=5000,
-    tail=0,         # two-tailed
-    out_type='mask'
-)
-print(clusters)
-print(cluster_p_values)
-rows = []
-for i_c, c in enumerate(clusters):
-    p = float(cluster_p_values[i_c])
-    if p < alpha:
-        # c is a boolean mask (out_type='mask'); if it's a slice tuple, adapt accordingly
-        if isinstance(c, np.ndarray):
-            idx = np.flatnonzero(c)
-        else:
-            idx = np.arange(len(times))[c]
-
-        if idx.size == 0:
-            continue
-
-
-        start_t = float(times[idx[0]])
-        end_t   = float(times[idx[-1]])
-        mean_t  = float(np.mean(T_obs[idx]))
-        dur     = int(idx.size)
-
-        rows.append({
-            "effect": "Interaction (linear trend: Correct − Incorrect)",
-            "cluster_id": int(i_c + 1),
-            "start_time": start_t,
-            "end_time": end_t,
-            "duration_samps": dur,
-            "p_value": p,
-            "mean_t": mean_t,
-            "n_subjects": int(X_lin.shape[0]),
-        })
-
-summary = pd.DataFrame(rows).reset_index(drop=True)
-display(summary)
-# summary.to_csv("clusters_LoadxAccuracy_linearTrend_interaction_FIXED.csv", index=False)
-
-        
-# Plot t-curve with correctly shaded clusters
-plt.figure(figsize=(10,5))
-plt.plot(times, T_obs, label='t (Correct − Incorrect load trend)')
-plt.axhline(0, color='k', linestyle=':', linewidth=0.8)
-
-for i_c, c in enumerate(clusters):
-    if cluster_p_values[i_c] < alpha:
-        if isinstance(c, np.ndarray):
-            idx = np.flatnonzero(c)
-        else:
-            idx = np.arange(len(times))[c]
-        plt.axvspan(float(times[idx[0]]), float(times[idx[-1]]), color='red', alpha=0.3)
-
-plt.xlabel("Time (s)")
-plt.ylabel("t")
-plt.title("Interaction via linear trend (C − I) — cluster summary (fixed mapping)")
-plt.tight_layout()
-plt.show()
 
 
 # %%
-
+# The below seems to simply correlate mean accuracy per participant with their mean pupil size during delay
 
 # Example: mean pupil in Load 3 delay window per subject
 mean_pupil = X3.mean(axis=1)   # (n_sub,)
@@ -1033,5 +996,6 @@ for load in [1,2,3]:
     merged = pd.merge(mbp_load, df_load_mean)
 
     r, p = stats.pearsonr(merged['Mean_Difference'], merged['pupils'])
-    print(f"Correlation (Load 1): r={r:.2f}, p={p:.3f}")
+    print(f"Correlation (Load {load}): r={r:.2f}, p={p:.3f}")
 # %%
+

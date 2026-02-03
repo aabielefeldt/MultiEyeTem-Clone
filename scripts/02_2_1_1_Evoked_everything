@@ -1,0 +1,1589 @@
+# %%
+# Importsconda
+import mne
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from pupil_utils import apply_baseline_nan_aware
+from scipy.stats import zscore
+from mne.stats import permutation_cluster_test, f_oneway, permutation_cluster_1samp_test
+from scipy import stats
+from scipy.stats import t, ttest_rel, zscore, f
+
+
+# %% Load Metadata
+
+df = pd.read_csv('../data/csv_files/df.csv')
+good_partis = df['subID'].unique()
+
+
+# ============================================================
+# 1) Helpers: circular distance + nearest cardinal axis (0/90/180/270)
+# ============================================================
+
+CARDINALS = np.array([0.0, 90.0, 180.0, 270.0])
+
+def wrap360(theta):
+    """Wrap degrees into [0, 360). Works on scalars or numpy arrays/Series."""
+    return np.mod(theta, 360.0)
+
+def circ_dist_deg(a, b):
+    """
+    Circular distance between angles a and b in degrees, in [0, 180].
+    a, b can be arrays/Series.
+    """
+    a = wrap360(a)
+    b = wrap360(b)
+    d = np.abs(a - b)
+    return np.minimum(d, 360.0 - d)
+
+def nearest_cardinal_axis(theta_mem):
+    """
+    For each theta_mem (deg), return nearest cardinal axis (0/90/180/270)
+    and distance to it.
+    """
+    theta_mem = wrap360(theta_mem)
+    # dist to each cardinal: shape (n, 4)
+    dists = np.stack([circ_dist_deg(theta_mem, c) for c in CARDINALS], axis=1)
+    idx = np.argmin(dists, axis=1)
+    axis = CARDINALS[idx]
+    dmin = dists[np.arange(len(theta_mem)), idx]
+    return axis, dmin
+
+
+# ============================================================
+# 2) Trial-level "away from cardinal" coding from button press
+#    Your columns:
+#      - object_cued_rot: memorized/original orientation (deg)
+#      - button_press_clockwise: 1=CW, 0=CCW
+#    Optional:
+#      - object_test_rot_cued: probe orientation shown (deg)
+#      - acc_trial_concrete_cued: accuracy (0/1)
+# ============================================================
+
+def add_cardinal_bias_columns(df,
+                              mem_col="object_cued_rot",
+                              press_col="button_press_clockwise",
+                              eps_deg=1.0):
+    """
+    Adds:
+      - nearest_cardinal (deg)
+      - dist_to_cardinal (deg)
+      - away_cardinal (0/1): whether chosen direction moves AWAY from the nearest cardinal
+      - bias_signed (deg): + if away, - if toward (magnitude in degrees for eps step)
+    Uses a tiny step eps_deg in the chosen direction from the memorized orientation.
+    """
+    out = df.copy()
+
+    theta_mem = wrap360(out[mem_col].to_numpy(dtype=float))
+    axis, d_mem = nearest_cardinal_axis(theta_mem)
+
+    # Map button press to direction: CW=+1, CCW=-1
+    dir_resp = np.where(out[press_col].to_numpy() == 1, 1.0, -1.0)
+
+    theta_step = wrap360(theta_mem + eps_deg * dir_resp)
+    d_step = circ_dist_deg(theta_step, axis)
+
+    away = (d_step > d_mem).astype(int)     # 1 = away, 0 = toward
+    # If you want to treat exact ties (rare) as NA:
+    ties = np.isclose(d_step, d_mem, atol=1e-12)
+    away = away.astype("float")
+    away[ties] = np.nan
+
+    out["nearest_cardinal"] = axis
+    out["dist_to_cardinal"] = d_mem
+    out["away_cardinal"] = away
+    out["bias_signed"] = (d_step - d_mem)   # >0 away, <0 toward (in "eps degrees" units)
+    return out
+
+
+# --- apply to your df ---
+df2 = add_cardinal_bias_columns(df,
+                                mem_col="object_cued_rot",
+                                press_col="button_press_clockwise",
+                                eps_deg=1.0)
+
+
+
+
+
+#%%# dataframe of epochs and attached metadata, works but overloads the RAM and takes very long
+
+# drop_log_rows = []
+
+# all_participants = []
+
+# for i in good_partis:
+#     # Read participant data
+#     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+#     epoch_file = f"{folder_path}/{i}_even_newer-epo.fif"
+#     pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+#     pupil_epoch.metadata = df2[df2['subID']==i]
+#     pp_metadata = pupil_epoch.metadata
+    
+#     #makes false assumption somehow, dropped epochs will drop the metadata usually but somehow its not dropping it
+#     #correctly because of this line?
+#     # probably also because I am doing this line before epochs are dropped due to baseline application
+#     #pp_metadata['epoch'] = pp_metadata['trial']
+
+#     # applying baseline per eye and nan aware while dropping any epochs where the baseline period was nan in both eyes
+#     pupil_epoch_bl = apply_baseline_nan_aware(pupil_epoch, bmin=-0.1, bmax=0.0)
+    
+#     # counting dropped epochs
+#     sum_dropped = sum('BAD_baseline_nan_both_eyes' in entry for entry in pupil_epoch_bl.drop_log)
+#     drop_log_rows.append({'subID': i, 'sum_dropped': sum_dropped})
+
+#     pp_metadata = pupil_epoch_bl.metadata.copy()
+#     pp_metadata["mne_epoch"] = np.arange(len(pp_metadata), dtype=int)
+
+#     # combining channels
+#     pupil_ix = mne.pick_channels(pupil_epoch_bl.info["ch_names"], include=['pupil_left', 'pupil_right'])
+#     roi_dict = dict(pupils=pupil_ix)
+#     combine_nanmean = lambda data: np.nanmean(data, axis=1)
+#     pupil_epochs_combined_bl = mne.channels.combine_channels(pupil_epoch_bl, roi_dict, method=combine_nanmean)
+    
+#     # Split + crop
+#     con1 = pupil_epochs_combined_bl["items_presented == 1"].copy().crop(-0.1, 7)
+#     con2 = pupil_epochs_combined_bl["items_presented == 2"].copy().crop(-0.1, 8)
+#     con3 = pupil_epochs_combined_bl["items_presented == 3"].copy().crop(-0.1, 9)
+
+#     # Convert
+#     dfs = [con1.to_data_frame(), con2.to_data_frame(), con3.to_data_frame()]
+#     epochs_cons = pd.concat(dfs, ignore_index=True)
+
+#     epochs_df_pp = epochs_cons.merge(pp_metadata, how="left", left_on="epoch", right_on="mne_epoch")
+#     # drop helper key
+#     epochs_df_pp = epochs_df_pp.drop(columns=["mne_epoch"])
+
+#     epochs_df_pp["epoch"] = epochs_df_pp["epoch"] + 1
+
+#     # sort back to original order
+#     epochs_df_pp = epochs_df_pp.sort_values(["epoch", "time"], kind="mergesort").reset_index(drop=True)
+
+#     all_participants.append(epochs_df_pp)
+
+# epochs_metadata_df = pd.concat(all_participants, ignore_index=True)
+# drop_log_df = pd.DataFrame(drop_log_rows)
+
+
+#Reset index and save
+#epochs_metadata_df.to_csv('../data/csv_files/epochs_metadata_df.csv', index=False)
+
+#%% trying to attach the new metadata and run evokeds depending on bias
+drop_log_rows = []
+all_evoked_dfs = []
+
+folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+
+# nan-mean across epochs (returns shape: n_channels x n_times)
+evoked_nan_mean = lambda x: np.nanmean(x, axis=0)
+
+# crop rules per load
+tmax_by_load = {1: 7, 2: 8, 3: 9}
+
+for sub in good_partis:
+    epoch_file = f"{folder_path}/{sub}_even_newer-epo.fif"
+
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+
+    # attach metadata (must already align with epochs)
+    pupil_epoch.metadata = df2.loc[df2["subID"] == sub].copy()
+
+    # baseline + drop bad baseline epochs
+    pupil_epoch_bl = apply_baseline_nan_aware(pupil_epoch, bmin=-0.1, bmax=0.0)
+
+    # count dropped
+    sum_dropped = sum("BAD_baseline_nan_both_eyes" in entry for entry in pupil_epoch_bl.drop_log)
+    drop_log_rows.append({"subID": sub, "sum_dropped": sum_dropped})
+
+    # combine pupil channels into one channel called "pupils"
+    pupil_ix = mne.pick_channels(pupil_epoch_bl.info["ch_names"], include=["pupil_left", "pupil_right"])
+    roi_dict = dict(pupils=pupil_ix)
+    pupil_epochs = mne.channels.combine_channels(
+        pupil_epoch_bl, roi_dict, method=lambda data: np.nanmean(data, axis=1)
+    )
+
+    # loop over groups: Load x away_cardinal
+    for load in (1, 2, 3):
+        # select load and crop
+        ep_load = pupil_epochs[f"items_presented == {load}"].copy().crop(-0.1, tmax_by_load[load])
+
+        for away in (0, 1):
+            ep_away = ep_load[f"away_cardinal == {away}"]
+
+            # loop over dist_to_cardinal values *within this subset*
+            dist_vals = sorted(ep_away.metadata["dist_to_cardinal"].dropna().unique())
+
+            for dist in dist_vals:
+                ep_dist = ep_away[f"dist_to_cardinal == {dist}"]
+
+                #loop over orientation patterns per trial all_oblique vs mixed vs all_cardinal
+                ori_patterns = df2['trial_ori_pattern'].unique()
+
+                for pat in ori_patterns:
+                    ep_pat = ep_dist[f"trial_ori_pattern == '{pat}'"]
+
+                    accs = [0,1]
+                    for acc in accs:
+                        ep_grp = ep_pat[f"acc_trial_concrete_cued == {acc}"]
+
+                        if len(ep_grp) == 0:
+                            continue
+                        
+                        # average across epochs with nanmean
+                        evk = ep_grp.average(method=evoked_nan_mean)
+
+                        # convert to df; keep only time + the single channel
+                        df_evk = evk.to_data_frame()  # columns typically: time, pups/pupils (and maybe 'condition')
+
+                        df_evk = df_evk[["time", "pupils"]].copy()
+
+                        # add identifiers
+                        df_evk["subID"] = sub
+                        df_evk["items_presented"] = load
+                        df_evk["away_cardinal"] = away
+                        df_evk["dist_to_cardinal"] = dist
+                        df_evk["trial_ori_pattern"] = pat
+                        df_evk["acc_trial_concrete_cued"] = acc
+
+                        all_evoked_dfs.append(df_evk)
+
+# final outputs
+evokeds_df = pd.concat(all_evoked_dfs, ignore_index=True)
+drop_log_df = pd.DataFrame(drop_log_rows)
+# %%
+# Shifting
+
+# shifting the conditions so that the epochs that are epoched on pos1 are time-locked to the test onset
+evokeds_df_shifted = evokeds_df.copy()
+evokeds_df_shifted.loc[evokeds_df_shifted['items_presented']==1, 'time'] +=2
+evokeds_df_shifted.loc[evokeds_df_shifted['items_presented']==2, 'time'] +=1
+evokeds_df_shifted.loc[evokeds_df_shifted['items_presented']==3, 'time'] +=0
+
+#%%
+mask_partis = df[df['mask']==1]['subID'].unique().tolist()
+nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
+# Adding column for mask
+evokeds_df_shifted['mask'] = evokeds_df_shifted['subID'].apply(
+    lambda x: 1 if x in mask_partis else 0)
+
+evokeds_df_shifted.to_csv('../data/csv_files/evoked_df_everything.csv', index=False)
+
+# %%
+# Load evoked
+
+evokeds_df_shifted = pd.read_csv('../data/csv_files/evoked_df_everything.csv')
+
+
+
+# %%
+
+for load in [1,2,3]:
+
+    subset = evokeds_df_shifted[evokeds_df_shifted['items_presented'] == load]
+
+    fig, ax = plt.subplots(figsize=(12, 10), sharex=True, sharey=True)
+
+    # Shades for 'all_cardinal' and 'all_oblique'
+    cardinal_shades = ['#08306b', '#2171b5', '#deebf7']  # dark to light blue
+    oblique_shades = ['#7f2704', '#d94801', '#fdd0a2']   # dark to light orange
+
+    subset_close = subset[subset['dist_to_cardinal'] == 11.25]
+    subset_far = subset[subset['dist_to_cardinal'] == 33.75]
+    sns.lineplot(data=subset_close, x='time', y='pupils', hue='away_cardinal', errorbar='se', legend='full', palette='Blues')
+    sns.lineplot(data=subset_far, x='time', y='pupils', hue='away_cardinal', errorbar='se', legend='full', palette='Reds')
+
+    sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
+    
+    ax.axvline(0, color='black', alpha=0.33)
+    ax.axvline(1, color='black', alpha=0.66)
+    ax.axvline(2, color='black')  
+    ax.axvline(3, color='darkblue')  
+    ax.axvline(6.5, color='blue')  
+
+    # Define y-coordinate for labels (as a fraction of the plot height)
+    label_y = 1.05
+
+    # Add labels above the vertical lines
+    ax.text(0, ax.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+    ax.text(1, ax.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+    ax.text(2, ax.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+    ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+    ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+
+    # Set x-axis to show all whole numbers within range
+    x_ticks = np.arange(int(evokeds_df_shifted['time'].min()), int(evokeds_df_shifted['time'].max()) + 1, 1)
+    ax.set_xticks(x_ticks)
+    ax.set_xticklabels(x_ticks)
+
+    # Increase font size of x and y tick labels
+    ax.tick_params(axis='x', labelsize=14)
+    ax.tick_params(axis='y', labelsize=14)
+
+    # Adding a legend
+    # ax.legend(loc='best', fontsize=12)
+    # new_labels = ['Ori close - Load 1', 'Cardinal - Load 2', 'Cardinal - Load 3', 'Oblique - Load 1', 'Oblique - Load 2', 'Oblique - Load 3']
+    # for t, l in zip(ax.get_legend().texts, new_labels):
+    #     t.set_text(l)
+    # ax.set_title(f'{mask}', y=1.2, fontsize=16)
+
+    # Adding a title
+    plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize = 20)
+    plt.title(f'Load {load} and Distance to next cardinal {dist}', y=1.25, color='blue', alpha=0.4)
+    plt.show()
+#%%
+dists = [11.25, 33.75]
+with sns.plotting_context(context='paper', font_scale=1.5): 
+    for dist in dists:
+        subset_dist = evokeds_df_shifted[evokeds_df_shifted['dist_to_cardinal'] == dist]
+        for load in [1,2,3]:
+
+            subset = subset_dist[subset_dist['items_presented'] == load]
+
+            fig, ax = plt.subplots(figsize=(12, 10), sharex=True, sharey=True)
+
+            # Shades for 'all_cardinal' and 'all_oblique'
+            cardinal_shades = ['#08306b', '#2171b5', '#deebf7']  # dark to light blue
+            oblique_shades = ['#7f2704', '#d94801', '#fdd0a2']   # dark to light orange
+
+            sns.lineplot(data=subset, x='time', y='pupils', hue='away_cardinal', errorbar='se', legend='full')
+
+            sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
+            
+            ax.axvline(0, color='black', alpha=0.33)
+            ax.axvline(1, color='black', alpha=0.66)
+            ax.axvline(2, color='black')  
+            ax.axvline(3, color='darkblue')  
+            ax.axvline(6.5, color='blue')  
+
+            # Define y-coordinate for labels (as a fraction of the plot height)
+            label_y = 1.05
+
+            # Add labels above the vertical lines
+            ax.text(0, ax.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+            ax.text(1, ax.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+            ax.text(2, ax.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+            ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+            ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+
+            # Set x-axis to show all whole numbers within range
+            x_ticks = np.arange(int(evokeds_df_shifted['time'].min()), int(evokeds_df_shifted['time'].max()) + 1, 1)
+            ax.set_xticks(x_ticks)
+            ax.set_xticklabels(x_ticks)
+
+            # Increase font size of x and y tick labels
+            ax.tick_params(axis='x', labelsize=14)
+            ax.tick_params(axis='y', labelsize=14)
+
+            # Adding a legend
+            ax.legend(loc='best', fontsize=12)
+            # new_labels = ['Cardinal - Load 1', 'Cardinal - Load 2', 'Cardinal - Load 3', 'Oblique - Load 1', 'Oblique - Load 2', 'Oblique - Load 3']
+            # for t, l in zip(ax.get_legend().texts, new_labels):
+            #     t.set_text(l)
+            # ax.set_title(f'{mask}', y=1.2, fontsize=16)
+
+            # Adding a title
+            plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize = 20)
+            plt.title(f'Load {load} and Distance to next cardinal {dist}', y=1.25, color='blue', alpha=0.4)
+            plt.show()
+
+
+#%%
+
+masks = [0,1]
+with sns.plotting_context(context='paper', font_scale=1.5): 
+    for mask in masks:
+        subset_mask = evokeds_df_shifted[evokeds_df_shifted['mask'] == mask]
+        for load in [1,2,3]:
+
+            subset = subset_mask[subset_mask['items_presented'] == load]
+
+            fig, ax = plt.subplots(figsize=(12, 10), sharex=True, sharey=True)
+
+            # Shades for 'all_cardinal' and 'all_oblique'
+            cardinal_shades = ['#08306b', '#2171b5', '#deebf7']  # dark to light blue
+            oblique_shades = ['#7f2704', '#d94801', '#fdd0a2']   # dark to light orange
+
+            sns.lineplot(data=subset, x='time', y='pupils', hue='away_cardinal', errorbar='se', legend='full')
+
+            sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
+            
+            ax.axvline(0, color='black', alpha=0.33)
+            ax.axvline(1, color='black', alpha=0.66)
+            ax.axvline(2, color='black')  
+            ax.axvline(3, color='darkblue')  
+            ax.axvline(6.5, color='blue')  
+
+            # Define y-coordinate for labels (as a fraction of the plot height)
+            label_y = 1.05
+
+            # Add labels above the vertical lines
+            ax.text(0, ax.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+            ax.text(1, ax.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+            ax.text(2, ax.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+            ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+            ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+
+            # Set x-axis to show all whole numbers within range
+            x_ticks = np.arange(int(evokeds_df_shifted['time'].min()), int(evokeds_df_shifted['time'].max()) + 1, 1)
+            ax.set_xticks(x_ticks)
+            ax.set_xticklabels(x_ticks)
+
+            # Increase font size of x and y tick labels
+            ax.tick_params(axis='x', labelsize=14)
+            ax.tick_params(axis='y', labelsize=14)
+
+            # Adding a legend
+            ax.legend(loc='best', fontsize=12)
+            # new_labels = ['Cardinal - Load 1', 'Cardinal - Load 2', 'Cardinal - Load 3', 'Oblique - Load 1', 'Oblique - Load 2', 'Oblique - Load 3']
+            # for t, l in zip(ax.get_legend().texts, new_labels):
+            #     t.set_text(l)
+            ax.set_title(f'{mask}', y=1.2, fontsize=16)
+
+            # Adding a title
+            plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize = 20)
+            plt.title(f'Load {load} and Mask {mask}', y=1.25, color='blue', alpha=0.4)
+            plt.show()
+    
+# %%
+masks = [0,1]
+with sns.plotting_context(context='paper', font_scale=1.5): 
+    for mask in masks:
+        subset_mask = evoked_df_all_combos_shifted[evoked_df_all_combos_shifted['mask'] == mask]
+        for load in [1,2,3]:
+            subset = subset_mask[subset_mask['Load'] == load]
+            fig, ax = plt.subplots(figsize=(12, 10), sharex=True, sharey=True)
+
+            # Shades for 'all_cardinal' and 'all_oblique'
+            cardinal_shades = ['#08306b', '#2171b5', '#deebf7']  # dark to light blue
+            oblique_shades = ['#7f2704', '#d94801', '#fdd0a2']   # dark to light orange
+
+            sns.lineplot(data=subset, x='time', y='pupils', hue='cardinal_type', errorbar='se', legend='full')
+
+            sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
+            
+            ax.axvline(0, color='black', alpha=0.33)
+            ax.axvline(1, color='black', alpha=0.66)
+            ax.axvline(2, color='black')  
+            ax.axvline(3, color='darkblue')  
+            ax.axvline(6.5, color='blue')  
+
+            # Define y-coordinate for labels (as a fraction of the plot height)
+            label_y = 1.05
+
+            # Add labels above the vertical lines
+            ax.text(0, ax.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+            ax.text(1, ax.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+            ax.text(2, ax.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+            ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+            ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+
+            # Set x-axis to show all whole numbers within range
+            x_ticks = np.arange(int(evoked_df_all_combos_shifted['time'].min()), int(evoked_df_all_combos_shifted['time'].max()) + 1, 1)
+            ax.set_xticks(x_ticks)
+            ax.set_xticklabels(x_ticks)
+
+            # Increase font size of x and y tick labels
+            ax.tick_params(axis='x', labelsize=14)
+            ax.tick_params(axis='y', labelsize=14)
+
+            # Adding a legend
+            ax.legend(loc='best', fontsize=12)
+            # new_labels = ['Cardinal - Load 1', 'Cardinal - Load 2', 'Cardinal - Load 3', 'Oblique - Load 1', 'Oblique - Load 2', 'Oblique - Load 3']
+            # for t, l in zip(ax.get_legend().texts, new_labels):
+            #     t.set_text(l)
+            # ax.set_title(f'{mask}', y=1.2, fontsize=16)
+
+            # Adding a title
+            plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize = 20)
+            plt.title(f'Mask = {mask} and Load = {load}', y=1.25, color='blue', alpha=0.4)
+            plt.show()
+
+
+
+# %%
+# Data Preparation 
+
+evokeds_df_shifted = evokeds_df_shifted.copy()
+evokeds_df_shifted['time'] = evokeds_df_shifted['time'].round(3)
+
+
+start_time, end_time = 3, 6.5
+evokeds_df_shifted_dw = evokeds_df_shifted[(evokeds_df_shifted['time'] >= start_time) & (evokeds_df_shifted['time'] <= end_time)].copy()
+
+evokeds_df_shifted_dw['pupils_z'] = evokeds_df_shifted_dw.groupby('subID')['pupils'].transform(lambda x: zscore(x, nan_policy='omit'))
+
+#%%
+# defining t-test statistic
+
+def paired_t(X1, X2):
+    t_vals, _ = stats.ttest_rel(X1, X2, axis=0)
+    return t_vals
+
+def independent_t(X1, X2):
+    t_vals, _ = stats.ttest_ind(X1, X2, axis=0, equal_var=False)  # Welch’s t-test
+    return t_vals
+
+# %% 
+# Cluster test on main effect between away vs towards cardinal axis button press
+# but only for probe objects close to the cardinal axis
+##########
+#####
+
+cluster_results = {}
+
+#subset only close to cardinal
+# subset_cardinal = evokeds_df_shifted_dw[evokeds_df_shifted_dw['dist_to_cardinal'] == 11.25]
+
+# either the above subset or could also look at only all_cardinal ori combos
+subset_cardinal = evokeds_df_shifted_dw[evokeds_df_shifted_dw['trial_ori_pattern'] == 'all_cardinal']
+subset_cardinal = subset_cardinal[subset_cardinal['acc_trial_concrete_cued'] == 0]
+
+
+# Subset
+subset_away = subset_cardinal[subset_cardinal['away_cardinal'] == 1]
+subset_tow = subset_cardinal[subset_cardinal['away_cardinal'] == 0]
+
+# Pivot to get subjects x timepoints
+X1_df = subset_away.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+X2_df = subset_tow.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+
+# Align only on time because between subjects test
+common_times = X1_df.columns.intersection(X2_df.columns)
+times = common_times.to_numpy()
+
+X1 = X1_df[common_times].values
+X2 = X2_df[common_times].values
+
+
+
+T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
+    [X1, X2],
+    n_permutations=1000,
+    threshold=2.0,        # use a lower t threshold
+    tail=0,               # two-tailed (direction of effect could go either way)
+    stat_fun=paired_t,
+    out_type='mask',
+    verbose=True
+)
+
+cluster_summaries = []
+for i, c in enumerate(clusters):
+    p_val = cluster_p_values[i]
+    time_inds = c[0]
+    F_vals = T_obs[time_inds]
+    mean_F = F_vals.mean()
+
+    # Extract descriptive means of each condition inside cluster
+    load_means = {
+        "mean_load1": np.nanmean(X1[:, time_inds]),
+        "mean_load2": np.nanmean(X2[:, time_inds])
+    }
+    cluster_entry = {
+        "cluster_id": i + 1,
+        "start_time": times[time_inds][0],
+        "end_time": times[time_inds][-1],
+        "p_value": p_val,
+        "mean_F": mean_F,
+    }
+    cluster_entry.update(load_means)
+
+    cluster_summaries.append(cluster_entry)
+
+# Save to DataFrame
+cluster_df = pd.DataFrame(cluster_summaries)
+# cluster_df.to_csv("cluster_results_load_by_mask.csv", index=False)
+display(cluster_df)
+
+
+# Plot
+plt.figure(figsize=(10, 5))
+plt.plot(times, T_obs, label='T-values')
+for i_c, c in enumerate(clusters):
+    if cluster_p_values[i_c] < 0.05:
+        plt.axvspan(times[c][0], times[c][-1], color='red', alpha=0.3)
+plt.axhline(2, color='black', linestyle='--')
+plt.title(f'Cluster Permutation Test (Correct vs False)')
+plt.xlabel('Time (s)')
+plt.ylabel('T-statistic')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+times = np.array(common_times)  # make sure it's ordered
+X1_mean = X1.mean(axis=0)
+X2_mean = X2.mean(axis=0)
+
+
+plt.plot(times, X1_mean, label='away')
+plt.plot(times, X2_mean, label='towars')
+
+
+# Highlight significant clusters
+for i_c, cluster in enumerate(clusters):
+    if cluster_p_values[i_c] < 0.05:
+        time_mask = cluster
+        plt.axvspan(times[time_mask][0], times[time_mask][-1], color='red', alpha=0.3)
+
+plt.legend()
+plt.title(f'Cluster Permutation Test Mask Conditions')
+plt.xlabel('Time (s)')
+plt.ylabel('Pupil size')
+plt.show()
+
+
+# %%
+# simple mean over delay window analyses
+
+grps = evokeds_df_shifted_dw.groupby(['subID', 'dist_to_cardinal', 'away_cardinal'])['pupils'].mean()
+grps_df = pd.DataFrame(grps).reset_index()
+sns.boxplot(data=grps_df, x='dist_to_cardinal', hue='away_cardinal', y='pupils')
+
+#%%
+grps = evokeds_df_shifted.groupby(['subID', 'dist_to_cardinal', 'away_cardinal'])['pupils'].mean()
+grps_df = pd.DataFrame(grps).reset_index()
+sns.stripplot(data=grps_df, x='dist_to_cardinal', hue='away_cardinal', y='pupils')
+# %%
+# looks like if only looking at all cardinal trials, pupil dilation is bigger when they then pressed away from cardinal axis
+
+for load in [1,2,3]:
+
+    subset = evokeds_df_shifted_dw[evokeds_df_shifted_dw['items_presented'] == load]
+
+    fig, ax = plt.subplots(figsize=(12, 10), sharex=True, sharey=True)
+
+    # Shades for 'all_cardinal' and 'all_oblique'
+    cardinal_shades = ['#08306b', '#2171b5', '#deebf7']  # dark to light blue
+    oblique_shades = ['#7f2704', '#d94801', '#fdd0a2']   # dark to light orange
+
+    #subset_card = subset[subset['ori_pattern'] == 'all_cardinal']
+
+    sns.lineplot(data=evokeds_df_shifted_dw, x='time', y='pupils_z', hue='away_cardinal', errorbar='se', legend='full', palette='Blues')
+
+    # subset_away = subset[subset['away_cardinal'] == 1]
+    # subset_tow = subset[subset['away_cardinal'] == 0]
+
+    # sns.lineplot(data=subset_away, x='time', y='pupils_z', hue='ori_pattern', errorbar='se', legend='full', palette=cardinal_shades) #'Blues'
+    # sns.lineplot(data=subset_tow, x='time', y='pupils_z', hue='ori_pattern', errorbar='se', legend='full', palette=oblique_shades)  #orange tones
+
+
+# %% trying to do cluster test on the above effect
+
+# Main effect of away_button press but divided by load conditions and only in all_cardinal trials
+# or only on cardinal probe object... what makes more sense?
+cluster_results = {}
+
+for load in [1, 2, 3]:
+    print(f"\nRunning cluster test for Load {load}...")
+
+    # Subset the data
+    subset = evokeds_df_shifted_dw[evokeds_df_shifted_dw['items_presented'] == load]
+    subset_card = subset[subset['dist_to_cardinal'] == 11.25]
+    #subset_card = subset[subset['trial_ori_pattern'] == 'all_cardinal']
+
+    df_away = subset_card[subset_card['away_cardinal'] == 1]
+    df_tow = subset_card[subset_card['away_cardinal'] == 0]
+
+    # Pivot to get subjects x timepoints
+    X1_df = df_away.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+    X2_df = df_tow.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+
+    # Align subjects and timepoints
+    common_subs = X1_df.index.intersection(X2_df.index)
+    common_times = X1_df.columns.intersection(X2_df.columns)
+
+    X1 = X1_df.loc[common_subs, common_times].to_numpy()
+    X2 = X2_df.loc[common_subs, common_times].to_numpy()
+    times = common_times.to_numpy()
+
+    # Run cluster-based permutation test
+    T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
+        [X1, X2],
+        n_permutations=1000,
+        threshold=2.0,
+        tail=0,
+        out_type='mask',
+        verbose=True,
+        stat_fun=paired_t
+    )
+
+    cluster_summaries = []
+    for i, c in enumerate(clusters):
+        p_val = cluster_p_values[i]
+        time_inds = c[0]
+        F_vals = T_obs[time_inds]
+        mean_F = F_vals.mean()
+
+        # Extract descriptive means of each condition inside cluster
+        load_means = {
+            "mean_load1": np.nanmean(X1[:, time_inds]),
+            "mean_load2": np.nanmean(X2[:, time_inds])
+        }
+        cluster_entry = {
+            "cluster_id": i + 1,
+            "start_time": times[time_inds][0],
+            "end_time": times[time_inds][-1],
+            "p_value": p_val,
+            "mean_F": mean_F,
+        }
+        cluster_entry.update(load_means)
+
+        cluster_summaries.append(cluster_entry)
+
+    # Save to DataFrame
+    cluster_df = pd.DataFrame(cluster_summaries)
+    # cluster_df.to_csv("cluster_results_load_by_mask.csv", index=False)
+    display(cluster_df)
+
+    # Plot
+    plt.figure(figsize=(10, 5))
+    plt.plot(times, T_obs, label='T-values')
+    for i_c, c in enumerate(clusters):
+        if cluster_p_values[i_c] < 0.05:
+            plt.axvspan(times[c][0], times[c][-1], color='red', alpha=0.3)
+    plt.axhline(0, color='black', linestyle='--')
+    plt.title(f'Cluster Permutation Test (Load {load})')
+    plt.xlabel('Time (s)')
+    plt.ylabel('T-statistic')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+    times = np.array(common_times)  # make sure it's ordered
+    X1_mean = X1.mean(axis=0)
+    X2_mean = X2.mean(axis=0)
+
+
+    plt.plot(times, X1_mean, label='away')
+    plt.plot(times, X2_mean, label='towards')
+
+
+    # Highlight significant clusters
+    for i_c, cluster in enumerate(clusters):
+        if cluster_p_values[i_c] < 0.05:
+            time_mask = cluster
+            plt.axvspan(times[time_mask][0], times[time_mask][-1], color='red', alpha=0.3)
+
+    plt.legend()
+    plt.title(f'Cluster Permutation Test Load Conditions and button press towards or away from cardinal')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Pupil size')
+    plt.show()
+# %%
+
+grps = evokeds_df_shifted_dw.groupby(['subID', 'items_presented', 'ori_pattern', 'away_cardinal'])['pupils'].mean()
+grps_df = pd.DataFrame(grps).reset_index()
+subset = grps_df[grps_df['ori_pattern']=='all_cardinal']
+sns.boxplot(data=subset, x='items_presented', hue='away_cardinal', y='pupils')
+# %% Trying to test the interaction between load and away cardinal?
+
+# no interaction found
+
+alpha = 0.05
+n_perm = 5000
+
+
+subset = evokeds_df_shifted_dw[evokeds_df_shifted_dw['trial_ori_pattern']=='all_cardinal']
+subset = evokeds_df_shifted_dw[evokeds_df_shifted_dw['dist_to_cardinal']==11.25]
+subset = evokeds_df_shifted_dw
+# Build per-load (subjects × time) for each accuracy
+def mat_for(away, load):
+    sub = subset[(subset['away_cardinal'] == away) & (subset['items_presented'] == load)]
+    return sub.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+
+C1, C2, C3 = mat_for(1,1), mat_for(1,2), mat_for(1,3)
+I1, I2, I3 = mat_for(0, 1), mat_for(0, 2), mat_for(0, 3)
+
+# Intersect subjects & times across all 6 to keep within-subjects
+common_subs = C1.index
+common_times = C1.columns
+for M in [C2, C3, I1, I2, I3]:
+    common_subs = common_subs.intersection(M.index)
+    common_times = common_times.intersection(M.columns)
+times = np.array(sorted(common_times))
+
+C1 = C1.loc[common_subs, times].to_numpy()
+C2 = C2.loc[common_subs, times].to_numpy()
+C3 = C3.loc[common_subs, times].to_numpy()
+I1 = I1.loc[common_subs, times].to_numpy()
+I2 = I2.loc[common_subs, times].to_numpy()
+I3 = I3.loc[common_subs, times].to_numpy()
+
+# Drop timepoints with any NaN across all 6
+col_ok = (~np.isnan(C1) & ~np.isnan(C2) & ~np.isnan(C3) &
+          ~np.isnan(I1) & ~np.isnan(I2) & ~np.isnan(I3)).all(axis=0)
+
+times = times[col_ok]
+C1, C2, C3 = C1[:, col_ok], C2[:, col_ok], C3[:, col_ok]
+I1, I2, I3 = I1[:, col_ok], I2[:, col_ok], I3[:, col_ok]
+
+# Linear trend weights across loads
+w = np.array([-1.0, 0.0, 1.0])
+
+# Per-subject linear trend time series for Correct and Incorrect
+trend_C = w[0]*C1 + w[1]*C2 + w[2]*C3   # (n_sub × n_time)
+trend_I = w[0]*I1 + w[1]*I2 + w[2]*I3
+
+# Interaction contrast: Correct − Incorrect (if positive → steeper positive load trend on correct trials)
+X = (trend_C - trend_I)                  # (n_sub × n_time)
+
+n = X.shape[0]
+threshold = t.ppf(1 - 0.025, df=n-1)
+
+# 1-sample cluster permutation test vs 0
+T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
+    X,
+    n_permutations=n_perm,
+    threshold=threshold,   # auto t-threshold for 1-sample t
+    tail=0,           # two-tailed (trend could be pos or neg)
+    out_type='mask',
+    verbose=True
+)
+
+rows = []
+for i_c, c in enumerate(clusters):
+    p = float(cluster_p_values[i_c])
+
+    # c is a boolean mask (out_type='mask'); if it's a slice tuple, adapt accordingly
+    if isinstance(c, np.ndarray):
+        idx = np.flatnonzero(c)
+    else:
+        idx = np.arange(len(times))[c]
+
+    if idx.size == 0:
+        continue
+
+
+    start_t = float(times[idx[0]])
+    end_t   = float(times[idx[-1]])
+    mean_t  = float(np.mean(T_obs[idx]))
+    dur     = int(idx.size)
+
+    rows.append({
+        "effect": "Interaction (linear trend: Correct − Incorrect)",
+        "cluster_id": int(i_c + 1),
+        "start_time": start_t,
+        "end_time": end_t,
+        "duration_samps": dur,
+        "p_value": p,
+        "mean_t": mean_t,
+        "n_subjects": int(X.shape[0]),
+    })
+
+summary = pd.DataFrame(rows).reset_index(drop=True)
+display(summary if not summary.empty else pd.DataFrame({"note": ["No significant clusters after min-size filter."]}))
+summary.to_csv("clusters_LoadxAccuracy_linearTrend_interaction_FIXED.csv", index=False)
+
+
+# Plot t-curve with correctly shaded clusters
+plt.figure(figsize=(10,5))
+plt.plot(times, T_obs, label='t (Correct − Incorrect load trend)')
+plt.axhline(0, color='k', linestyle=':', linewidth=0.8)
+
+for i_c, c in enumerate(clusters):
+    if cluster_p_values[i_c] < alpha:
+        if isinstance(c, np.ndarray):
+            idx = np.flatnonzero(c)
+        else:
+            idx = np.arange(len(times))[c]
+        plt.axvspan(float(times[idx[0]]), float(times[idx[-1]]), color='red', alpha=0.3)
+
+plt.xlabel("Time (s)")
+plt.ylabel("t")
+plt.title("Interaction via linear trend (C − I) — cluster summary (fixed mapping)")
+plt.tight_layout()
+plt.show()
+
+# %%
+start_time, end_time = 4.5, 6.5
+evokeds_df_shifted_short = evokeds_df_shifted_dw[(evokeds_df_shifted_dw['time'] >= start_time) & (evokeds_df_shifted_dw['time'] <= end_time)].copy()
+
+# %%
+import pingouin as pg
+#  REPEATED MEASURES ANOVA comparing the cardinal repulsion in the load conditions
+# probably needs to be done like this since there are three values (one for every condition per participant)
+subset = evokeds_df_shifted_short[evokeds_df_shifted_short['trial_ori_pattern']=='all_cardinal']
+anova_results = pg.rm_anova(data=subset, dv='pupils_z', within=['items_presented','away_cardinal'], subject='subID')
+
+# Display ANOVA results
+display(anova_results.round(4))
+
+# Define the significance level (alpha)
+alpha = 0.05
+#p_value = anova_results['p-unc'].values
+p_value = anova_results.loc[2, 'p-unc']
+if p_value < alpha:
+    print("The ANOVA test indicates a significant difference among the load conditions.")
+else:
+    print("The ANOVA test does not indicate a significant difference among the load conditions.")
+
+plt.figure(figsize=(10, 6))  # Set the figure size
+
+# Create a boxplot
+#sns.stripplot(data=subset, x='items_presented', y='pupils', hue='away_cardinal')
+#sns.pointplot(data=subset, x='items_presented', y='pupils', hue='away_cardinal', estimator='mean', linestyles='none')
+sns.boxplot(data=subset, x='items_presented', y='pupils_z', hue='away_cardinal')
+plt.xlabel('Items Presented')
+plt.ylabel('Mean Cardinal Repulsion at Cardinal Positions')
+plt.title('Stripplot of Cardinal Repulsion Indices for Different Conditions')
+plt.show()
+# %%
+# very significant
+# but also to be expected, trial_ori_pattern is just either cardinal or oblique in load 1 and dist to cardinal is also either
+# cardinal (11.25) or oblque orientation (dist=33.75)
+for load in [1,2,3]:
+    subset = df2[df2['items_presented']==load]
+    anova_results = pg.rm_anova(data=subset, dv='away_cardinal', within=['trial_ori_pattern','dist_to_cardinal'], subject='subID')
+    display(anova_results.round(4))
+
+# 
+# %%
+
+grps = evokeds_df_shifted_dw.groupby(['subID', 'items_presented', 'trial_ori_pattern', 'away_cardinal'])['pupils_z'].mean()
+grps_df = pd.DataFrame(grps).reset_index()
+
+for load in [1,2,3]:
+    subset = evokeds_df_shifted_dw[evokeds_df_shifted_dw['items_presented']==load]
+    anova_results = pg.rm_anova(data=subset, dv='pupils_z', within=['trial_ori_pattern','away_cardinal'], subject='subID')
+    display(anova_results.round(4))
+# %%
+for pat in evokeds_df_shifted_dw['trial_ori_pattern'].unique():
+    print(pat)
+    subset = evokeds_df_shifted_dw[evokeds_df_shifted_dw['trial_ori_pattern']==pat]
+    anova_results = pg.rm_anova(data=subset, dv='pupils_z', within=['items_presented','away_cardinal'], subject='subID')
+    display(anova_results.round(4))
+# %%
+for load in [1,2,3]:
+    subset = evokeds_df_shifted_dw[evokeds_df_shifted_dw['items_presented']==load]
+    plt.figure(figsize=(10, 5))
+    sns.lineplot(data=subset, x='time', y='pupils_z', hue='trial_ori_pattern', errorbar='se', legend='full')
+    plt.show()
+# %%
+for load in [1,2,3]:
+    subset = evokeds_df_shifted_dw[evokeds_df_shifted_dw['items_presented']==load]
+    anova_results = pg.rm_anova(data=subset, dv='pupils_z', within=['acc_trial_concrete_cued','away_cardinal'], subject='subID')
+    display(anova_results.round(4))
+# %%
+subset_cardinal = evokeds_df_shifted_dw[evokeds_df_shifted_dw['trial_ori_pattern']=='all_cardinal']
+
+for load in [1,2,3]:
+    subset = subset_cardinal[subset_cardinal['items_presented']==load]
+    anova_results = pg.rm_anova(data=subset, dv='pupils_z', within=['acc_trial_concrete_cued', 'away_cardinal'], subject='subID')
+    display(anova_results.round(4))
+    plt.figure(figsize=(10, 5))
+    sns.stripplot(data=subset, x='away_cardinal', y='pupils_z', hue='acc_trial_concrete_cued',  legend='full', jitter=0.5)
+    plt.show()
+# %%
+subset_spec = evokeds_df_shifted_dw.loc[(evokeds_df_shifted_dw['trial_ori_pattern']=='all_cardinal') & (evokeds_df_shifted_dw['items_presented']==2)]
+# %%
+for pat in evokeds_df_shifted_dw['trial_ori_pattern'].unique():
+    print(pat)
+    subset = evokeds_df_shifted_dw[evokeds_df_shifted_dw['trial_ori_pattern']==pat]
+    anova_results = pg.rm_anova(data=subset, dv='pupils_z', within=['items_presented'], subject='subID')
+    display(anova_results.round(4))
+# %%
+anova_results = pg.rm_anova(data=evokeds_df_shifted_dw, dv='pupils_z', within=['trial_ori_pattern', 'items_presented'], subject='subID')
+display(anova_results.round(4))
+# %%
+grps = evokeds_df_shifted_dw.groupby(['subID', 'items_presented', 'trial_ori_pattern', 'acc_trial_concrete_cued', 'away_cardinal'])['pupils_z'].mean()
+grps_df = pd.DataFrame(grps).reset_index()
+
+# %%
+plt.figure(figsize=(10, 5))
+sns.stripplot(data=grps_df[grps_df['acc_trial_concrete_cued']==1], x='trial_ori_pattern', y='pupils_z', hue='away_cardinal',  legend='full', palette='Reds', jitter=0.2)
+sns.stripplot(data=grps_df[grps_df['acc_trial_concrete_cued']==0], x='trial_ori_pattern', y='pupils_z', hue='away_cardinal',  legend='full', palette='Blues', jitter=0.2)
+
+plt.show()
+# %%
+for l in [1,2,3]:
+    subset = grps_df[grps_df['items_presented']==l]
+    plt.figure(figsize=(10, 5))
+    sns.stripplot(data=subset[subset['away_cardinal']==1], x='trial_ori_pattern', y='pupils_z', hue='acc_trial_concrete_cued',  legend='full', palette='Reds', jitter=0.2)
+    sns.stripplot(data=subset[subset['away_cardinal']==0], x='trial_ori_pattern', y='pupils_z', hue='acc_trial_concrete_cued',  legend='full', palette='Blues', jitter=0.2)
+
+    plt.show()
+# %%
+import numpy as np
+import pandas as pd
+import mne
+
+delay_tmin, delay_tmax = 3.0, 6.5
+
+rows = []
+
+for sub in good_partis:
+    epoch_file = f"{folder_path}/{sub}_even_newer-epo.fif"
+    ep = mne.read_epochs(epoch_file, preload=True, verbose=None)
+
+    ep.metadata = df2.loc[df2["subID"] == sub].copy()
+
+    # baseline + drop bad baseline epochs
+    ep = apply_baseline_nan_aware(ep, bmin=-0.1, bmax=0.0)
+
+    # combine eyes -> one channel
+    pupil_ix = mne.pick_channels(ep.info["ch_names"], include=["pupil_left", "pupil_right"])
+    ep = mne.channels.combine_channels(ep, dict(pupils=pupil_ix),
+                                       method=lambda data: np.nanmean(data, axis=1))
+
+    # crop to delay window and compute mean per epoch
+    ep_delay = ep.copy().crop(delay_tmin, delay_tmax)
+
+    X = ep_delay.get_data()  # shape: (n_epochs, 1, n_times)
+    pupil_delay_mean = np.nanmean(X[:, 0, :], axis=1)  # one value per epoch
+
+    meta = ep_delay.metadata.copy()
+    meta["subID"] = sub
+    meta["pupil_delay_mean"] = pupil_delay_mean
+
+    # keep only what you need
+    keep = ["subID", "items_presented", "trial_ori_pattern", "acc_trial_concrete_cued", 'away_cardinal', "pupil_delay_mean"]
+    rows.append(meta[keep])
+
+trial_df = pd.concat(rows, ignore_index=True)
+
+
+#%%
+# clean dtypes
+trial_df["items_presented"] = trial_df["items_presented"].astype("category")
+trial_df["trial_ori_pattern"] = trial_df["trial_ori_pattern"].astype("category")
+
+
+
+trial_df["pupil_delay_z"] = trial_df.groupby("subID")["pupil_delay_mean"].transform(
+    lambda x: (x - x.mean()) / x.std(ddof=0)
+)
+
+# %%
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+
+model = smf.gee(
+    "away_cardinal ~ pupil_delay_z * acc_trial_concrete_cued + pupil_delay_z * items_presented + pupil_delay_z * trial_ori_pattern",
+    groups="subID",
+    data=trial_df,
+    family=sm.families.Binomial()
+)
+res = model.fit()
+print(res.summary())
+
+
+# %%
+
+import numpy as np
+import pandas as pd
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# -----------------------------
+# 1) Subset to cardinal trials
+# -----------------------------
+card_df = trial_df[trial_df["trial_ori_pattern"] == "all_cardinal"].copy()
+
+# drop rows with missing values in key columns
+card_df = card_df.dropna(subset=["away_cardinal", "acc_trial_concrete_cued", "items_presented", "subID"]).copy()
+
+# now safe to cast
+card_df["away_cardinal"] = card_df["away_cardinal"].astype(int)
+card_df["acc_trial_concrete_cued"] = card_df["acc_trial_concrete_cued"].astype(int)
+card_df["items_presented"] = card_df["items_presented"].astype("category")
+card_df["subID"] = card_df["subID"].astype(str)
+
+
+# If you don't already have pupil_delay_z, create it (within-subject z-score)
+if "pupil_delay_z" not in card_df.columns:
+    card_df["pupil_delay_z"] = card_df.groupby("subID")["pupil_delay_mean"].transform(
+        lambda x: (x - x.mean()) / x.std(ddof=0)
+    )
+
+# Optional: remove rows with missing values in any model vars
+model_vars = ["away_cardinal", "pupil_delay_z", "acc_trial_concrete_cued", "items_presented", "subID"]
+card_df = card_df.dropna(subset=model_vars).copy()
+
+# ----------------------------------------------------
+# 2) (Optional) Descriptives: away rate by conditions
+# ----------------------------------------------------
+desc = (card_df
+        .groupby(["items_presented", "acc_trial_concrete_cued"])["away_cardinal"]
+        .agg(n="count", away_rate="mean")
+        .reset_index())
+print(desc)
+
+# ---------------------------------------------------------
+# 3) Plot: P(away) vs pupil, split by load and accuracy
+# ---------------------------------------------------------
+# Bin pupil for visualization (avoids messy scatter)
+card_df["pupil_bin"] = pd.qcut(card_df["pupil_delay_z"], q=10, duplicates="drop")
+plot_df = (card_df
+           .groupby(["items_presented", "acc_trial_concrete_cued", "pupil_bin"], as_index=False)
+           .agg(pupil_delay_z=("pupil_delay_z", "mean"),
+                p_away=("away_cardinal", "mean"),
+                n=("away_cardinal", "size")))
+
+g = sns.FacetGrid(
+    plot_df,
+    row="acc_trial_concrete_cued",
+    col="items_presented",
+    height=3.2,
+    aspect=1.2,
+    sharex=True,
+    sharey=True
+)
+g.map_dataframe(sns.lineplot, x="pupil_delay_z", y="p_away")
+g.set_axis_labels("Delay pupil (z, 3.0–6.5s)", "P(away_cardinal = 1)")
+g.set_titles(row_template="Accuracy={row_name}", col_template="Load={col_name}")
+plt.tight_layout()
+plt.show()
+
+# ---------------------------------------------------------
+# 4) Logistic GEE: away_cardinal predicted by pupil + mods
+# ---------------------------------------------------------
+# Start simpler if you want:
+# formula = "away_cardinal ~ pupil_delay_z + acc_trial_concrete_cued + items_presented"
+
+formula = (
+    "away_cardinal ~ "
+    "pupil_delay_z * acc_trial_concrete_cued + "
+    "pupil_delay_z * items_presented"
+)
+
+gee = smf.gee(
+    formula=formula,
+    groups="subID",
+    data=card_df,
+    family=sm.families.Binomial()
+).fit()
+
+print(gee.summary())
+
+# -----------------------------------------
+# 5) Odds ratios + 95% CI (more interpretable)
+# -----------------------------------------
+params = gee.params
+conf = gee.conf_int()
+or_table = pd.DataFrame({
+    "OR": np.exp(params),
+    "CI_low": np.exp(conf[0]),
+    "CI_high": np.exp(conf[1]),
+    "p": gee.pvalues
+}).round(4)
+
+print("\nOdds ratios (exp(beta)) with 95% CI:")
+print(or_table)
+
+
+
+# %%
+# it looks like the bias on incorrect trials is correlated with bigger pupils and only close to the cardinals??
+
+subset_card = evokeds_df_shifted[evokeds_df_shifted['dist_to_cardinal']==11.25]
+subset2 = subset_card[subset_card['acc_trial_concrete_cued']==0]
+print(subset2.groupby('away_cardinal')['pupils'].mean())
+
+subset_obli = evokeds_df_shifted[evokeds_df_shifted['dist_to_cardinal']==33.75]
+subset2 = subset_obli[subset_obli['acc_trial_concrete_cued']==0]
+print(subset2.groupby('away_cardinal')['pupils'].mean())
+
+
+# %%
+
+subset_only_inaccurate = evokeds_df_shifted[evokeds_df_shifted['acc_trial_concrete_cued']==0]
+subset_only_inaccurate_mean = subset_only_inaccurate.groupby(['dist_to_cardinal', 'away_cardinal', 'time'])['pupils'].mean().reset_index()
+
+subset_only_inaccurate_mean["time"] = subset_only_inaccurate_mean["time"].round(3)
+plt.figure()
+sns.lineplot(data=subset_only_inaccurate_mean[subset_only_inaccurate_mean['dist_to_cardinal']==11.25], x='time', y='pupils', hue='away_cardinal', errorbar='se', palette='Blues')
+sns.lineplot(data=subset_only_inaccurate_mean[subset_only_inaccurate_mean['dist_to_cardinal']==33.75], x='time', y='pupils', hue='away_cardinal', errorbar='se', palette='Reds')
+plt.show()
+# %%
+# %% trying to do cluster test on the above effect
+
+# Main effect of away_button press but divided by load conditions and only in all_cardinal trials
+# or only on cardinal probe object... what makes more sense?
+cluster_results = {}
+
+for load in [1, 2, 3]:
+    print(f"\nRunning cluster test for Load {load}...")
+
+    # Subset the data
+    subset = evokeds_df_shifted_dw[evokeds_df_shifted_dw['items_presented'] == load]
+    subset_card = subset[subset['dist_to_cardinal'] == 11.25]
+    subset_inaccurate = subset_card[subset_card['acc_trial_concrete_cued'] == 0]
+    #subset_card = subset[subset['trial_ori_pattern'] == 'all_cardinal']
+
+    df_away = subset_inaccurate[subset_inaccurate['away_cardinal'] == 1]
+    df_tow = subset_inaccurate[subset_inaccurate['away_cardinal'] == 0]
+
+    # Pivot to get subjects x timepoints
+    X1_df = df_away.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+    X2_df = df_tow.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+
+    # Align subjects and timepoints
+    common_subs = X1_df.index.intersection(X2_df.index)
+    common_times = X1_df.columns.intersection(X2_df.columns)
+
+    X1 = X1_df.loc[common_subs, common_times].to_numpy()
+    X2 = X2_df.loc[common_subs, common_times].to_numpy()
+    times = common_times.to_numpy()
+
+    # Run cluster-based permutation test
+    T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
+        [X1, X2],
+        n_permutations=1000,
+        threshold=2.0,
+        tail=0,
+        out_type='mask',
+        verbose=True,
+        stat_fun=paired_t
+    )
+
+    cluster_summaries = []
+    for i, c in enumerate(clusters):
+        p_val = cluster_p_values[i]
+        time_inds = c[0]
+        F_vals = T_obs[time_inds]
+        mean_F = F_vals.mean()
+
+        # Extract descriptive means of each condition inside cluster
+        load_means = {
+            "mean_load1": np.nanmean(X1[:, time_inds]),
+            "mean_load2": np.nanmean(X2[:, time_inds])
+        }
+        cluster_entry = {
+            "cluster_id": i + 1,
+            "start_time": times[time_inds][0],
+            "end_time": times[time_inds][-1],
+            "p_value": p_val,
+            "mean_F": mean_F,
+        }
+        cluster_entry.update(load_means)
+
+        cluster_summaries.append(cluster_entry)
+
+    # Save to DataFrame
+    cluster_df = pd.DataFrame(cluster_summaries)
+    # cluster_df.to_csv("cluster_results_load_by_mask.csv", index=False)
+    display(cluster_df)
+
+    # Plot
+    plt.figure(figsize=(10, 5))
+    plt.plot(times, T_obs, label='T-values')
+    for i_c, c in enumerate(clusters):
+        if cluster_p_values[i_c] < 0.05:
+            plt.axvspan(times[c][0], times[c][-1], color='red', alpha=0.3)
+    plt.axhline(0, color='black', linestyle='--')
+    plt.title(f'Cluster Permutation Test (Load {load})')
+    plt.xlabel('Time (s)')
+    plt.ylabel('T-statistic')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+    times = np.array(common_times)  # make sure it's ordered
+    X1_mean = X1.mean(axis=0)
+    X2_mean = X2.mean(axis=0)
+
+
+    plt.plot(times, X1_mean, label='away')
+    plt.plot(times, X2_mean, label='towards')
+
+
+    # Highlight significant clusters
+    for i_c, cluster in enumerate(clusters):
+        if cluster_p_values[i_c] < 0.05:
+            time_mask = cluster
+            plt.axvspan(times[time_mask][0], times[time_mask][-1], color='red', alpha=0.3)
+
+    plt.legend()
+    plt.title(f'Cluster Permutation Test Load Conditions and button press towards or away from cardinal')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Pupil size')
+    plt.show()
+
+# %%
+# Trying to do the same as I have done for the behavioural bias but for pupil dilation
+# creating a new evoked that has object cued rotation 
+
+#%% trying to attach the new metadata and run evokeds depending on bias
+drop_log_rows = []
+all_evoked_dfs = []
+
+folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+
+# nan-mean across epochs (returns shape: n_channels x n_times)
+evoked_nan_mean = lambda x: np.nanmean(x, axis=0)
+
+# crop rules per load
+tmax_by_load = {1: 7, 2: 8, 3: 9}
+
+for sub in good_partis:
+    epoch_file = f"{folder_path}/{sub}_even_newer-epo.fif"
+
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+
+    # attach metadata (must already align with epochs)
+    pupil_epoch.metadata = df2.loc[df2["subID"] == sub].copy()
+
+    # baseline + drop bad baseline epochs
+    pupil_epoch_bl = apply_baseline_nan_aware(pupil_epoch, bmin=-0.1, bmax=0.0)
+
+    # count dropped
+    sum_dropped = sum("BAD_baseline_nan_both_eyes" in entry for entry in pupil_epoch_bl.drop_log)
+    drop_log_rows.append({"subID": sub, "sum_dropped": sum_dropped})
+
+    # combine pupil channels into one channel called "pupils"
+    pupil_ix = mne.pick_channels(pupil_epoch_bl.info["ch_names"], include=["pupil_left", "pupil_right"])
+    roi_dict = dict(pupils=pupil_ix)
+    pupil_epochs = mne.channels.combine_channels(
+        pupil_epoch_bl, roi_dict, method=lambda data: np.nanmean(data, axis=1)
+    )
+
+    # loop over groups: Load x away_cardinal
+    for load in (1, 2, 3):
+        # select load and crop
+        ep_load = pupil_epochs[f"items_presented == {load}"].copy().crop(-0.1, tmax_by_load[load])
+
+        for away in (0, 1):
+            ep_away = ep_load[f"away_cardinal == {away}"]
+
+            # loop over dist_to_cardinal values *within this subset*
+            ori_vals = sorted(ep_away.metadata["object_cued_rot"].dropna().unique())
+
+            for ori in ori_vals:
+                ep_grp = ep_away[f"object_cued_rot == {ori}"]
+
+                if len(ep_grp) == 0:
+                    continue
+                
+                # average across epochs with nanmean
+                evk = ep_grp.average(method=evoked_nan_mean)
+
+                # convert to df; keep only time + the single channel
+                df_evk = evk.to_data_frame()  # columns typically: time, pups/pupils (and maybe 'condition')
+
+                df_evk = df_evk[["time", "pupils"]].copy()
+
+                # add identifiers
+                df_evk["subID"] = sub
+                df_evk["items_presented"] = load
+                df_evk["away_cardinal"] = away
+                df_evk["object_cued_rot"] = ori
+
+                all_evoked_dfs.append(df_evk)
+
+# final outputs
+evokeds_df = pd.concat(all_evoked_dfs, ignore_index=True)
+drop_log_df = pd.DataFrame(drop_log_rows)
+# %%
+# Shifting
+
+# shifting the conditions so that the epochs that are epoched on pos1 are time-locked to the test onset
+evokeds_df_shifted_object_ori = evokeds_df.copy()
+evokeds_df_shifted_object_ori.loc[evokeds_df_shifted_object_ori['items_presented']==1, 'time'] +=2
+evokeds_df_shifted_object_ori.loc[evokeds_df_shifted_object_ori['items_presented']==2, 'time'] +=1
+evokeds_df_shifted_object_ori.loc[evokeds_df_shifted_object_ori['items_presented']==3, 'time'] +=0
+
+#%%
+mask_partis = df[df['mask']==1]['subID'].unique().tolist()
+nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
+# Adding column for mask
+evokeds_df_shifted_object_ori['mask'] = evokeds_df_shifted_object_ori['subID'].apply(
+    lambda x: 1 if x in mask_partis else 0)
+# %% 
+# %%
+# Data Preparation 
+
+evokeds_df_shifted_object_ori = evokeds_df_shifted_object_ori.copy()
+evokeds_df_shifted_object_ori['time'] = evokeds_df_shifted_object_ori['time'].round(3)
+
+
+start_time, end_time = 3, 6.5
+evokeds_df_shifted_object_ori_dw = evokeds_df_shifted_object_ori[(evokeds_df_shifted_object_ori['time'] >= start_time) & (evokeds_df_shifted_object_ori['time'] <= end_time)].copy()
+
+evokeds_df_shifted_object_ori_dw['pupils_z'] = evokeds_df_shifted_object_ori_dw.groupby('subID')['pupils'].transform(lambda x: zscore(x, nan_policy='omit'))
+
+# %%
+# Subtracting - manually without the function
+# Calculating clockwise button press proportion for the orientations of interest (closest to the cardinal axes)
+
+# Grouping the data by the necessary keys and producing a mean for button press clockwise for every condition and orientation and subject ID
+
+df_grouped_z = evokeds_df_shifted_object_ori_dw.groupby(by=['subID', 'items_presented', 'object_cued_rot', 'away_cardinal'])['pupils_z'].mean().reset_index()
+df_grouped_z = df_grouped_z[df_grouped_z['away_cardinal']==1]
+# Grouping by Condition
+condition_grps = df_grouped_z.groupby('items_presented', as_index=False)
+
+seperated_con_difs = []        # List for condition-specific differences
+combined_con_difs = []  # List for differences across all conditions
+
+conditions = np.sort(df['items_presented'].unique())
+
+for condition in conditions:
+    current_condition = condition_grps.get_group(condition)
+    
+    for i in good_partis:
+        participant_grp = current_condition.groupby('subID', as_index=False)
+        participant_data = participant_grp.get_group(i)
+        differences = []
+        
+        # Define the pairs of orientations for subtraction
+        orientation_pairs = [(11.25, 348.75), (101.25, 78.75), (191.25, 168.75), (281.25, 258.75)]
+
+        # calculating the mean for that orientation within that participant and load condition
+        for ori_x, ori_y in orientation_pairs:
+            value_x = participant_data.loc[participant_data['object_cued_rot'] == ori_x, 'pupils_z'].mean()
+            value_y = participant_data.loc[participant_data['object_cued_rot'] == ori_y, 'pupils_z'].mean()
+        
+            # Calculate the difference and append to the list
+            difference = value_x - value_y
+            differences.append(difference)
+
+        mean_difference = np.mean(differences)
+        seperated_con_difs.append((i, mean_difference, condition))
+        
+    # Now, calculate the mean difference across all conditions (for the same participants) at the same time
+    df_grouped_all_con = evokeds_df_shifted_object_ori_dw.groupby(['subID', 'object_cued_rot', 'away_cardinal'])['pupils_z'].mean().reset_index()
+    df_grouped_all_con = df_grouped_all_con[df_grouped_all_con['away_cardinal']==1]
+    for i in good_partis:
+        participant_grp_all_con = df_grouped_all_con.groupby('subID', as_index=False)
+        participant_data_all_con = participant_grp_all_con.get_group(i)
+        differences_all_con = []
+
+        for ori_x, ori_y in orientation_pairs:
+            value_x_all_con = participant_data_all_con.loc[participant_data_all_con['object_cued_rot'] == ori_x, 'pupils_z'].mean()
+            value_y_all_con = participant_data_all_con.loc[participant_data_all_con['object_cued_rot'] == ori_y, 'pupils_z'].mean()
+
+            # Calculate the difference and append to the list
+            difference_all_con = value_x_all_con - value_y_all_con
+            differences_all_con.append(difference_all_con)
+            #print(i, value_x_all_con, value_y_all_con, difference_all_con, differences_all_con)
+
+        mean_difference_all_con = np.mean(differences_all_con)
+        combined_con_difs.append((i, mean_difference_all_con))
+
+# Create DataFrames for both condition-specific differences and all conditions combined
+seperated_con_difs_df = pd.DataFrame(seperated_con_difs, columns=['subID', 'Mean_Difference', 'items_presented'])
+combined_con_difs_df = pd.DataFrame(combined_con_difs, columns=['subID', 'Mean_Difference'])
+
+# Display the DataFrames
+display(seperated_con_difs_df)
+display(combined_con_difs_df)
+
+
+#%% 
+#  T-test against zero for all conditions together 
+ttest_results = pg.ttest(combined_con_difs_df['Mean_Difference'], 0)
+display(ttest_results.round(4))
+
+p_value = ttest_results['p-val'].values
+
+# Define the significance level (alpha)
+alpha = 0.05
+
+# Check if the p-value is less than alpha to determine significance
+if p_value < alpha:
+    print("The t-test indicates a significant difference in cardinal bias from 0 across all load conditions.")
+else:
+    print("The t-test does not indicate a significant difference in cardinal bias from 0 across all load conditions.")
+# %% 
+# same as above but:
+#  REPEATED MEASURES ANOVA comparing the cardinal repulsion in the load conditions
+# probably needs to be done like this since there are three values (one for every condition per participant)
+
+anova_results = pg.rm_anova(data=seperated_con_difs_df, dv='Mean_Difference', within='items_presented', subject='subID')
+
+# Display ANOVA results
+display(anova_results.round(4))
+
+# Define the significance level (alpha)
+alpha = 0.05
+p_value = anova_results['p-unc'].values
+if p_value < alpha:
+    print("The ANOVA test indicates a significant difference among the load conditions.")
+else:
+    print("The ANOVA test does not indicate a significant difference among the load conditions.")
+
+plt.figure(figsize=(10, 6))  # Set the figure size
+
+# Create a boxplot
+sns.stripplot(data=seperated_con_difs_df, x='items_presented', y='Mean_Difference')
+sns.pointplot(data=seperated_con_difs_df, x='items_presented', y='Mean_Difference', estimator='mean', linestyles='none')
+plt.xlabel('Items Presented')
+plt.ylabel('Mean Cardinal Repulsion at Cardinal Positions')
+plt.title('Stripplot of Cardinal Repulsion Indices for Different Conditions')
+plt.show()
+
+
+# %%
+# polar plot of pupil sizes per orienation
+
+fig = plt.figure()
+
+# Change the projection to 'polar'
+ax = fig.add_subplot(111, projection='polar')
+
+# Get outer ylim for plotting radial lines
+ylim = ax.get_ylim()
+
+# to store values for plotting full circle lines at the end
+thetas = []
+thetas_adjusted = []
+con1s = []
+con2s = []
+con3s = []
+all_cons = []
+colors = sns.hls_palette(17)
+# colors = sns.color_palette("mako", as_cmap=True)
+df_grouped_con1 = df_grouped_z[df_grouped_z['items_presented']==1]
+df_grouped_con2 = df_grouped_z[df_grouped_z['items_presented']==2]
+df_grouped_con3 = df_grouped_z[df_grouped_z['items_presented']==3]
+
+# Get ordered list of unique target orientations
+oris = df_grouped_z['object_cued_rot'].unique()
+oris.sort()   
+oris = np.append(oris, oris[0])
+
+#unbiased_assumption = np.full(17, 0.5)
+
+for i in range(len(oris)):
+    theta = np.radians(oris[i])
+    theta_adjusted = -theta + ((np.pi/2)) % (2*np.pi)
+
+    all_con = df_grouped_z[df_grouped_z['object_cued_rot']==oris[i]]['pupils_z'].mean()
+    con1 = df_grouped_con1[df_grouped_con1['object_cued_rot']==oris[i]]['pupils_z'].mean()
+    con2 = df_grouped_con2[df_grouped_con2['object_cued_rot']==oris[i]]['pupils_z'].mean()
+    con3 = df_grouped_con3[df_grouped_con3['object_cued_rot']==oris[i]]['pupils_z'].mean()
+    
+    thetas.append(theta)
+    thetas_adjusted.append(theta_adjusted)
+    all_cons.append(all_con)
+    con1s.append(con1)
+    con2s.append(con2)
+    con3s.append(con3)
+
+    ax.plot(theta_adjusted, all_con, 'o', color=colors[1])
+    ax.plot(theta_adjusted, con1, 'o', color=colors[5])
+    ax.plot(theta_adjusted, con2, 'o', color=colors[9])
+    ax.plot(theta_adjusted, con3, 'o', color=colors[13])
+
+    # Add text labels for each point to inspect if needed
+    # text_positions = np.full(17, 0.55)[i]
+    # label_offset = 0.0  # Adjust this value for label position
+    # ax.text(theta_adjusted, text_positions + label_offset, str(oris[i]), fontsize=9, ha='center', va='center', color='black')
+
+
+
+# Plotting lines to connect dots
+ax.plot(thetas_adjusted, all_cons, '--', color='black', label='all loads average')
+ax.plot(thetas_adjusted, con1s, '-', color=colors[5], label='load 1')
+ax.plot(thetas_adjusted, con2s, '-', color=colors[9], label='load 2')
+ax.plot(thetas_adjusted, con3s, '-', color=colors[13], label='load 3')
+
+#ax.plot(thetas_adjusted, unbiased_assumption, color=colors[16], linestyle='dashed')
+
+plt.legend()
+
+plt.show()
+# %%

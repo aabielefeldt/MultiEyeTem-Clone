@@ -10,7 +10,7 @@ df = pd.read_csv('../data/csv_files/df.csv')
 good_partis = df['subID'].unique()
 
 # %%
-# appending all epochs into one list while:
+### appending all epochs into one list while:
 # combining both pupil channels (using nanmean)
 # applying baseline
 # seperating by condition
@@ -31,8 +31,10 @@ evoked_df = pd.DataFrame()
 for i in good_partis:
     
     # reading epochs per participant
-    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
-    epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
+    #folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_zscored"
+    #epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
+    epoch_file = folder_path + "/" + i + "_zscored-epo.fif"
     pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
 
     # applying baseline per eye and nan aware while dropping any epochs where the baseline period was nan in both eyes
@@ -48,8 +50,7 @@ for i in good_partis:
     roi_dict = dict(pupils=pupil_ix)
     combine_nanmean = lambda data: np.nanmean(data, axis=1)
     pupil_epochs_combined_bl = mne.channels.combine_channels(pupil_epoch_bl, roi_dict, method=combine_nanmean)
-    
-    
+
     # seperating per load condition
     con1_epochs = pupil_epochs_combined_bl["items_presented == 1"]
     con2_epochs = pupil_epochs_combined_bl["items_presented == 2"]
@@ -68,13 +69,13 @@ for i in good_partis:
     con3_ave = con3_epochs.average(method=evoked_nan_mean)
 
     # adding individual averaged data to dataframe including load and subID
-    con1_ave_df = con1_ave.to_data_frame()
+    con1_ave_df = con1_ave.to_data_frame(scalings=1)
     con1_ave_df['Load'] = 1
     con1_ave_df['subID'] = i
-    con2_ave_df = con2_ave.to_data_frame()
+    con2_ave_df = con2_ave.to_data_frame(scalings=1)
     con2_ave_df['Load'] = 2
     con2_ave_df['subID'] = i
-    con3_ave_df = con3_ave.to_data_frame()
+    con3_ave_df = con3_ave.to_data_frame(scalings=1)
     con3_ave_df['Load'] = 3
     con3_ave_df['subID'] = i
 
@@ -82,14 +83,14 @@ for i in good_partis:
     evoked_df = pd.concat([evoked_df, con1_ave_df])
     evoked_df = pd.concat([evoked_df, con2_ave_df])
     evoked_df = pd.concat([evoked_df, con3_ave_df])
-    evoked_df['baseline_start'] = baseline[0]
-    evoked_df['baseline_end'] = baseline[1]
+    # evoked_df['baseline_start'] = baseline[0]
+    # evoked_df['baseline_end'] = baseline[1]
 
 drop_log_df = pd.DataFrame(drop_log_rows)
 display(drop_log_df)
-evoked_df = evoked_df.reset_index()
+#evoked_df = evoked_df.reset_index()
 display(evoked_df)
-evoked_df.to_csv('../data/csv_files/evoked_df.csv', index=False)
+#evoked_df.to_csv('../data/csv_files/evoked_df.csv', index=False)
 
 # %%
 
@@ -111,5 +112,5 @@ evoked_df_shifted['mask'] = evoked_df_shifted['subID'].apply(
 
 #%%
 # saving
-evoked_df_shifted.to_csv('../data/csv_files/evoked_df_shifted.csv', index=False)
+#evoked_df_shifted.to_csv('../data/csv_files/evoked_df_shifted.csv', index=False)
 # %%

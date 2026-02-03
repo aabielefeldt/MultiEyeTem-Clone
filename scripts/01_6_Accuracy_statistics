@@ -11,6 +11,17 @@ import pingouin as pg
 df = pd.read_csv('../data/csv_files/df.csv')
 good_partis = df['subID'].unique()
 
+#%%
+mostly_cardinal = ['cnn', 'ccn', 'ccc', 'cco', 'coc', 'occ']
+mostly_oblique = ['onn', 'oon', 'ooo', 'coo', 'oco', 'ooc']
+category_map = {}
+category_map.update({cat: 'mostly_cardinal' for cat in mostly_cardinal})
+category_map.update({cat: 'mostly_oblique' for cat in mostly_oblique})
+
+
+df['cardinal_type'] = df['trial_ori_cat_combo'].map(lambda x: category_map.get(x, 'mixed'))
+
+
 # %% 
 # Confidence / Manipulation / Accuracy Checks
 
@@ -25,6 +36,7 @@ for i in good_partis:
         no_mask_data.append(participant_data['acc_trial_concrete_cued'].mean())
 # mask_data = df.loc[df['mask'] == 1, 'acc_trial_concrete_cued']
 # nomask_data = df.loc[df['mask'] == 0, 'acc_trial_concrete_cued']
+
 
 result_df = pg.ttest(mask_data, no_mask_data)
 display(result_df)
@@ -193,7 +205,7 @@ for i in good_partis:
 results_acc_con = pd.concat(results)
 display(results_acc_con.round(4))
 
-
+##### !!!! Doesnt this need to be pg.rm_anova  - repeated measures? 
 # Pingouin ANOVA
 anova_result_acc_items = pg.anova(data=results_acc_con, dv='acc_trial_concrete_cued', between='items_presented')
 display(anova_result_acc_items.round(4))
@@ -295,3 +307,81 @@ print('The R2 of the model is 0.034 and the adjusted R2 is 0.033, which means th
 
 # check effect size
 
+# %%
+# Is there a difference in accuracy depending on the encoded orientations?
+# hard to detangle load conditions and orienation patterns
+# in load 1, difference between orientations is the same as oblique effect because the encoded orienations are always identical
+# to the tested orientations, in load 2 and 3 there are around double the amount of trials that are mixed than all_cardinal or all_oblique (df[df['items_presented']==2]['trial_ori_pattern'].value_counts())
+#  
+########
+
+# mean per condition exactly the same as in previous version without collapsing by participant first. does that make sense?
+mean_per_con = df.groupby(['items_presented', 'trial_ori_pattern'])['acc_trial_concrete_cued'].mean()
+display(mean_per_con)
+
+palette = sns.color_palette("hls", n_colors=df['trial_ori_pattern'].nunique())
+results = []
+for i in good_partis:
+    participant_data_acc = df.loc[df['subID'] == i].groupby(['subID', 'trial_ori_pattern'])['acc_trial_concrete_cued'].mean().reset_index()
+    #participant_data_acc = df[df['subID'] == i].groupby(['block_number', 'subID'])['acc_trial_concrete_cued'].mean().reset_index()
+    # display(participant_data_acc)
+    results.append(participant_data_acc)
+
+results_acc_con = pd.concat(results)
+display(results_acc_con.round(4))
+
+
+loads = [1,2,3]
+for load in loads:
+    # Pingouin ANOVA
+    data_load = df[df['items_presented']==load]
+    data = data_load.groupby(['subID', 'trial_ori_pattern'])['acc_trial_concrete_cued'].mean().reset_index()
+    anova_result_acc_items = pg.rm_anova(data=data, dv='acc_trial_concrete_cued', within=['trial_ori_pattern'], subject='subID')
+    display(anova_result_acc_items.round(4))
+
+    # Boxplot (distribution summary, transparent so dots are visible)
+    sns.boxplot(
+        x='trial_ori_pattern',
+        y='acc_trial_concrete_cued',
+        data=data,
+        palette=palette,
+        showcaps=True,
+        showfliers=False,
+        whiskerprops={'linewidth':1.5},
+        boxprops=dict(alpha=0.5),
+        legend=False 
+    )
+
+    # Scatter of individual participants
+    sns.stripplot(
+        x='trial_ori_pattern',
+        y='acc_trial_concrete_cued',
+        data=data,
+        palette=palette,
+        edgecolor='black',
+        linewidth=1,
+        jitter=True,
+        alpha=0.7,
+        dodge=False
+    )
+    sns.despine()
+    plt.title("Boxplot showing accuracy per condition")
+    plt.xlabel("Load Condition")
+    plt.ylabel("Mean Accuracy")
+    plt.show()
+
+# %%
+# How is accuracy varying with reaction time
+
+df_dropped = df[df['acc_trial_concrete_cued'].notna()]
+
+#%%
+anova_result_acc_items = pg.rm_anova(data=df_dropped, dv='rt_resp_concrete_cued', within=['items_presented', 'acc_trial_concrete_cued'], subject='subID')
+display(anova_result_acc_items.round(4))
+
+#%%
+df_dropped = df[df['acc_trial_concrete_cued'].notna()]
+# %%
+anova_result_acc_items = pg.rm_anova(data=df_dropped, dv='rt_resp_concrete_cued', within=['items_presented'], subject='subID')
+display(anova_result_acc_items.round(4))
+# %%

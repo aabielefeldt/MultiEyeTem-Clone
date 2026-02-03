@@ -204,50 +204,50 @@ plt.savefig(os.path.join(figures_save_dir, 'combined_boxplot_all_participants.pn
 plt.show()
 
 # %% 
-#  Subtrating Accuracy of Cardinal Positions from Oblique Positions 
-# this is not different from the above anova, the only thing I could use this for would be to plot the interaction
-# directly rather than plot the 3x2 plot but I dont think this would be any more straight forward 
+# #  Subtrating Accuracy of Cardinal Positions from Oblique Positions 
+# # this is not different from the above anova, the only thing I could use this for would be to plot the interaction
+# # directly rather than plot the 3x2 plot but I dont think this would be any more straight forward 
 
-# Subtracting differences in accuracy depending on cardinal vs oblique position
-# Cardinal - Oblique Accuracy for every Load condition
+# # Subtracting differences in accuracy depending on cardinal vs oblique position
+# # Cardinal - Oblique Accuracy for every Load condition
 
-obli_data_con1 = df.loc[df['items_presented']==1].groupby(['subID', 'items_presented', 'probe_ori_cat'])[('acc_trial_concrete_cued')].mean().reset_index()
-obli_data_con2 = df.loc[df['items_presented']==2].groupby(['subID', 'items_presented', 'probe_ori_cat'])[('acc_trial_concrete_cued')].mean().reset_index()
-obli_data_con3 = df.loc[df['items_presented']==3].groupby(['subID', 'items_presented', 'probe_ori_cat'])[('acc_trial_concrete_cued')].mean().reset_index()
+# obli_data_con1 = df.loc[df['items_presented']==1].groupby(['subID', 'items_presented', 'probe_ori_cat'])[('acc_trial_concrete_cued')].mean().reset_index()
+# obli_data_con2 = df.loc[df['items_presented']==2].groupby(['subID', 'items_presented', 'probe_ori_cat'])[('acc_trial_concrete_cued')].mean().reset_index()
+# obli_data_con3 = df.loc[df['items_presented']==3].groupby(['subID', 'items_presented', 'probe_ori_cat'])[('acc_trial_concrete_cued')].mean().reset_index()
 
-obli_data_con1_piv = obli_data_con1.pivot(index=['subID', 'items_presented'], columns='probe_ori_cat', values='acc_trial_concrete_cued')
-obli_data_con2_piv = obli_data_con2.pivot(index=['subID', 'items_presented'], columns='probe_ori_cat', values='acc_trial_concrete_cued')
-obli_data_con3_piv = obli_data_con3.pivot(index=['subID', 'items_presented'], columns='probe_ori_cat', values='acc_trial_concrete_cued')
+# obli_data_con1_piv = obli_data_con1.pivot(index=['subID', 'items_presented'], columns='probe_ori_cat', values='acc_trial_concrete_cued')
+# obli_data_con2_piv = obli_data_con2.pivot(index=['subID', 'items_presented'], columns='probe_ori_cat', values='acc_trial_concrete_cued')
+# obli_data_con3_piv = obli_data_con3.pivot(index=['subID', 'items_presented'], columns='probe_ori_cat', values='acc_trial_concrete_cued')
 
 
-obli_data_con1_piv['Difference'] = obli_data_con1_piv['cardinal'].sub(obli_data_con1_piv['oblique'])
-obli_data_con2_piv['Difference'] = obli_data_con2_piv['cardinal'].sub(obli_data_con2_piv['oblique'])
-obli_data_con3_piv['Difference'] = obli_data_con3_piv['cardinal'].sub(obli_data_con3_piv['oblique'])
+# obli_data_con1_piv['Difference'] = obli_data_con1_piv['cardinal'].sub(obli_data_con1_piv['oblique'])
+# obli_data_con2_piv['Difference'] = obli_data_con2_piv['cardinal'].sub(obli_data_con2_piv['oblique'])
+# obli_data_con3_piv['Difference'] = obli_data_con3_piv['cardinal'].sub(obli_data_con3_piv['oblique'])
 
-all_tables_subs = pd.concat([obli_data_con1_piv, obli_data_con2_piv, obli_data_con3_piv]).reset_index()
-display(all_tables_subs)
+# all_tables_subs = pd.concat([obli_data_con1_piv, obli_data_con2_piv, obli_data_con3_piv]).reset_index()
+# display(all_tables_subs)
 
-plt.figure(figsize=(10,6))
-sns.stripplot(data=all_tables_subs, x='items_presented', y='Difference', jitter=0.1) #(x='probe_ori_cat', y='acc_trial_concrete_cued', data=final_grouped_data_obli)
-sns.pointplot(data=all_tables_subs, x='items_presented', y='Difference')
-plt.title('Difference in Accuracy between Objects shown in Cardinal vs Oblique Positions per Load Condition')
-plt.xlabel('Load Condition')
-plt.ylabel('Mean Difference per participant')
-plt.savefig(os.path.join(figures_save_dir, 'difference_accuracy_cardinal_oblique.png'))
-plt.show()
+# plt.figure(figsize=(10,6))
+# sns.stripplot(data=all_tables_subs, x='items_presented', y='Difference', jitter=0.1) #(x='probe_ori_cat', y='acc_trial_concrete_cued', data=final_grouped_data_obli)
+# sns.pointplot(data=all_tables_subs, x='items_presented', y='Difference')
+# plt.title('Difference in Accuracy between Objects shown in Cardinal vs Oblique Positions per Load Condition')
+# plt.xlabel('Load Condition')
+# plt.ylabel('Mean Difference per participant')
+# plt.savefig(os.path.join(figures_save_dir, 'difference_accuracy_cardinal_oblique.png'))
+# plt.show()
 
-# %%
-# Anova on difference scores, same as doing it on the full df
+# # %%
+# # Anova on difference scores, same as doing it on the full df
 
-result_anova_repeated = pg.rm_anova(data=all_tables_subs, dv='Difference', within=['items_presented'], subject='subID')
+# result_anova_repeated = pg.rm_anova(data=all_tables_subs, dv='Difference', within=['items_presented'], subject='subID')
 
-display(result_anova_repeated.round(4))
-p_value = result_anova_repeated['p-unc'].values
-alpha = 0.05
-if p_value < alpha:
-    print("The ANOVA indicates a significant difference in the oblique effect depending on the laod condition.")
-else:
-    print("The ANOVA does not indicate a significant difference in the oblique effect depending on the laod condition.")
+# display(result_anova_repeated.round(4))
+# p_value = result_anova_repeated['p-unc'].values
+# alpha = 0.05
+# if p_value < alpha:
+#     print("The ANOVA indicates a significant difference in the oblique effect depending on the laod condition.")
+# else:
+#     print("The ANOVA does not indicate a significant difference in the oblique effect depending on the laod condition.")
 
 # %% 
 #  Oblique effect on polar plot
@@ -296,16 +296,17 @@ unbiased_assumption = np.full(17, 0.5)
 # Plot the data for the three conditions individually
 # at the moment using -spacing_rad to make the data go in the correct (anticlockwise direction)
 # ax.plot(-spacing_circ, unbiased_assumption, color='tab:pink', linestyle='dashed')
-ax.plot(-spacing_circ, oriacc1_circ, color=colors[0], linestyle='dashed', marker='o')
-ax.plot(-spacing_circ, oriacc2_circ, color=colors[1], linestyle='dashed', marker='o')
-ax.plot(-spacing_circ, oriacc3_circ, color=colors[2], linestyle='dashed', marker='o')
+ax.plot(-spacing_circ, oriacc1_circ, color=colors[0], linestyle='dashed', marker='o', label='load 1')
+ax.plot(-spacing_circ, oriacc2_circ, color=colors[1], linestyle='dashed', marker='o', label='load 2')
+ax.plot(-spacing_circ, oriacc3_circ, color=colors[2], linestyle='dashed', marker='o', label='load 3')
 
 plt.legend()
 plt.title('Oblique Effect on Polar Plot by Load Condition')
 plt.savefig(os.path.join(figures_save_dir, 'polar_plot_oblique_effect.png'))
 plt.show()
 
-#%% bar polar plot for accuracy per orientation (all conditions)
+#%% 
+# bar polar plot for accuracy per orientation (all conditions)
 
 # Get ordered list of unique target orientations
 rots = df['object_cued_rot'].unique()
@@ -351,7 +352,7 @@ ax.set_yticklabels(['0.5'])
 plt.show()
 
 # %%
-
+##### delete all below?
 # might be useless for oblique effect
 
 
