@@ -124,6 +124,66 @@ df['trial_ori_pattern'] = np.where(
         'mixed'
     )
 )
+#%%
+# creating categorical columns depending on probes and sample objects distance to the next cardinal and wether response
+# pressed the objects further or closer towards cardinal 
+
+CARDINALS = np.array([0.0, 90.0, 180.0, 270.0])
+
+def wrap360(x):
+    return np.mod(x, 360.0)
+
+def circ_dist_deg(a, b):
+    """Circular (unsigned) distance in degrees in [0, 180]. Works on arrays."""
+    a = wrap360(a)
+    b = wrap360(b)
+    d = np.abs(a - b)
+    return np.minimum(d, 360.0 - d)
+
+def nearest_cardinal_axis(theta):
+    """Nearest cardinal axis (0/90/180/270) for each theta (array)."""
+    theta = wrap360(theta)
+    dists = np.stack([circ_dist_deg(theta, c) for c in CARDINALS], axis=1)
+    idx = np.argmin(dists, axis=1)
+    return CARDINALS[idx]
+
+# --- vectors ---
+mem   = df["object_cued_rot"].to_numpy(dtype=float)          # remembered orientation
+probe = df["object_test_rot_cued"].to_numpy(dtype=float)     # probe shown at test
+resp  = df["final_rot_concrete_cued"].to_numpy(dtype=float)  # final response
+
+# axis defined by the remembered orientation (your request)
+axis = nearest_cardinal_axis(mem)
+
+# distance of probe and response from that axis
+d_mem   = circ_dist_deg(mem, axis)
+d_probe = circ_dist_deg(probe, axis)
+resp_weighted = (probe+((probe-resp)/8)) # this treats the button press from the probe orientation as -1 or +1 degree to
+# avoid that probe objects close to cardinals are treated as further away from cardinal axis (this makes the movement more 
+# interested in directions towards or away from closest cardinal rather than actual distance of response to probe)
+# object cued = 11.25, probe = 3.25, after button press towards cardinal orientation of response would be 4.75,
+# i treat it as 2.25 (so moved towards cardinal by one degree instead of 8)
+d_resp  = circ_dist_deg(resp_weighted, axis)
+
+# add columns
+df["nearest_cardinal_mem"] = axis
+df["dist_to_cardinal_mem"] = d_mem
+df['dist_probe_to_cardinal'] = d_probe
+
+# 1 = probe is farther from cardinal (moved away)
+# 0 = probe is closer to cardinal (moved toward)
+probe_away = (d_probe > d_mem).astype(float)
+# Handle rare ties (should not occur with ±8° offsets, but safe)
+probe_away[np.isclose(d_probe, d_mem, atol=1e-12)] = np.nan
+df["probe_away_from_cardinal"] = probe_away
+
+# Away/toward based on the *movement from probe to response*
+# 1 = moved away from cardinal, 0 = moved toward cardinal
+pressed_away = (d_probe > d_resp).astype(float)
+pressed_away[np.isnan(resp)] = np.nan  # keep missing responses as NaN
+# Optional: if someone ended exactly same distance (rare), mark NaN
+pressed_away[np.isclose(d_resp, d_probe, atol=1e-12)] = np.nan
+df["pressed_away_from_cardinal"] = pressed_away
 
 # %% 
 # Creating folder structure and saving the dataframe

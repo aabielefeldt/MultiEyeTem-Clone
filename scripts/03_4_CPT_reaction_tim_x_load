@@ -8,6 +8,7 @@ from scipy.stats import zscore
 from mne.stats import permutation_cluster_1samp_test, permutation_cluster_test
 from scipy import stats
 from scipy.stats import t, ttest_rel, zscore, f
+from IPython.display import display
 
 # %% 
 # read evokeds and metadata

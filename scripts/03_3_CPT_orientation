@@ -19,23 +19,14 @@ mask_partis = df[df['mask']==1]['subID'].unique().tolist()
 nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
 
 # evoked_df_shifted = pd.read_csv('../data/csv_files/evoked_df_shifted.csv')
-# evoked_df_only_cardinal_shifted = pd.read_csv('../data/csv_files/evoked_df_only_cardinal_shifted.csv')
+
 evoked_df_all_combos_shifted = pd.read_csv('../data/csv_files/evoked_df_all_combos_shifted.csv')
 # sig_results_shifted_cardinal_category = pd.read_csv('../data/csv_files/sig_results_shifted_cardinal_category.csv')
 
  # %% Rounding the time of all to be identical between participants, ultimately move this to where the evoked dfs are created
 # evoked_df_shifted['time'] = evoked_df_shifted['time'].round(3)
-# evoked_df_only_cardinal_shifted['time'] = evoked_df_only_cardinal_shifted['time'].round(3)
 evoked_df_all_combos_shifted['time'] = evoked_df_all_combos_shifted['time'].round(3)
 
-only_cardinal = ['cnn', 'ccn', 'ccc']
-only_oblique = ['onn', 'oon', 'ooo']
-category_map = {}
-category_map.update({cat: 'only_cardinal' for cat in only_cardinal})
-category_map.update({cat: 'only_oblique' for cat in only_oblique})
-
-
-evoked_df_all_combos_shifted['cardinal_type_only_one'] = evoked_df_all_combos_shifted['trial_ori_cat_combo'].map(lambda x: category_map.get(x, 'mixed'))
 
 # %%
 # defining t-test statistic

@@ -8,6 +8,7 @@ from scipy.stats import zscore
 from mne.stats import permutation_cluster_test, f_oneway, permutation_cluster_1samp_test
 from scipy import stats
 from scipy.stats import t, ttest_rel, zscore, f
+from IPython.display import display
 
 # %% 
 # read evokeds and metadata
@@ -18,14 +19,28 @@ evoked_df_accuracy = pd.read_csv('../data/csv_files/evoked_df_accuracy.csv')
 # %%
 # Data Preparation 
 
+median_acc = df.groupby(['subID'])['acc_trial_concrete_cued'].mean().median()
+median_acc
+all = df.groupby(['subID'])['acc_trial_concrete_cued'].mean()
+group_good = all[all>median_acc].index
+group_bad = all[all<=median_acc].index
+
 evoked_df_acc = evoked_df_accuracy_shifted.copy()
+
+evoked_df_acc['acc_group'] = evoked_df_acc['subID'].apply(
+    lambda x: 'high' if x in group_good else 'low')
+
+
+
 evoked_df_acc['time'] = evoked_df_acc['time'].round(3)
 
-evoked_df_acc['pupils'] = evoked_df_acc.groupby('subID')['pupils'].transform(lambda x: zscore(x, nan_policy='omit'))
+# zscore the complete time-frame, not ideal because load conditions contribute differently due to longer trials for higher load
+# if I am only looking at false vs correct, this is probably fine though
+# evoked_df_acc['pupils'] = evoked_df_acc.groupby('subID')['pupils'].transform(lambda x: zscore(x, nan_policy='omit'))
 
-start_time, end_time = 0, 9
-evoked_df_acc = evoked_df_acc[(evoked_df_acc['time'] >= start_time) & (evoked_df_acc['time'] <= end_time)].copy()
-
+start_time, end_time = 3, 6.5
+delay_time_window = evoked_df_acc[(evoked_df_acc['time'] >= start_time) & (evoked_df_acc['time'] <= end_time)].copy()
+delay_time_window['pupils_z'] = delay_time_window.groupby('subID')['pupils'].transform(lambda x: zscore(x, nan_policy='omit'))
 
 # %%
 # defining t-test statistic
@@ -34,127 +49,168 @@ def paired_t(X1, X2):
     t_vals, _ = stats.ttest_rel(X1, X2, axis=0)
     return t_vals
 
-# should I use Welchs or students t here, groups are quie different in size
 def independent_t(X1, X2):
     t_vals, _ = stats.ttest_ind(X1, X2, axis=0, equal_var=True)  # equal_var=False = Welch’s t-test vs equal_var=True -> pooled-variance t-test (Student’s t), use Welch only when groups are very unequal
     return t_vals
 
+seed = 42
 
 # %%
 # 1 - Accuracy main effect (Correct vs False)
-# but using paired t test - should be correct
-# but needs to be within participants / on-sample
-# but paired t would be for completely seperate groups no? should be rm_anova instead? --> doesn't matter
-# its a paired t test which is for within group effects and is the same as a two-way anova 
-# rewriting from Mask vs no Mask
 
-##########
+# post-hoc pairwise comparison cluster tests ---
+# fixed, now using permutation_cluster_1samp_test for within subjects design, which uses t-test against zero under
+# the hood to test whether the mean differences between conditions are different from zero across subjects
+# mathematically equivalent to ttest_rel, subtraction for difference curve just happens internally with ttest_rel
+# this is copied from load main effec/post-hoc tests
+# 
 
-cluster_results = {}
 
-evoked_df_acc_only_no_mask = evoked_df_acc[evoked_df_acc['mask']==1]
+# Safety copy and ensure common time grid
+df_post = delay_time_window.copy()
+df_post['time'] = df_post['time'].round(3)
+
+alpha = 0.05
+n_perm = 5000
+
+all_rows = []  # to collect summaries across both mask groups
 
 # Subset the data
-df_correct = evoked_df_acc[evoked_df_acc['accuracy'] == 'correct']
-df_false = evoked_df_acc[evoked_df_acc['accuracy'] == 'false']
-
+df_correct = delay_time_window[delay_time_window['accuracy'] == 'correct']
+df_false = delay_time_window[delay_time_window['accuracy'] == 'false']
 
 # Pivot to get subjects x timepoints
-X1_df = df_correct.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-X2_df = df_false.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+X1_df = df_correct.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+X2_df = df_false.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
 
-# Align only on time because between subjects test
+# Align subjects and timepoints across the two accuracies (within-subjects!)
+common_subs  = X1_df.index.intersection(X2_df.index)
 common_times = X1_df.columns.intersection(X2_df.columns)
-times = common_times.to_numpy()
+common_times = np.array(sorted(common_times))
 
-X1 = X1_df[common_times].values
-X2 = X2_df[common_times].values
+X1 = X1_df.loc[common_subs, common_times].to_numpy()
+X2 = X2_df.loc[common_subs, common_times].to_numpy()
+times = common_times
+
+# Drop rows/cols with any NaNs across the two accuracies
+row_ok = (~np.isnan(X1) & ~np.isnan(X2)).all(axis=1)
+col_ok = (~np.isnan(X1) & ~np.isnan(X2)).all(axis=0)
+X1, X2 = X1[row_ok][:, col_ok], X2[row_ok][:, col_ok]
+times = times[col_ok]
+common_subs = common_subs[row_ok]
+
+print("Aligned shapes:", X1.shape, X2.shape)  # (n_subjects, n_times)
 
 
-# 
-T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
-    [X1, X2],
-    n_permutations=1000,
-    threshold=2.0,        # use a lower t threshold
-    tail=0,               # two-tailed (direction of effect could go either way)
-    stat_fun=paired_t,
-    out_type='mask',
+Xdiff = X2 - X1                       # (n_subjects, n_times)
+n_sub = Xdiff.shape[0]
+tcrit = t.ppf(1 - 0.025, df=n_sub - 1)  # two-tailed cluster-forming threshold
+
+T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
+    Xdiff,
+    n_permutations=n_perm,
+    threshold=tcrit,
+    tail=0,
+    seed=seed,
+    out_type="mask",
     verbose=True
 )
 
+print(cluster_p_values.round(3))
+# Summarize significant clusters
 alpha = 0.05
-cluster_summaries = []
+n_times = len(times)
 
-for i, c in enumerate(clusters):
-    p_val = cluster_p_values[i]
-    if p_val < alpha:
-        time_inds = c[0]
-        t_vals = T_obs[time_inds]
-        mean_t = t_vals.mean()
-        direction = "Correct > False" if mean_t > 0 else "False > Correct"
+# ---- Summarize significant clusters (no helper) ----
+for i_c, c in enumerate(clusters):
+    p = float(cluster_p_values[i_c])
+    if p < alpha:
+        # Build a boolean time mask regardless of cluster type
+        if isinstance(c, np.ndarray):
+            time_mask = c  # already boolean mask over time
+        else:
+            # c is a tuple containing a slice (or a slice)
+            s = c[0] if isinstance(c, tuple) else c
+            time_mask = np.zeros(n_times, dtype=bool)
+            time_mask[s] = True
 
-        cluster_summaries.append({
-            "cluster_id": i + 1,
-            "start_time": times[time_inds][0],
-            "end_time": times[time_inds][-1],
-            "p_value": p_val,
+        t_vals = T_obs[time_mask]
+        mean_t = float(np.mean(t_vals))
+
+        # Effect (A - B) averaged within the cluster (paired contrast)
+        # Here XA and XB are the two arrays you tested (e.g., X3 and X1)
+        mean_diff = float(np.nanmean(Xdiff[:, time_mask]))
+
+        # Cluster bounds for reporting
+        idx = np.flatnonzero(time_mask)
+        t_start = float(times[idx[0]])
+        t_end   = float(times[idx[-1]])
+
+        all_rows.append({
+            "cluster_id": int(i_c + 1),
+            "start_time": t_start,
+            "end_time": t_end,
+            "p_value": p,
             "mean_t": mean_t,
-            "direction": direction
+            "mean_diff": mean_diff,
+            "n_subjects": int(X1.shape[0])
         })
 
-# Turn into DataFrame
-cluster_df_correct_vs_false = pd.DataFrame(cluster_summaries)
-
-# Save to CSV
-# cluster_df_correct_vs_false.to_csv("cluster_results.csv", index=False)
-
-display(cluster_df_correct_vs_false)
-
-# Plot
+# ---- Plot t-curve and shade ALL significant clusters (no helper) ----
 plt.figure(figsize=(10, 5))
-plt.plot(times, T_obs, label='T-values')
-for i_c, c in enumerate(clusters):
-    if cluster_p_values[i_c] < 0.05:
-        plt.axvspan(times[c][0], times[c][-1], color='red', alpha=0.3)
-plt.axhline(2, color='black', linestyle='--')
-plt.title(f'Cluster Permutation Test (Correct vs False)')
-plt.xlabel('Time (s)')
-plt.ylabel('T-statistic')
+plt.plot(times, T_obs, label='t-values')
+plt.axhline(0, color='k', linestyle='--', linewidth=0.8)
+plt.title(f"Post-hoc (paired cluster test)")
+plt.xlabel("Time (s)")
+plt.ylabel("t-statistic")
 plt.legend()
 plt.tight_layout()
 plt.show()
 
-times = np.array(common_times)  # make sure it's ordered
-X1_mean = X1.mean(axis=0)
-X2_mean = X2.mean(axis=0)
+# Optional: show condition means for reference
+plt.figure(figsize=(10, 5))
+plt.plot(times, X1.mean(axis=0), label='correct')
+plt.plot(times, X2.mean(axis=0), label='incorrect')
+for i_c, c in enumerate(clusters):
+    if cluster_p_values[i_c] < alpha:
+        if isinstance(c, np.ndarray):
+            time_mask = c
+        else:
+            s = c[0] if isinstance(c, tuple) else c
+            time_mask = np.zeros(n_times, dtype=bool)
+            time_mask[s] = True
 
+        idx = np.flatnonzero(time_mask)
+        if idx.size:  # safety
+            plt.axvspan(times[idx[0]], times[idx[-1]], color='red', alpha=0.3, zorder=0)
 
-plt.plot(times, X1_mean, label='correct')
-plt.plot(times, X2_mean, label='false')
-
-
-# Highlight significant clusters
-for i_c, cluster in enumerate(clusters):
-    if cluster_p_values[i_c] < 0.05:
-        time_mask = cluster
-        plt.axvspan(times[time_mask][0], times[time_mask][-1], color='red', alpha=0.3)
-
+plt.title(f"Condition means")
+plt.xlabel("Time (s)")
+plt.ylabel("Mean pupil")
 plt.legend()
-plt.title(f'Cluster Permutation Test Accuracy')
-plt.xlabel('Time (s)')
-plt.ylabel('Pupil size')
+plt.tight_layout()
 plt.show()
 
+# Save combined summary across
+posthoc_df = pd.DataFrame(all_rows).reset_index(drop=True)
+# posthoc_df.to_csv("posthoc_load_pairwise_clusters.csv", index=False)
+
+display(posthoc_df if not posthoc_df.empty else "No significant post-hoc clusters.")
 #%%
 # Test the interaction between Load and Accuracy with a contrast based interaction test
+# this should be all correct I think but check again
+# this is testing whether the linear trend for the load conditions is the same in correct vs incorrect trials
+# for the whole trial timeline it isnt (-> there is a difference during test)
+# but maybe also interesting to only look at delay
+
 
 alpha = 0.05
 n_perm = 5000
 
 # Build per-load (subjects × time) for each accuracy
 def mat_for(acc, load):
-    sub = evoked_df_acc[(evoked_df_acc['accuracy'] == acc) & (evoked_df_acc['Load'] == load)]
-    return sub.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+    sub = delay_time_window[(delay_time_window['accuracy'] == acc) & (delay_time_window['Load'] == load)]
+    return sub.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
 
 C1, C2, C3 = mat_for('correct',1), mat_for('correct',2), mat_for('correct',3)
 I1, I2, I3 = mat_for('false',  1), mat_for('false',  2), mat_for('false',  3)
@@ -202,6 +258,7 @@ T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
     threshold=threshold,   # auto t-threshold for 1-sample t
     tail=0,           # two-tailed (trend could be pos or neg)
     out_type='mask',
+    seed=seed,
     verbose=True
 )
 
@@ -298,33 +355,37 @@ for load in [1, 2, 3]:
     print(f"\nRunning cluster test for Load {load}...")
 
     # Subset the data
-    df_load = evoked_df_acc[evoked_df_acc['Load'] == load]
+    df_load = delay_time_window[delay_time_window['Load'] == load]
     df_correct = df_load[df_load['accuracy'] == 'correct']
     df_false = df_load[df_load['accuracy'] == 'false']
 
     # Pivot to get subjects x timepoints
-    X1_df = df_correct.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-    X2_df = df_false.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+    X1_df = df_correct.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+    X2_df = df_false.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
 
     # Align subjects and timepoints
     common_subs = X1_df.index.intersection(X2_df.index)
     common_times = X1_df.columns.intersection(X2_df.columns)
+    times = common_times.to_numpy()
 
     X1 = X1_df.loc[common_subs, common_times].to_numpy()
     X2 = X2_df.loc[common_subs, common_times].to_numpy()
-    times = common_times.to_numpy()
+
+    Xdiff = X2 - X1                       # (n_subjects, n_times)
+    n_sub = Xdiff.shape[0]
+    tcrit = t.ppf(1 - 0.025, df=n_sub - 1)  # two-tailed cluster-forming threshold
 
     # Run cluster-based permutation test
-    T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
-        [X1, X2],
-        n_permutations=1000,
-        threshold=2.0,
+    T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
+        Xdiff,
+        n_permutations=n_perm,
+        threshold=tcrit,
         tail=0,
+        seed=seed,
         out_type='mask',
-        verbose=True,
-        stat_fun=paired_t
+        verbose=True
     )
-
+    print(cluster_p_values.round(3))
     # Store results
     cluster_results[load] = {
         "T_obs": T_obs,
@@ -369,108 +430,135 @@ for load in [1, 2, 3]:
     plt.ylabel('Pupil size')
     plt.show()
 
+    
+
 
 # %%
 # Main effect of load but only on correct trials
-# should not be f_oneway I think, f_oneway is for independent samples
-df_correct = evoked_df_acc[evoked_df_acc['accuracy'] == 'correct']
-cluster_results = {}
+# maybe redundant
 
-# Subset the data
-df_load1 = df_correct[df_correct['Load'] == 1]
-df_load2 = df_correct[df_correct['Load'] == 2]
-df_load3 = df_correct[df_correct['Load'] == 3]
+# One-sample cluster test on a planned contrast.
+# a linear trend contrast cluster test against zero.
+# “Is the average difference between high and low load (per subject) reliably non-zero?” - answer no, there is a reliable difference
+# might compare this to the planned contrast test above, both are apparently reasonable
+# results are also relatively similar to results of the more complicated omnibus test (similar significant clusters, p-values are much more significant for omnibus test though)
 
-# Pivot to get subjects x timepoints
-X1_df = df_load1.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-X2_df = df_load2.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-X3_df = df_load3.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+# the difference between load conditions is reliably non-zero for only correct as well as 
+# for only false trials, however the effect was slightly bigger and more significant for correct trials
+df_post = delay_time_window.copy()
+df_post['time'] = df_post['time'].round(3)
 
-# Align subjects and timepoints
-common_subs = X1_df.index.intersection(X2_df.index).intersection(X3_df.index)
-common_times = X1_df.columns.intersection(X2_df.columns).intersection(X3_df.columns)
+df_correct = df_post[df_post['accuracy'] == 'false']
 
-X1 = X1_df.loc[common_subs, common_times].to_numpy()
-X2 = X2_df.loc[common_subs, common_times].to_numpy()
-X3 = X3_df.loc[common_subs, common_times].to_numpy()
+# Build subject×time tables per load
+P1 = df_correct[df_correct['Load'] == 1].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+P2 = df_correct[df_correct['Load'] == 2].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+P3 = df_correct[df_correct['Load'] == 3].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
 
-times = common_times.to_numpy()
+# Align subjects and timepoints across ALL three loads (within-subjects!)
+common_subs  = P1.index.intersection(P2.index).intersection(P3.index)
+common_times = P1.columns.intersection(P2.columns).intersection(P3.columns)
+common_times = np.array(sorted(common_times))
 
-T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
-    [X1, X2, X3],
-    n_permutations=1000,
-    threshold=None,        # None for f_test?
-    tail=1,               # two-tailed
-    stat_fun=f_oneway,
-    out_type='mask',
-    verbose=True
+X1 = P1.loc[common_subs, common_times].to_numpy()
+X2 = P2.loc[common_subs, common_times].to_numpy()
+X3 = P3.loc[common_subs, common_times].to_numpy()
+times = common_times
+
+# X1, X2, X3 already aligned: (subjects × time)
+w = np.array([-1, 0, 1])  # linear contrast weights
+
+# Compute per-subject contrast time series
+X_lin = w[0]*X1 + w[1]*X2 + w[2]*X3   # shape (n_sub × n_time)
+
+# Cluster test vs 0
+n_sub = X_lin.shape[0]
+tcrit = t.ppf(1 - 0.025, df=n_sub-1)
+
+T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
+    X_lin,
+    threshold=tcrit,
+    n_permutations=5000,
+    tail=0,         # two-tailed
+    seed=seed,
+    out_type='mask'
 )
 
+print(clusters)
+print(cluster_p_values)
+
 alpha = 0.05
-cluster_summaries = []
-
-for i, c in enumerate(clusters):
-    p_val = cluster_p_values[i]
-    if p_val < alpha:
-        time_inds = c[0]
-        F_vals = T_obs[time_inds]
-        mean_F = F_vals.mean()
-
-        # Extract descriptive means of each condition inside cluster
-        load_means = {
-            "mean_load1": np.nanmean(X1[:, time_inds]),
-            "mean_load2": np.nanmean(X2[:, time_inds]),
-            "mean_load3": np.nanmean(X3[:, time_inds]),
-        }
-        cluster_entry = {
-            "cluster_id": i + 1,
-            "start_time": times[time_inds][0],
-            "end_time": times[time_inds][-1],
-            "p_value": p_val,
-            "mean_F": mean_F,
-        }
-        cluster_entry.update(load_means)
-
-        cluster_summaries.append(cluster_entry)
-
-# Save to DataFrame
-cluster_df = pd.DataFrame(cluster_summaries)
-# cluster_df.to_csv("cluster_results_load.csv", index=False)
-
-display(cluster_df)
-
-# Plot
-plt.figure(figsize=(10, 5))
-plt.plot(times, T_obs, label='T-values')
+rows = []
 for i_c, c in enumerate(clusters):
-    if cluster_p_values[i_c] < 0.05:
-        plt.axvspan(times[c][0], times[c][-1], color='red', alpha=0.3)
-plt.axhline(0, color='black', linestyle='--')
-plt.title(f'Cluster Permutation Test Load)')
-plt.xlabel('Time (s)')
-plt.ylabel('T-statistic')
-plt.legend()
+    p = float(cluster_p_values[i_c])
+    if p < alpha:
+        # c is a boolean mask (out_type='mask'); if it's a slice tuple, adapt accordingly
+        if isinstance(c, np.ndarray):
+            idx = np.flatnonzero(c)
+        else:
+            idx = np.arange(len(times))[c]
+
+        if idx.size == 0:
+            continue
+
+
+        start_t = float(times[idx[0]])
+        end_t   = float(times[idx[-1]])
+        mean_t  = float(np.mean(T_obs[idx]))
+        dur     = int(idx.size)
+
+        rows.append({
+            "effect": "linear trend",
+            "cluster_id": int(i_c + 1),
+            "start_time": start_t,
+            "end_time": end_t,
+            "duration_samps": dur,
+            "p_value": p,
+            "mean_t": mean_t,
+            "n_subjects": int(X_lin.shape[0]),
+        })
+
+summary = pd.DataFrame(rows).reset_index(drop=True)
+display(summary)
+# summary.to_csv("clusters_LoadxAccuracy_linearTrend_interaction_FIXED.csv", index=False)
+
+        
+# Plot t-curve with correctly shaded clusters
+plt.figure(figsize=(10,5))
+plt.plot(times, T_obs, label='t (load trend)')
+plt.axhline(0, color='k', linestyle=':', linewidth=0.8)
+
+for i_c, c in enumerate(clusters):
+    if cluster_p_values[i_c] < alpha:
+        if isinstance(c, np.ndarray):
+            idx = np.flatnonzero(c)
+        else:
+            idx = np.arange(len(times))[c]
+        plt.axvspan(float(times[idx[0]]), float(times[idx[-1]]), color='red', alpha=0.3)
+
+plt.xlabel("Time (s)")
+plt.ylabel("t") 
+plt.title("Linear trend of load effect")
 plt.tight_layout()
 plt.show()
 
-times = np.array(common_times)  # make sure it's ordered
-X1_mean = X1.mean(axis=0)
-X2_mean = X2.mean(axis=0)
-X3_mean = X3.mean(axis=0)
+# %%
+# could try to median split high-accuracy and low-accuracy subIDs
 
-plt.plot(times, X1_mean, label='Load 1')
-plt.plot(times, X2_mean, label='Load 2')
-plt.plot(times, X3_mean, label='Load 3')
 
-# Highlight significant clusters
-for i_c, cluster in enumerate(clusters):
-    if cluster_p_values[i_c] < 0.05:
-        time_mask = cluster
-        plt.axvspan(times[time_mask][0], times[time_mask][-1], color='red', alpha=0.3)
+##########
 
-plt.legend()
-plt.title('Cluster Permutation Test Load Conditions')
-plt.xlabel('Time (s)')
-plt.ylabel('Pupil size')
-plt.show()
+# using t-test (student's t) because more intepretable than f-test, using tcrit caluclated from function, two-tailed (tail=0), seed=42 to make result reproducible (42 is convention[meaning of life])
+# should all be correct
+
+# looks like mask is more of an influence in the low performing group, unequal number of 
+# subIDs with mask in low and high group
+# so this analysis probably doesn't make sense
+# df_maskuracy= df.groupby(['subID', 'mask'])['acc_trial_concrete_cued'].mean().reset_index()
+# df_maskuracy['acc_group'] = df_maskuracy['subID'].apply(
+#     lambda x: 'high' if x in group_good else 'low')
+# df_maskuracy.sort_values('acc_group')
+
+# deleted the actual test but should probably make a note of the idea somewhere
+
 # %%

@@ -1,10 +1,14 @@
-"files.watcherExclude": {
-    "**/figures/**": true,
-    "**/csv_files/**": true
-  }
 
 {
-  "workbench.colorCustomizations": {
-      "editor.rangeHighlightBackground": "#00AA00"
+  "search.exclude": {
+    "**/data/**": true,
+    "**/.git/**": true,
+    "**/.conda/**": true
+  },
+
+  "files.watcherExclude": {
+    "**/data/**": true,
+    "**/.git/**": true,
+    "**/.conda/**": true
   }
 }

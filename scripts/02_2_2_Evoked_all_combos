@@ -20,9 +20,10 @@ ori_cat_combos = df['trial_ori_cat_combo'].unique()
 
 drop_log_rows = []
 
-evoked_df_all_combos = pd.DataFrame()
+evoked_list = []
 
 for i in good_partis:
+
     # Read participant data
     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
     epoch_file = f"{folder_path}/{i}_even_newer-epo.fif"
@@ -51,10 +52,8 @@ for i in good_partis:
             print(f"Skipping {combo} for subject {i} due to missing data")
             continue
         
-#####
-# !!
-# check if the below cropping makes sense..
-
+        # Averaging epochs based on orientation combo only, load is coded within ori combo and will then just 
+        # be added to the df
         # Infer Load from number of non-'n' letters in combo (e.g., 'cnn' → 2 → Load = 1)
         n_items_presented = 3 - combo.count('n')
         load = n_items_presented
@@ -65,18 +64,19 @@ for i in good_partis:
 
         # Average and convert to DataFrame
         evoked = selected_epochs.average(method=lambda x: np.nanmean(x, axis=0))
-        evoked_df = evoked.to_data_frame()
+        evoked_df = evoked.to_data_frame(scalings=1)
         evoked_df['Load'] = load
         evoked_df['subID'] = i
         evoked_df['trial_ori_cat_combo'] = combo
 
-        evoked_df_all_combos = pd.concat([evoked_df_all_combos, evoked_df])
-
+        evoked_list.append(evoked_df)
+    
 drop_log_df = pd.DataFrame(drop_log_rows)
+evoked_df_all_combos = pd.concat(evoked_list, ignore_index=True)
 
-# # Reset index and save
-# evoked_df_all_combos = evoked_df_all_combos.reset_index()
-# evoked_df_all_combos.to_csv('../data/csv_files/evoked_df_all_combos.csv', index=False)
+# Saving
+drop_log_df.to_csv('../data/csv_files/drop_log_df_evoked_all_combos.csv', index=False)
+evoked_df_all_combos.to_csv('../data/csv_files/evoked_df_all_combos.csv', index=False)
 
 
 # %%
@@ -102,67 +102,28 @@ category_map = {}
 category_map.update({cat: 'mostly_cardinal' for cat in mostly_cardinal})
 category_map.update({cat: 'mostly_oblique' for cat in mostly_oblique})
 
-
 evoked_df_all_combos_shifted['cardinal_type'] = evoked_df_all_combos_shifted['trial_ori_cat_combo'].map(lambda x: category_map.get(x, 'mixed'))
 
+only_cardinal = ['cnn', 'ccn', 'ccc']
+only_oblique = ['onn', 'oon', 'ooo']
+category_map = {}
+category_map.update({cat: 'only_cardinal' for cat in only_cardinal})
+category_map.update({cat: 'only_oblique' for cat in only_oblique})
+evoked_df_all_combos_shifted['cardinal_type_only_one'] = evoked_df_all_combos_shifted['trial_ori_cat_combo'].map(lambda x: category_map.get(x, 'mixed'))
+
+# also include rounding here
+evoked_df_all_combos_shifted['time'] = evoked_df_all_combos_shifted['time'].round(3)
+
+# Saving
 evoked_df_all_combos_shifted.to_csv('../data/csv_files/evoked_df_all_combos_shifted.csv', index=False)
+
+
+
+
+
+
 # %%
-masks = [0,1]
-with sns.plotting_context(context='paper', font_scale=1.5): 
-    for mask in masks:
-        subset_mask = evoked_df_all_combos_shifted[evoked_df_all_combos_shifted['mask'] == mask]
-        for load in [1,2,3]:
-
-            subset = subset_mask[subset_mask['Load'] == load]
-
-            fig, ax = plt.subplots(figsize=(12, 10), sharex=True, sharey=True)
-
-            # Shades for 'all_cardinal' and 'all_oblique'
-            cardinal_shades = ['#08306b', '#2171b5', '#deebf7']  # dark to light blue
-            oblique_shades = ['#7f2704', '#d94801', '#fdd0a2']   # dark to light orange
-
-            sns.lineplot(data=subset, x='time', y='pupils', hue='cardinal_type', errorbar='se', legend='full')
-
-            sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
-            
-            ax.axvline(0, color='black', alpha=0.33)
-            ax.axvline(1, color='black', alpha=0.66)
-            ax.axvline(2, color='black')  
-            ax.axvline(3, color='darkblue')  
-            ax.axvline(6.5, color='blue')  
-
-            # Define y-coordinate for labels (as a fraction of the plot height)
-            label_y = 1.05
-
-            # Add labels above the vertical lines
-            ax.text(0, ax.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
-            ax.text(1, ax.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
-            ax.text(2, ax.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
-            ax.text(3, ax.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
-            ax.text(6.5, ax.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
-
-            # Set x-axis to show all whole numbers within range
-            x_ticks = np.arange(int(evoked_df_all_combos_shifted['time'].min()), int(evoked_df_all_combos_shifted['time'].max()) + 1, 1)
-            ax.set_xticks(x_ticks)
-            ax.set_xticklabels(x_ticks)
-
-            # Increase font size of x and y tick labels
-            ax.tick_params(axis='x', labelsize=14)
-            ax.tick_params(axis='y', labelsize=14)
-
-            # Adding a legend
-            ax.legend(loc='best', fontsize=12)
-            # new_labels = ['Cardinal - Load 1', 'Cardinal - Load 2', 'Cardinal - Load 3', 'Oblique - Load 1', 'Oblique - Load 2', 'Oblique - Load 3']
-            # for t, l in zip(ax.get_legend().texts, new_labels):
-            #     t.set_text(l)
-            # ax.set_title(f'{mask}', y=1.2, fontsize=16)
-
-            # Adding a title
-            plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize = 20)
-            plt.title(f'Load {load}', y=1.25, color='blue', alpha=0.4)
-            plt.show()
-    
-# %%
+# plotting cardinal type pupil traces seperated by load and mask
 masks = [0,1]
 with sns.plotting_context(context='paper', font_scale=1.5): 
     for mask in masks:

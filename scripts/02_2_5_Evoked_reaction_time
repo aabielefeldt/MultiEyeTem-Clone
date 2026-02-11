@@ -12,11 +12,6 @@ from pupil_utils import apply_baseline_nan_aware
 df = pd.read_csv('../data/csv_files/df.csv')
 good_partis = df['subID'].unique()
 
-
-# per subID median split fast and slow trials
-
-
-
 # %%
 # appending all epochs into one list while:
 # combining both pupil channels
@@ -24,12 +19,9 @@ good_partis = df['subID'].unique()
 # seperating by condition
 # cropping according to condition
 # averaging epochs
-
-# also loop over mask condition (no, can do that while plotting based on subID)
-
 drop_log_rows = []
 
-evoked_df_reaction_time = pd.DataFrame()
+evoked_list = []
 
 for i in good_partis:
     
@@ -57,7 +49,7 @@ for i in good_partis:
     rt = pupil_epochs_combined_bl.metadata['rt_resp_concrete_cued']
     sub_reaction_time_median = np.nanmedian(rt)  # skips NaNs
 
-    # seperating per cardinal category condition
+    # seperating slow vs fast reaction time per subID
     con1_epochs_pos1 = pupil_epochs_combined_bl["items_presented == 1"]
     con1_epochs_fast= con1_epochs_pos1[f"rt_resp_concrete_cued <= {sub_reaction_time_median}"]
     con1_epochs_slow = con1_epochs_pos1[f"rt_resp_concrete_cued > {sub_reaction_time_median}"]
@@ -87,47 +79,44 @@ for i in good_partis:
 
     # adding individual averaged data to dataframe including load and subID
     # Cardinal trials
-    con1_ave_df_fast = con1_ave_fast.to_data_frame()
+    con1_ave_df_fast = con1_ave_fast.to_data_frame(scalings=1)
     con1_ave_df_fast['Load'] = 1
     con1_ave_df_fast['subID'] = i
     con1_ave_df_fast['reaction_time'] = 'fast'
-    con2_ave_df_fast = con2_ave_fast.to_data_frame()
+    con2_ave_df_fast = con2_ave_fast.to_data_frame(scalings=1)
     con2_ave_df_fast['Load'] = 2
     con2_ave_df_fast['subID'] = i
     con2_ave_df_fast['reaction_time'] = 'fast'
-    con3_ave_df_fast = con3_ave_fast.to_data_frame()
+    con3_ave_df_fast = con3_ave_fast.to_data_frame(scalings=1)
     con3_ave_df_fast['Load'] = 3
     con3_ave_df_fast['subID'] = i
     con3_ave_df_fast['reaction_time'] = 'fast'
 
     # Oblique trials
-    con1_ave_df_slow = con1_ave_slow.to_data_frame()
+    con1_ave_df_slow = con1_ave_slow.to_data_frame(scalings=1)
     con1_ave_df_slow['Load'] = 1
     con1_ave_df_slow['subID'] = i
     con1_ave_df_slow['reaction_time'] = 'slow'
-    con2_ave_df_slow = con2_ave_slow.to_data_frame()
+    con2_ave_df_slow = con2_ave_slow.to_data_frame(scalings=1)
     con2_ave_df_slow['Load'] = 2
     con2_ave_df_slow['subID'] = i 
     con2_ave_df_slow['reaction_time'] = 'slow'
-    con3_ave_df_slow = con3_ave_slow.to_data_frame()
+    con3_ave_df_slow = con3_ave_slow.to_data_frame(scalings=1)
     con3_ave_df_slow['Load'] = 3
     con3_ave_df_slow['subID'] = i
     con3_ave_df_slow['reaction_time'] = 'slow'
 
     # concatenating to evoked_df_reaction_time
-    evoked_df_reaction_time = pd.concat([evoked_df_reaction_time, con1_ave_df_fast])
-    evoked_df_reaction_time = pd.concat([evoked_df_reaction_time, con2_ave_df_fast])
-    evoked_df_reaction_time = pd.concat([evoked_df_reaction_time, con3_ave_df_fast])
-    evoked_df_reaction_time = pd.concat([evoked_df_reaction_time, con1_ave_df_slow])
-    evoked_df_reaction_time = pd.concat([evoked_df_reaction_time, con2_ave_df_slow])
-    evoked_df_reaction_time = pd.concat([evoked_df_reaction_time, con3_ave_df_slow])
-    evoked_df_reaction_time['baseline_start'] = baseline[0]
-    evoked_df_reaction_time['baseline_end'] = baseline[1]
+    # extending evoked list
+    evoked_list.extend([con1_ave_df_fast, con2_ave_df_fast, con3_ave_df_fast, con1_ave_df_slow, con2_ave_df_slow, con3_ave_df_slow])
+
 
 drop_log_df = pd.DataFrame(drop_log_rows)
-display(drop_log_df)
-evoked_df_reaction_time = evoked_df_reaction_time.reset_index()
-display(evoked_df_reaction_time)
+evoked_df_reaction_time = pd.concat(evoked_list, ignore_index=True)
+
+# evoked_df_accuracy['baseline_start'] = baseline[0] 
+# evoked_df_accuracy['baseline_end'] = baseline[1] 
+drop_log_df.to_csv('../data/csv_files/drop_log_df_evoked_reaction_time.csv', index=False)
 evoked_df_reaction_time.to_csv('../data/csv_files/evoked_df_reaction_time.csv', index=False)
 
 # %%
@@ -140,12 +129,13 @@ evoked_df_reaction_time_shifted.loc[evoked_df_reaction_time_shifted['Load']==2, 
 evoked_df_reaction_time_shifted.loc[evoked_df_reaction_time_shifted['Load']==3, 'time'] +=0
 
 # %%
+# Adding column for mask
 mask_partis = df[df['mask']==1]['subID'].unique().tolist()
 nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
-# Adding column for mask
+
 evoked_df_reaction_time_shifted['mask'] = evoked_df_reaction_time_shifted['subID'].apply(
     lambda x: 1 if x in mask_partis else 0)
 
-
+evoked_df_reaction_time_shifted['time'] = evoked_df_reaction_time_shifted['time'].round(3)
 evoked_df_reaction_time_shifted.to_csv('../data/csv_files/evoked_df_reaction_time_shifted.csv', index=False)
 # %%

@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from statsmodels.stats.multicomp import pairwise_tukeyhsd #(not in envirnoment yet)
 import seaborn as sns
 import pingouin as pg
+from IPython.display import display
 
 # %% Load Metadata
 
@@ -38,7 +39,7 @@ for i in good_partis:
 # nomask_data = df.loc[df['mask'] == 0, 'acc_trial_concrete_cued']
 
 
-result_df = pg.ttest(mask_data, no_mask_data)
+result_df = pg.ttest(mask_data, no_mask_data, correction=False) #correction=False uses students t instead of welch
 display(result_df)
 
 # Access specific properties
@@ -385,3 +386,6 @@ df_dropped = df[df['acc_trial_concrete_cued'].notna()]
 anova_result_acc_items = pg.rm_anova(data=df_dropped, dv='rt_resp_concrete_cued', within=['items_presented'], subject='subID')
 display(anova_result_acc_items.round(4))
 # %%
+
+anova_result_acc_items = pg.rm_anova(data=df_dropped, dv='acc_trial_concrete_cued', within=['items_presented', 'mask'], subject='subID')
+display(anova_result_acc_items.round(4))

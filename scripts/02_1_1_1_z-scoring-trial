@@ -6,7 +6,7 @@ import pandas as pd
 import itertools
 import os
 from pupil_utils import annotate_velocity_blinks, remove_missing_data, plot_pupil_trace_and_velocity_mad, interpolate_blinks, merge_and_rename_annotations, set_zero_to_nan
-
+from IPython.display import display
 
 # %% Load Metadata
 df = pd.read_csv('../data/csv_files/df.csv')

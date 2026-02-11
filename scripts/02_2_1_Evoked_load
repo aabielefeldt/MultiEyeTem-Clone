@@ -4,6 +4,7 @@ import mne
 import pandas as pd
 import numpy as np
 from pupil_utils import apply_baseline_nan_aware
+from IPython.display import display
 # %% Load Metadata
 
 df = pd.read_csv('../data/csv_files/df.csv')
@@ -26,15 +27,13 @@ good_partis = df['subID'].unique()
 ########
 drop_log_rows = []
 
-evoked_df = pd.DataFrame()
+evoked_list = []
 
 for i in good_partis:
     
     # reading epochs per participant
-    #folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
-    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_zscored"
-    #epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
-    epoch_file = folder_path + "/" + i + "_zscored-epo.fif"
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+    epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
     pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
 
     # applying baseline per eye and nan aware while dropping any epochs where the baseline period was nan in both eyes
@@ -79,38 +78,39 @@ for i in good_partis:
     con3_ave_df['Load'] = 3
     con3_ave_df['subID'] = i
 
-    # concatenating to evoked_df
-    evoked_df = pd.concat([evoked_df, con1_ave_df])
-    evoked_df = pd.concat([evoked_df, con2_ave_df])
-    evoked_df = pd.concat([evoked_df, con3_ave_df])
-    # evoked_df['baseline_start'] = baseline[0]
-    # evoked_df['baseline_end'] = baseline[1]
+    # extending evoked list
+    evoked_list.extend([con1_ave_df, con2_ave_df, con3_ave_df])
+
 
 drop_log_df = pd.DataFrame(drop_log_rows)
-display(drop_log_df)
-#evoked_df = evoked_df.reset_index()
-display(evoked_df)
-#evoked_df.to_csv('../data/csv_files/evoked_df.csv', index=False)
+evoked_df_load = pd.concat(evoked_list, ignore_index=True)
+
+# evoked_df['baseline_start'] = baseline[0]
+# evoked_df['baseline_end'] = baseline[1]
+
+drop_log_df.to_csv('../data/csv_files/drop_log_df_evoked_load.csv', index=False)
+evoked_df_load.to_csv('../data/csv_files/evoked_df_load.csv', index=False)
 
 # %%
 
 # shifting the conditions so that the epochs that are epoched on pos1 are time-locked to the test onset
-evoked_df_shifted = evoked_df.copy()
-evoked_df_shifted.loc[evoked_df_shifted['Load']==1, 'time'] +=2
-evoked_df_shifted.loc[evoked_df_shifted['Load']==2, 'time'] +=1
-evoked_df_shifted.loc[evoked_df_shifted['Load']==3, 'time'] +=0
-
-
+evoked_df_load_shifted = evoked_df_load.copy()
+evoked_df_load_shifted.loc[evoked_df_load_shifted['Load']==1, 'time'] +=2
+evoked_df_load_shifted.loc[evoked_df_load_shifted['Load']==2, 'time'] +=1
+evoked_df_load_shifted.loc[evoked_df_load_shifted['Load']==3, 'time'] +=0
 
 # %%
 mask_partis = df[df['mask']==1]['subID'].unique().tolist()
 nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
 # Adding column for mask
-evoked_df_shifted['mask'] = evoked_df_shifted['subID'].apply(
+evoked_df_load_shifted['mask'] = evoked_df_load_shifted['subID'].apply(
     lambda x: 1 if x in mask_partis else 0)
 
+# also include rounding here
+evoked_df_load_shifted['time'] = evoked_df_load_shifted['time'].round(3)
 
-#%%
 # saving
-#evoked_df_shifted.to_csv('../data/csv_files/evoked_df_shifted.csv', index=False)
+evoked_df_load_shifted.to_csv('../data/csv_files/evoked_df_load_shifted.csv', index=False)
+
+
 # %%

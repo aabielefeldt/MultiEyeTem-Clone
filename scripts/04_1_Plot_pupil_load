@@ -6,20 +6,27 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy.stats import zscore
+from IPython.display import display
+import os
 
 # %% 
 # read evoked dataframe and associated significant results 
 
 evoked_df_shifted = pd.read_csv('../data/csv_files/evoked_df_shifted.csv')
+evoked_df = pd.read_csv('../data/csv_files/evoked_df.csv')
 df = pd.read_csv('../data/csv_files/df.csv')
 good_partis = df['subID'].unique()
 
+# an evoked where I used the full time of the encoding period until delay (differing lengths for load conditions) as the baseline
+evoked_df_shifted_full_trial_bl = pd.read_csv('../data/csv_files/evoked_df_shifted_full_trial_bl.csv')
+
+evoked_df_shifted_no_bl = pd.read_csv('../data/csv_files/evoked_df_shifted_no_bl.csv')
 #%%
 # with the new evoked from the new epochs (with changed blink interpolation)
 # z-scoring data
 # evoked_df_shifted = evoked_df_shifted.copy()
 
-# Z-score within each subject (across all times and trials)
+# # Z-score within each subject (across all times and trials)
 # evoked_df_shifted['pupils'] = evoked_df_shifted.groupby('subID')['pupils'].transform(
 #     lambda x: zscore(x, nan_policy='omit')
 # )
@@ -82,7 +89,7 @@ with sns.plotting_context(context='paper', font_scale=1.5):
     plt.title(f'data z-scored within participants', y=1.25, color='blue', alpha=0.4)
     
     # Adding a legend
-    ax.legend(loc='upper right', fontsize=12)
+    ax.legend(loc='lower right', fontsize=12)
     new_labels = ['Load 1', 'Load 2', 'Load 3']
     for t, l in zip(ax.get_legend().texts, new_labels):
         t.set_text(l)
@@ -92,7 +99,7 @@ with sns.plotting_context(context='paper', font_scale=1.5):
     figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures'
     figure_filepath = os.path.join(figures_folder, name)
 
-    plt.savefig(figure_filepath, bbox_inches = 'tight')
+    # plt.savefig(figure_filepath, bbox_inches = 'tight')
 # %%
 # # %% 
 

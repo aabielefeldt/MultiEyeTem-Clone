@@ -10,6 +10,9 @@ from mne.stats import permutation_cluster_test, f_oneway, permutation_cluster_1s
 from scipy import stats
 from scipy.ndimage import gaussian_filter1d
 from scipy.stats import t, ttest_rel, zscore, f, ttest_ind
+from IPython.display import display
+import pingouin as pg
+
 
 
 #%%
@@ -53,9 +56,9 @@ evoked_df_shifted['time'] = evoked_df_shifted['time'].round(3)
 # exluding participant?
 # blink_outlier_subIDs = ['GJL7U8'] # , 'Z16JQR', 'AGYVK9', 'T4LJ1R', 'TEPWRW'
 # evoked_df_all_combos_shifted_excluded = evoked_df_shifted[~evoked_df_shifted['subID'].isin(blink_outlier_subIDs)]
-# evoked_df_shifted['pupils_z'] = evoked_df_shifted.groupby('subID')['pupils'].transform(lambda x: zscore(x, nan_policy='omit'))
 
- 
+# Z-score within each subject (across all times and averaged conditions)
+# evoked_df_shifted['pupils_z'] = evoked_df_shifted.groupby('subID')['pupils'].transform(lambda x: zscore(x, nan_policy='omit'))
 
 start_time = 3
 end_time = 6.5
@@ -65,7 +68,8 @@ end_time = 6.5
 # delay_time_window = evoked_df_all_combos_shifted_excluded[(evoked_df_all_combos_shifted_excluded['time'] >= start_time) & (evoked_df_all_combos_shifted_excluded['time'] <= end_time)]
 # delay_time_window = evoked_df_all_combos_shifted[(evoked_df_all_combos_shifted['time'] >= start_time) & (evoked_df_all_combos_shifted['time'] <= end_time)]
 
-delay_time_window = evoked_df_shifted[(evoked_df_shifted['time'] >= start_time) & (evoked_df_shifted['time'] <= end_time)]
+delay_time_window = evoked_df_shifted[(evoked_df_shifted['time'] >= start_time) & (evoked_df_shifted['time'] <= end_time)].copy()
+delay_time_window['pupils_z'] = delay_time_window.groupby('subID')['pupils'].transform(lambda x: zscore(x, nan_policy='omit'))
 
 # z-scoring data
 # delay_time_window = delay_time_window.copy()
@@ -73,7 +77,7 @@ delay_time_window = evoked_df_shifted[(evoked_df_shifted['time'] >= start_time) 
 # evoked_df_shifted_zscored_epochs = evoked_df_shifted_zscored_epochs[~evoked_df_shifted_zscored_epochs['subID'].isin(not_downsampled)]
 # delay_time_window = evoked_df_shifted_zscored_epochs[(evoked_df_shifted_zscored_epochs['time'] >= start_time) & (evoked_df_shifted_zscored_epochs['time'] <= end_time)]
 
-# Z-score within each subject (across all times and averaged conditions)
+
 # %%
 # defining t-test statistics and parameters for all tests
 
@@ -93,8 +97,8 @@ seed = 42
 ##########
 
 # using t-test (student's t) because more intepretable than f-test, using tcrit caluclated from function, two-tailed (tail=0), seed=42 to make result reproducible (42 is convention[meaning of life])
+# results are the same with both tests
 # should all be correct
-
 
 cluster_results = {}
 
@@ -104,8 +108,8 @@ df_nomask = delay_time_window[delay_time_window['mask'] == 0]
 
 
 # Pivot to get subjects x timepoints
-X1_df = df_mask.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-X2_df = df_nomask.pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+X1_df = df_mask.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+X2_df = df_nomask.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
 
 # Align only on time because between subjects test
 common_times = X1_df.columns.intersection(X2_df.columns)
@@ -120,10 +124,9 @@ n1 = X1.shape[0]
 n2 = X2.shape[0]
 tcrit = t.ppf(1 - 0.025, df = (n1+n2-2))
 
-# this had different results when using t-test, why?
 T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
     [X1, X2],
-    n_permutations=10000,
+    n_permutations=10000, # using 10000 here because close to 0.05
     threshold=tcrit,        
     tail=0,               # 0 = two-tailed (direction of effect could go either way), tail=0 is ignored on f-test, needs to be one-tailed
     stat_fun=independent_t,
@@ -938,7 +941,7 @@ plt.show()
 
 # Example: mean pupil in Load 3 delay window per subject
 mean_pupil = X3.mean(axis=1)   # (n_sub,)
-
+mean_pupil = delay_time_window[delay_time_window['mask'] == 0]
 # Example: subject accuracy in Load 3
 sub_acc = df[df['items_presented']==3].groupby('subID')['acc_trial_concrete_cued'].mean().loc[common_subs]
 
@@ -980,7 +983,6 @@ sub_acc = df[(df['items_presented']==1) & (df['items_presented']==1)].groupby('s
 r, p = stats.pearsonr(mean_pupil, sub_acc)
 print(f"Correlation (Load 1): r={r:.2f}, p={p:.3f}")
 
-#%%
 
 # %%
 
@@ -999,3 +1001,62 @@ for load in [1,2,3]:
     print(f"Correlation (Load {load}): r={r:.2f}, p={p:.3f}")
 # %%
 
+evoked_df_shifted['pupils_z'] = evoked_df_shifted.groupby('subID')['pupils'].transform(lambda x: zscore(x, nan_policy='omit'))
+
+start_time, end_time = 3, 6.5
+delay_time_window = evoked_df_shifted[(evoked_df_shifted['time'] >= start_time) & (evoked_df_shifted['time'] <= end_time)].copy()
+
+group_means = delay_time_window.groupby(['subID', 'Load'])['pupils_z'].mean().reset_index()
+group_accs = df.groupby(['subID', 'items_presented'])['acc_trial_concrete_cued'].mean().reset_index()
+group_accs = group_accs.rename(columns={"items_presented": "Load"})
+
+
+merged = group_means.merge(group_accs)
+
+#%%
+r, p = stats.pearsonr(merged['pupils_z'], merged['acc_trial_concrete_cued'])
+print(f"Correlation (Load 1): r={r:.2f}, p={p:.3f}")
+
+# %%
+
+anova_result_acc_items = pg.rm_anova(data=merged, dv='pupils_z', within=['Load'], subject='subID')
+display(anova_result_acc_items.round(4))
+merged.groupby('Load')['pupils_z'].mean()
+plt.figure()
+sns.lineplot(data=merged, x='acc_trial_concrete_cued', y='pupils')
+# %%
+# trying percentage pupil size change
+# delay time window pupil size: (try both z-scored values and not)
+start_time, end_time = 3, 6.5
+delay_time_window = evoked_df_shifted[(evoked_df_shifted['time'] >= start_time) & (evoked_df_shifted['time'] <= end_time)].copy()
+
+start_time, end_time = 1.9, 2
+load_1 = evoked_df_shifted[evoked_df_shifted['Load']==1]
+load_2 = evoked_df_shifted[evoked_df_shifted['Load']==2]
+load_3 = evoked_df_shifted[evoked_df_shifted['Load']==3]
+start_time, end_time = 1.9, 2
+baseline_window1 = load_1[(load_1['time'] >= start_time) & (load_1['time'] <= end_time)].copy()
+start_time, end_time = 0.9, 1
+baseline_window2 = load_2[(load_2['time'] >= start_time) & (load_2['time'] <= end_time)].copy()
+start_time, end_time = -0.1, 0
+baseline_window3 = load_3[(load_3['time'] >= start_time) & (load_3['time'] <= end_time)].copy()
+baseline_window = pd.concat([baseline_window1, baseline_window2, baseline_window3])
+group_means = delay_time_window.groupby(['subID', 'Load'])['pupils_z'].mean().reset_index()
+baseline_means_per_load = baseline_window.groupby(['subID', 'Load'])['pupils_z'].mean().reset_index()
+baseline_means_all_load = baseline_window.groupby(['subID'])['pupils_z'].mean().reset_index()
+# %%
+all_changes = []
+for i in good_partis:
+    for load in [1,2,3]:
+
+        data_pp = group_means[(group_means['subID']==i) & (group_means['Load']==load)]['pupils_z'].iloc[0]
+        bl_pp = baseline_means_all_load[(baseline_means_all_load['subID']==i)]['pupils_z'].iloc[0]
+        percent_change_pp = ((data_pp - bl_pp)/bl_pp)*100
+        all_changes.append({'subID': i, 'Load': load, 'percent_change': percent_change_pp})
+
+percent_changes_df = pd.DataFrame(all_changes)
+
+plt.figure()
+sns.boxplot(data=percent_changes_df, y='percent_change', x='Load')
+plt.show()
+# %%

@@ -23,8 +23,8 @@ good_partis = df['subID'].unique()
 # cropping according to condition
 # averaging epochs
 drop_log_rows = []
-
-evoked_df_accuracy = pd.DataFrame() 
+evoked_list = []
+len_epochs = []
 
 for i in good_partis: 
     # reading epochs per participant 
@@ -46,10 +46,7 @@ for i in good_partis:
     combine_nanmean = lambda data: np.nanmean(data, axis=1)
     pupil_epochs_combined_bl = mne.channels.combine_channels(pupil_epoch_bl, roi_dict, method=combine_nanmean)
 
-    # only using correct trials --??
-    pupil_epochs_cardinal = pupil_epochs_combined_bl['acc_trial_concrete_cued==1'] 
-
-    # seperating per cardinal category condition 
+    # seperating per load and accuracy condition 
     con1_epochs_pos1 = pupil_epochs_combined_bl["items_presented == 1"] 
     con1_epochs_correct = con1_epochs_pos1["acc_trial_concrete_cued == 1"] 
     con1_epochs_false = con1_epochs_pos1["acc_trial_concrete_cued == 0"] 
@@ -59,7 +56,14 @@ for i in good_partis:
     con3_epochs_pos1 = pupil_epochs_combined_bl["items_presented == 3"] 
     con3_epochs_correct = con3_epochs_pos1["acc_trial_concrete_cued == 1"] 
     con3_epochs_false = con3_epochs_pos1["acc_trial_concrete_cued == 0"] 
-
+    
+    len_epochs.append({'subID': i, 
+                       'len_1_c': (con1_epochs_correct.__len__()),
+                       'len_1_f': (con1_epochs_false.__len__()),
+                       'len_2_c': (con2_epochs_correct.__len__()),
+                       'len_2_f': (con2_epochs_false.__len__()),
+                       'len_3_c': (con3_epochs_correct.__len__()),
+                       'len_3_f': (con3_epochs_false.__len__())})
     # shortening the epochs based on condition (crop defaults to inclduing tmax) 
     con1_epochs_correct.crop(-0.1, 7) 
     con2_epochs_correct.crop(-0.1, 8) 
@@ -79,50 +83,47 @@ for i in good_partis:
 
     # adding individual averaged data to dataframe including load and subID 
     # Correct trials 
-    con1_ave_df_correct = con1_ave_correct.to_data_frame() 
+    con1_ave_df_correct = con1_ave_correct.to_data_frame(scalings=1) 
     con1_ave_df_correct['Load'] = 1 
     con1_ave_df_correct['subID'] = i 
     con1_ave_df_correct['accuracy'] = 'correct' 
-    con2_ave_df_correct = con2_ave_correct.to_data_frame() 
+    con2_ave_df_correct = con2_ave_correct.to_data_frame(scalings=1) 
     con2_ave_df_correct['Load'] = 2 
     con2_ave_df_correct['subID'] = i 
     con2_ave_df_correct['accuracy'] = 'correct' 
-    con3_ave_df_correct = con3_ave_correct.to_data_frame() 
+    con3_ave_df_correct = con3_ave_correct.to_data_frame(scalings=1) 
     con3_ave_df_correct['Load'] = 3 
     con3_ave_df_correct['subID'] = i 
     con3_ave_df_correct['accuracy'] = 'correct' 
 
     # False trials 
-    con1_ave_df_false = con1_ave_false.to_data_frame() 
+    con1_ave_df_false = con1_ave_false.to_data_frame(scalings=1) 
     con1_ave_df_false['Load'] = 1 
     con1_ave_df_false['subID'] = i 
     con1_ave_df_false['accuracy'] = 'false' 
-    con2_ave_df_false = con2_ave_false.to_data_frame() 
+    con2_ave_df_false = con2_ave_false.to_data_frame(scalings=1) 
     con2_ave_df_false['Load'] = 2 
     con2_ave_df_false['subID'] = i 
     con2_ave_df_false['accuracy'] = 'false' 
-    con3_ave_df_false = con3_ave_false.to_data_frame() 
+    con3_ave_df_false = con3_ave_false.to_data_frame(scalings=1) 
     con3_ave_df_false['Load'] = 3 
     con3_ave_df_false['subID'] = i 
     con3_ave_df_false['accuracy'] = 'false' 
 
-    # concatenating to evoked_df_accuracy 
-    evoked_df_accuracy = pd.concat([evoked_df_accuracy, con1_ave_df_correct]) 
-    evoked_df_accuracy = pd.concat([evoked_df_accuracy, con2_ave_df_correct]) 
-    evoked_df_accuracy = pd.concat([evoked_df_accuracy, con3_ave_df_correct]) 
-    evoked_df_accuracy = pd.concat([evoked_df_accuracy, con1_ave_df_false]) 
-    evoked_df_accuracy = pd.concat([evoked_df_accuracy, con2_ave_df_false]) 
-    evoked_df_accuracy = pd.concat([evoked_df_accuracy, con3_ave_df_false]) 
-    evoked_df_accuracy['baseline_start'] = baseline[0] 
-    evoked_df_accuracy['baseline_end'] = baseline[1] 
+    # extending evoked list
+    evoked_list.extend([con1_ave_df_correct, con2_ave_df_correct, con3_ave_df_correct, con1_ave_df_false, con2_ave_df_false, con3_ave_df_false])
 
 drop_log_df = pd.DataFrame(drop_log_rows)
-display(drop_log_df)
-evoked_df_accuracy = evoked_df_accuracy.reset_index()
-display(evoked_df_accuracy)
+
+evoked_df_accuracy = pd.concat(evoked_list, ignore_index=True)
+
+# evoked_df_accuracy['baseline_start'] = baseline[0] 
+# evoked_df_accuracy['baseline_end'] = baseline[1] 
+drop_log_df.to_csv('../data/csv_files/drop_log_df_evoked_accuracy.csv', index=False)
 evoked_df_accuracy.to_csv('../data/csv_files/evoked_df_accuracy.csv', index=False)
-
-
+#%%
+acc_trials_num_per_epoch = pd.DataFrame(len_epochs)
+acc_trials_num_per_epoch.to_csv('../data/csv_files/acc_trials_num_per_epoch.csv', index=False)
 # %%
 # Shifting
 
@@ -134,8 +135,6 @@ evoked_df_accuracy_shifted.loc[evoked_df_accuracy_shifted['Load']==3, 'time'] +=
 
 # %%
 # adding mask to the evoked dataframe
-
-# %%
 mask_partis = df[df['mask']==1]['subID'].unique().tolist()
 nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
 
@@ -144,6 +143,6 @@ evoked_df_accuracy_shifted['mask'] = evoked_df_accuracy_shifted['subID'].apply(
 
 # also include rounding here
 evoked_df_accuracy_shifted['time'] = evoked_df_accuracy_shifted['time'].round(3)
-evoked_df_accuracy_shifted.to_csv('../data/csv_files/evoked_df_only_correct_shifted.csv', index=False)
+evoked_df_accuracy_shifted.to_csv('../data/csv_files/evoked_df_accuracy_shifted.csv', index=False)
 
 # %%

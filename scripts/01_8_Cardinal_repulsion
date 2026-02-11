@@ -16,7 +16,7 @@ df = pd.read_csv('../data/csv_files/df.csv')
 good_partis = df['subID'].unique()
 
 # %%
-# Cardinal Repulsion Polar Plot
+# Clockwise button press Repulsion Polar Plot
 
 # Define paths for saving files
 csv_save_dir = '../data/csv_files'
@@ -100,6 +100,91 @@ ax.plot(thetas_adjusted, unbiased_assumption, color=colors[16], linestyle='dashe
 
 plt.show()
 
+#%%
+# Repulsion in sample-orientations Polar Plot
+
+# Data
+mbp_df = df.groupby(by=['items_presented', 'object_cued_rot'])['pressed_away_from_cardinal'].mean().reset_index()
+
+mbp_con1 = mbp_df[mbp_df['items_presented'] == 1]
+mbp_con2 = mbp_df[mbp_df['items_presented'] == 2]
+mbp_con3 = mbp_df[mbp_df['items_presented'] == 3]
+
+# Polar Plot
+fig = plt.figure()
+
+# Change the projection to 'polar'
+ax = fig.add_subplot(111, projection='polar')
+
+# Get outer ylim for plotting radial lines
+ylim = ax.get_ylim()
+
+# to store values for plotting full circle lines at the end
+thetas = []
+thetas_adjusted = []
+con1s = []
+con2s = []
+con3s = []
+all_cons = []
+colors = sns.hls_palette(17)
+# colors = sns.color_palette("mako", as_cmap=True)
+
+# Get ordered list of unique target orientations
+oris = df['object_cued_rot'].unique()
+#oris = df['object_test_rot_cued'].unique()
+oris.sort()   
+oris = np.append(oris, oris[0])
+
+unbiased = np.full(len(oris), 0.5)
+
+for i in range(len(oris)):
+    theta = np.radians(oris[i])
+    theta_adjusted = -theta + ((np.pi/2)) % (2*np.pi)
+
+    all_con = mbp_df[mbp_df['object_cued_rot']==oris[i]]['pressed_away_from_cardinal'].mean()
+    
+    con1 = mbp_con1[mbp_con1['object_cued_rot']==oris[i]]['pressed_away_from_cardinal'].mean()
+    con2 = mbp_con2[mbp_con2['object_cued_rot']==oris[i]]['pressed_away_from_cardinal'].mean()
+    con3 = mbp_con3[mbp_con3['object_cued_rot']==oris[i]]['pressed_away_from_cardinal'].mean()
+    
+    thetas.append(theta)
+    thetas_adjusted.append(theta_adjusted)
+    all_cons.append(all_con)
+    con1s.append(con1)
+    con2s.append(con2)
+    con3s.append(con3)
+
+    ax.plot(theta_adjusted, all_con, 'o', color=colors[1])
+    ax.plot(theta_adjusted, con1, 'o', color=colors[5])
+    ax.plot(theta_adjusted, con2, 'o', color=colors[9])
+    ax.plot(theta_adjusted, con3, 'o', color=colors[13])
+    # Add text labels for each point to inspect if needed
+    # text_positions = np.full(17, 0.55)[i]
+    # label_offset = 0.0  # Adjust this value for label position
+    # ax.text(theta_adjusted, text_positions + label_offset, str(oris[i]), fontsize=9, ha='center', va='center', color='black')
+
+
+
+# Plotting lines to connect dots
+ax.plot(thetas_adjusted, all_cons, '--', color='black', label='all loads average')
+ax.plot(thetas_adjusted, con1s, '-', color=colors[5], label='load 1')
+ax.plot(thetas_adjusted, con2s, '-', color=colors[9], label='load 2')
+ax.plot(thetas_adjusted, con3s, '-', color=colors[13], label='load 3')
+ax.plot(thetas_adjusted, unbiased, color=colors[16], linestyle='dashed')
+# ax.plot(thetas_adjusted, con1s, '-', color=colors[5], label='probe away')
+# ax.plot(thetas_adjusted, con2s, '-', color=colors[9], label='probe toward')
+
+#ax.plot(thetas_adjusted, unbiased_assumption, color=colors[16], linestyle='dashed')
+# Move r origin outwards to have a hollow circle in the middle for ~AesTHeTicS~
+rorigin = -0.1*ylim[1]
+ax.set_rorigin(rorigin)
+
+ax.set_yticks([0.5])
+
+plt.legend()
+
+plt.show()
+
 # %%
 # bar plot with 90° on top and theta adjusted
 # Get ordered list of unique target orientations
@@ -107,6 +192,14 @@ oris = df['object_cued_rot'].unique()
 oris.sort()
 
 colors = sns.hls_palette(17)
+colors = sns.color_palette("cubehelix", n_colors=17)
+colors = sns.color_palette("vlag", n_colors=4 )*4
+
+colors1 = sns.color_palette("vlag", n_colors=2 )
+colors2 = sns.color_palette("vlag_r", n_colors=2 )
+colors = np.vstack((colors1, colors2)*4)
+
+
 fig = plt.figure()
 
 # Change the projection to 'polar'
@@ -251,6 +344,51 @@ for condition in conditions:
     else:
         print(f"The t-test does not indicate a significant difference in cardinal bias from 0 in condition {condition}.")
 
+
+# %% 
+# newly added from evoked everything
+# This might be useful
+# not super sure what it means though
+# cardinal bias is different depending on distance to cardinal axis
+# cardinal bias is different depending on accuracy --- what does that mean? the more accurate the bigger the bias..
+# not sure if that is meaningful
+# also interaction accuracy and distance to cardinal on bias.. not sure how to interpret
+df_subset = df.dropna(subset=[
+    "pressed_away_from_cardinal",
+    "probe_away_from_cardinal",
+    "dist_to_cardinal_mem",
+    "items_presented",
+    "acc_trial_concrete_cued"]).copy()
+
+anova_results = pg.rm_anova(data=df_subset, dv='pressed_away_from_cardinal', within=['dist_to_cardinal_mem', 'acc_trial_concrete_cued'], subject='subID')
+display(anova_results.round(3))
+
+df_subset_load1 = df_subset[df_subset['items_presented']==1]
+df_subset_load2 = df_subset[df_subset['items_presented']==2]
+df_subset_load3 = df_subset[df_subset['items_presented']==3]
+
+anova_results = pg.rm_anova(data=df_subset_load1, dv='pressed_away_from_cardinal', within=['dist_to_cardinal_mem', 'acc_trial_concrete_cued'], subject='subID')
+display(anova_results.round(3))
+
+anova_results = pg.rm_anova(data=df_subset_load2, dv='pressed_away_from_cardinal', within=['dist_to_cardinal_mem', 'acc_trial_concrete_cued'], subject='subID')
+display(anova_results.round(3))
+
+anova_results = pg.rm_anova(data=df_subset_load3, dv='pressed_away_from_cardinal', within=['dist_to_cardinal_mem', 'acc_trial_concrete_cued'], subject='subID')
+display(anova_results.round(3))
+
+# %%
+# Also probably very useful
+# repeated measures Anova on pressed away, showing bigger repulsion bias with proximity to cardinal
+bias_df = (
+    df.groupby(["subID","items_presented", 'dist_to_cardinal_mem'])
+      ["pressed_away_from_cardinal"]
+      .mean()
+      .reset_index()
+)
+anova_results = pg.rm_anova(data=bias_df, dv='pressed_away_from_cardinal', within=['items_presented', 'dist_to_cardinal_mem'], subject='subID')
+display(anova_results.round(3))
+
+# No load effect
 
 # %% 
 # same as above but:
@@ -404,13 +542,13 @@ plt.legend()
 def calculate_differences(df, chosen_column, condition=None):
     # Step 1: Group DataFrames according to the condition
     if condition == 1:
-        df_grouped = df[df['items_presented'] == 1].groupby(['subID', 'object_cued_rot', 'cardinal_category']).agg({chosen_column: 'mean'}).reset_index()
+        df_grouped = df[df['items_presented'] == 1].groupby(['subID', 'object_cued_rot', 'probe_ori_cat']).agg({chosen_column: 'mean'}).reset_index()
     elif condition == 2:
-        df_grouped = df[df['items_presented'] == 2].groupby(['subID', 'object_cued_rot', 'cardinal_category']).agg({chosen_column: 'mean'}).reset_index()
+        df_grouped = df[df['items_presented'] == 2].groupby(['subID', 'object_cued_rot', 'probe_ori_cat']).agg({chosen_column: 'mean'}).reset_index()
     elif condition == 3:
-        df_grouped = df[df['items_presented'] == 3].groupby(['subID', 'object_cued_rot', 'cardinal_category']).agg({chosen_column: 'mean'}).reset_index()
+        df_grouped = df[df['items_presented'] == 3].groupby(['subID', 'object_cued_rot', 'probe_ori_cat']).agg({chosen_column: 'mean'}).reset_index()
     else:
-        df_grouped = df.groupby(['subID', 'object_cued_rot', 'cardinal_category']).agg({chosen_column: 'mean'}).reset_index()
+        df_grouped = df.groupby(['subID', 'object_cued_rot', 'probe_ori_cat']).agg({chosen_column: 'mean'}).reset_index()
 
     # Step 2: Initialize a list to store results
     results = []
@@ -854,7 +992,7 @@ def calculate_absolute_differences(df, chosen_column, condition=None):
         df_grouped = df
         
     # Group by required columns and calculate mean for each group
-    df_grouped = df_grouped.groupby(['subID', 'object_cued_rot', 'cardinal_category']).agg(
+    df_grouped = df_grouped.groupby(['subID', 'object_cued_rot', 'probe_ori_cat']).agg(
         {chosen_column: 'mean'}).reset_index()
 
     # List to store results
@@ -893,7 +1031,7 @@ def calculate_differences_with_delayed_abs(df, chosen_column, condition=None):
         df_grouped = df
         
     # Group by required columns and calculate mean for each group
-    df_grouped = df_grouped.groupby(['subID', 'object_cued_rot', 'cardinal_category']).agg(
+    df_grouped = df_grouped.groupby(['subID', 'object_cued_rot', 'probe_ori_cat']).agg(
         {chosen_column: 'mean'}).reset_index()
 
     # List to store results
@@ -1339,3 +1477,12 @@ subj_bias_load = (
 subj_bias_load.to_csv("../data/csv_files/p_away_by_subj_load.csv", index=False)
 
 # %%
+# New stuff
+# trying to incorporate wether the probe moved away or towards the closest cardinal
+
+########################################################################################################################
+########################################################################################################################
+
+df[(df['probe_away_from_cardinal'] == 0) & (df['dist_to_cardinal_mem'] == 11.25)]['pressed_away_from_cardinal'].mean()
+
+# -> equals 1, can that be???

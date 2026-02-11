@@ -10,165 +10,14 @@ from scipy.stats import zscore
 from mne.stats import permutation_cluster_test, f_oneway, permutation_cluster_1samp_test
 from scipy import stats
 from scipy.stats import t, ttest_rel, zscore, f
-
+import pingouin as pg
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
 
 # %% Load Metadata
 
 df = pd.read_csv('../data/csv_files/df.csv')
 good_partis = df['subID'].unique()
-
-
-# ============================================================
-# 1) Helpers: circular distance + nearest cardinal axis (0/90/180/270)
-# ============================================================
-
-CARDINALS = np.array([0.0, 90.0, 180.0, 270.0])
-
-def wrap360(theta):
-    """Wrap degrees into [0, 360). Works on scalars or numpy arrays/Series."""
-    return np.mod(theta, 360.0)
-
-def circ_dist_deg(a, b):
-    """
-    Circular distance between angles a and b in degrees, in [0, 180].
-    a, b can be arrays/Series.
-    """
-    a = wrap360(a)
-    b = wrap360(b)
-    d = np.abs(a - b)
-    return np.minimum(d, 360.0 - d)
-
-def nearest_cardinal_axis(theta_mem):
-    """
-    For each theta_mem (deg), return nearest cardinal axis (0/90/180/270)
-    and distance to it.
-    """
-    theta_mem = wrap360(theta_mem)
-    # dist to each cardinal: shape (n, 4)
-    dists = np.stack([circ_dist_deg(theta_mem, c) for c in CARDINALS], axis=1)
-    idx = np.argmin(dists, axis=1)
-    axis = CARDINALS[idx]
-    dmin = dists[np.arange(len(theta_mem)), idx]
-    return axis, dmin
-
-
-# ============================================================
-# 2) Trial-level "away from cardinal" coding from button press
-#    Your columns:
-#      - object_cued_rot: memorized/original orientation (deg)
-#      - button_press_clockwise: 1=CW, 0=CCW
-#    Optional:
-#      - object_test_rot_cued: probe orientation shown (deg)
-#      - acc_trial_concrete_cued: accuracy (0/1)
-# ============================================================
-
-def add_cardinal_bias_columns(df,
-                              mem_col="object_cued_rot",
-                              press_col="button_press_clockwise",
-                              eps_deg=1.0):
-    """
-    Adds:
-      - nearest_cardinal (deg)
-      - dist_to_cardinal (deg)
-      - away_cardinal (0/1): whether chosen direction moves AWAY from the nearest cardinal
-      - bias_signed (deg): + if away, - if toward (magnitude in degrees for eps step)
-    Uses a tiny step eps_deg in the chosen direction from the memorized orientation.
-    """
-    out = df.copy()
-
-    theta_mem = wrap360(out[mem_col].to_numpy(dtype=float))
-    axis, d_mem = nearest_cardinal_axis(theta_mem)
-
-    # Map button press to direction: CW=+1, CCW=-1
-    dir_resp = np.where(out[press_col].to_numpy() == 1, 1.0, -1.0)
-
-    theta_step = wrap360(theta_mem + eps_deg * dir_resp)
-    d_step = circ_dist_deg(theta_step, axis)
-
-    away = (d_step > d_mem).astype(int)     # 1 = away, 0 = toward
-    # If you want to treat exact ties (rare) as NA:
-    ties = np.isclose(d_step, d_mem, atol=1e-12)
-    away = away.astype("float")
-    away[ties] = np.nan
-
-    out["nearest_cardinal"] = axis
-    out["dist_to_cardinal"] = d_mem
-    out["away_cardinal"] = away
-    out["bias_signed"] = (d_step - d_mem)   # >0 away, <0 toward (in "eps degrees" units)
-    return out
-
-
-# --- apply to your df ---
-df2 = add_cardinal_bias_columns(df,
-                                mem_col="object_cued_rot",
-                                press_col="button_press_clockwise",
-                                eps_deg=1.0)
-
-
-
-
-
-#%%# dataframe of epochs and attached metadata, works but overloads the RAM and takes very long
-
-# drop_log_rows = []
-
-# all_participants = []
-
-# for i in good_partis:
-#     # Read participant data
-#     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
-#     epoch_file = f"{folder_path}/{i}_even_newer-epo.fif"
-#     pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
-#     pupil_epoch.metadata = df2[df2['subID']==i]
-#     pp_metadata = pupil_epoch.metadata
-    
-#     #makes false assumption somehow, dropped epochs will drop the metadata usually but somehow its not dropping it
-#     #correctly because of this line?
-#     # probably also because I am doing this line before epochs are dropped due to baseline application
-#     #pp_metadata['epoch'] = pp_metadata['trial']
-
-#     # applying baseline per eye and nan aware while dropping any epochs where the baseline period was nan in both eyes
-#     pupil_epoch_bl = apply_baseline_nan_aware(pupil_epoch, bmin=-0.1, bmax=0.0)
-    
-#     # counting dropped epochs
-#     sum_dropped = sum('BAD_baseline_nan_both_eyes' in entry for entry in pupil_epoch_bl.drop_log)
-#     drop_log_rows.append({'subID': i, 'sum_dropped': sum_dropped})
-
-#     pp_metadata = pupil_epoch_bl.metadata.copy()
-#     pp_metadata["mne_epoch"] = np.arange(len(pp_metadata), dtype=int)
-
-#     # combining channels
-#     pupil_ix = mne.pick_channels(pupil_epoch_bl.info["ch_names"], include=['pupil_left', 'pupil_right'])
-#     roi_dict = dict(pupils=pupil_ix)
-#     combine_nanmean = lambda data: np.nanmean(data, axis=1)
-#     pupil_epochs_combined_bl = mne.channels.combine_channels(pupil_epoch_bl, roi_dict, method=combine_nanmean)
-    
-#     # Split + crop
-#     con1 = pupil_epochs_combined_bl["items_presented == 1"].copy().crop(-0.1, 7)
-#     con2 = pupil_epochs_combined_bl["items_presented == 2"].copy().crop(-0.1, 8)
-#     con3 = pupil_epochs_combined_bl["items_presented == 3"].copy().crop(-0.1, 9)
-
-#     # Convert
-#     dfs = [con1.to_data_frame(), con2.to_data_frame(), con3.to_data_frame()]
-#     epochs_cons = pd.concat(dfs, ignore_index=True)
-
-#     epochs_df_pp = epochs_cons.merge(pp_metadata, how="left", left_on="epoch", right_on="mne_epoch")
-#     # drop helper key
-#     epochs_df_pp = epochs_df_pp.drop(columns=["mne_epoch"])
-
-#     epochs_df_pp["epoch"] = epochs_df_pp["epoch"] + 1
-
-#     # sort back to original order
-#     epochs_df_pp = epochs_df_pp.sort_values(["epoch", "time"], kind="mergesort").reset_index(drop=True)
-
-#     all_participants.append(epochs_df_pp)
-
-# epochs_metadata_df = pd.concat(all_participants, ignore_index=True)
-# drop_log_df = pd.DataFrame(drop_log_rows)
-
-
-#Reset index and save
-#epochs_metadata_df.to_csv('../data/csv_files/epochs_metadata_df.csv', index=False)
 
 #%% trying to attach the new metadata and run evokeds depending on bias
 drop_log_rows = []
@@ -274,6 +123,8 @@ evokeds_df_shifted.to_csv('../data/csv_files/evoked_df_everything.csv', index=Fa
 # Load evoked
 
 evokeds_df_shifted = pd.read_csv('../data/csv_files/evoked_df_everything.csv')
+#%%
+evoked_df_all_combos_shifted = pd.read_csv('../data/csv_files/evoked_df_all_combos_shifted.csv')
 
 
 
@@ -525,6 +376,11 @@ def independent_t(X1, X2):
     t_vals, _ = stats.ttest_ind(X1, X2, axis=0, equal_var=False)  # Welch’s t-test
     return t_vals
 
+#%%
+# Parameters
+
+n_perm = 5000
+seed = 42
 # %% 
 # Cluster test on main effect between away vs towards cardinal axis button press
 # but only for probe objects close to the cardinal axis
@@ -538,7 +394,7 @@ cluster_results = {}
 
 # either the above subset or could also look at only all_cardinal ori combos
 subset_cardinal = evokeds_df_shifted_dw[evokeds_df_shifted_dw['trial_ori_pattern'] == 'all_cardinal']
-subset_cardinal = subset_cardinal[subset_cardinal['acc_trial_concrete_cued'] == 0]
+#subset_cardinal = subset_cardinal[subset_cardinal['acc_trial_concrete_cued'] == 0]
 
 
 # Subset
@@ -558,13 +414,17 @@ X2 = X2_df[common_times].values
 
 
 
-T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
-    [X1, X2],
-    n_permutations=1000,
-    threshold=2.0,        # use a lower t threshold
-    tail=0,               # two-tailed (direction of effect could go either way)
-    stat_fun=paired_t,
-    out_type='mask',
+Xdiff = X2 - X1                       # (n_subjects, n_times)
+n_sub = Xdiff.shape[0]
+tcrit = t.ppf(1 - 0.025, df=n_sub - 1)  # two-tailed cluster-forming threshold
+
+T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
+    Xdiff,
+    n_permutations=n_perm,
+    threshold=tcrit,
+    tail=0,
+    seed=seed,
+    out_type="mask",
     verbose=True
 )
 
@@ -636,14 +496,10 @@ plt.show()
 # %%
 # simple mean over delay window analyses
 
-grps = evokeds_df_shifted_dw.groupby(['subID', 'dist_to_cardinal', 'away_cardinal'])['pupils'].mean()
+grps = evokeds_df_shifted_dw.groupby(['subID', 'dist_to_cardinal', 'away_cardinal'])['pupils_z'].mean()
 grps_df = pd.DataFrame(grps).reset_index()
-sns.boxplot(data=grps_df, x='dist_to_cardinal', hue='away_cardinal', y='pupils')
+sns.boxplot(data=grps_df, x='dist_to_cardinal', hue='away_cardinal', y='pupils_z')
 
-#%%
-grps = evokeds_df_shifted.groupby(['subID', 'dist_to_cardinal', 'away_cardinal'])['pupils'].mean()
-grps_df = pd.DataFrame(grps).reset_index()
-sns.stripplot(data=grps_df, x='dist_to_cardinal', hue='away_cardinal', y='pupils')
 # %%
 # looks like if only looking at all cardinal trials, pupil dilation is bigger when they then pressed away from cardinal axis
 
@@ -776,7 +632,8 @@ grps = evokeds_df_shifted_dw.groupby(['subID', 'items_presented', 'ori_pattern',
 grps_df = pd.DataFrame(grps).reset_index()
 subset = grps_df[grps_df['ori_pattern']=='all_cardinal']
 sns.boxplot(data=subset, x='items_presented', hue='away_cardinal', y='pupils')
-# %% Trying to test the interaction between load and away cardinal?
+# %% 
+# Trying to test the interaction between load and away cardinal?
 
 # no interaction found
 
@@ -928,18 +785,42 @@ plt.xlabel('Items Presented')
 plt.ylabel('Mean Cardinal Repulsion at Cardinal Positions')
 plt.title('Stripplot of Cardinal Repulsion Indices for Different Conditions')
 plt.show()
-# %%
-# very significant
-# but also to be expected, trial_ori_pattern is just either cardinal or oblique in load 1 and dist to cardinal is also either
-# cardinal (11.25) or oblque orientation (dist=33.75)
-for load in [1,2,3]:
-    subset = df2[df2['items_presented']==load]
-    anova_results = pg.rm_anova(data=subset, dv='away_cardinal', within=['trial_ori_pattern','dist_to_cardinal'], subject='subID')
-    display(anova_results.round(4))
 
-# 
-# %%
+#%%
+# ANova on pupil size and cardinal bias
+# approaching significance
+# but could do that still with the new df columns maybe
+#########################################################################################################################
+########################################################################################################################
 
+grps = evokeds_df_shifted_dw.groupby(['subID', 'items_presented', 'dist_to_cardinal', 'away_cardinal'])['pupils_z'].mean()
+grps_df = pd.DataFrame(grps).reset_index()
+
+subset = evokeds_df_shifted_dw[evokeds_df_shifted_dw['dist_to_cardinal']==11.25]
+
+anova_results = pg.rm_anova(data=subset, dv='pupils_z', within='away_cardinal', subject='subID')
+display(anova_results.round(4))
+
+#%%
+# trying on only cardinal memorised items - pupils bigger for pressed away in trials
+# where object was shown close to axis and all objects were in cardinal positions
+#########################################################################################################################
+# significant
+subset_spec = evokeds_df_shifted_dw.loc[(evokeds_df_shifted_dw['trial_ori_pattern']=='all_cardinal')]
+subset = subset_spec[evokeds_df_shifted_dw['dist_to_cardinal']==11.25]
+
+anova_results = pg.rm_anova(data=subset, dv='pupils_z', within='away_cardinal', subject='subID')
+display(anova_results.round(4))
+
+# %%
+# looking at generally wether pupils are bigger when all objects remembered are cardinal
+#########################################################################################################################
+subset_spec = evokeds_df_shifted_dw.loc[evokeds_df_shifted_dw['trial_ori_pattern'].isin(['all_cardinal', 'all_oblique'])]
+
+anova_results = pg.rm_anova(data=subset_spec, dv='pupils_z', within='trial_ori_pattern', subject='subID')
+display(anova_results.round(4))
+
+# %%
 grps = evokeds_df_shifted_dw.groupby(['subID', 'items_presented', 'trial_ori_pattern', 'away_cardinal'])['pupils_z'].mean()
 grps_df = pd.DataFrame(grps).reset_index()
 
@@ -948,6 +829,7 @@ for load in [1,2,3]:
     anova_results = pg.rm_anova(data=subset, dv='pupils_z', within=['trial_ori_pattern','away_cardinal'], subject='subID')
     display(anova_results.round(4))
 # %%
+# there is some significance in here, could be due to serial effects?
 for pat in evokeds_df_shifted_dw['trial_ori_pattern'].unique():
     print(pat)
     subset = evokeds_df_shifted_dw[evokeds_df_shifted_dw['trial_ori_pattern']==pat]
@@ -964,45 +846,13 @@ for load in [1,2,3]:
     subset = evokeds_df_shifted_dw[evokeds_df_shifted_dw['items_presented']==load]
     anova_results = pg.rm_anova(data=subset, dv='pupils_z', within=['acc_trial_concrete_cued','away_cardinal'], subject='subID')
     display(anova_results.round(4))
-# %%
-subset_cardinal = evokeds_df_shifted_dw[evokeds_df_shifted_dw['trial_ori_pattern']=='all_cardinal']
 
-for load in [1,2,3]:
-    subset = subset_cardinal[subset_cardinal['items_presented']==load]
-    anova_results = pg.rm_anova(data=subset, dv='pupils_z', within=['acc_trial_concrete_cued', 'away_cardinal'], subject='subID')
-    display(anova_results.round(4))
-    plt.figure(figsize=(10, 5))
-    sns.stripplot(data=subset, x='away_cardinal', y='pupils_z', hue='acc_trial_concrete_cued',  legend='full', jitter=0.5)
-    plt.show()
-# %%
-subset_spec = evokeds_df_shifted_dw.loc[(evokeds_df_shifted_dw['trial_ori_pattern']=='all_cardinal') & (evokeds_df_shifted_dw['items_presented']==2)]
-# %%
-for pat in evokeds_df_shifted_dw['trial_ori_pattern'].unique():
-    print(pat)
-    subset = evokeds_df_shifted_dw[evokeds_df_shifted_dw['trial_ori_pattern']==pat]
-    anova_results = pg.rm_anova(data=subset, dv='pupils_z', within=['items_presented'], subject='subID')
-    display(anova_results.round(4))
-# %%
-anova_results = pg.rm_anova(data=evokeds_df_shifted_dw, dv='pupils_z', within=['trial_ori_pattern', 'items_presented'], subject='subID')
-display(anova_results.round(4))
 # %%
 grps = evokeds_df_shifted_dw.groupby(['subID', 'items_presented', 'trial_ori_pattern', 'acc_trial_concrete_cued', 'away_cardinal'])['pupils_z'].mean()
 grps_df = pd.DataFrame(grps).reset_index()
 
-# %%
-plt.figure(figsize=(10, 5))
-sns.stripplot(data=grps_df[grps_df['acc_trial_concrete_cued']==1], x='trial_ori_pattern', y='pupils_z', hue='away_cardinal',  legend='full', palette='Reds', jitter=0.2)
-sns.stripplot(data=grps_df[grps_df['acc_trial_concrete_cued']==0], x='trial_ori_pattern', y='pupils_z', hue='away_cardinal',  legend='full', palette='Blues', jitter=0.2)
 
-plt.show()
-# %%
-for l in [1,2,3]:
-    subset = grps_df[grps_df['items_presented']==l]
-    plt.figure(figsize=(10, 5))
-    sns.stripplot(data=subset[subset['away_cardinal']==1], x='trial_ori_pattern', y='pupils_z', hue='acc_trial_concrete_cued',  legend='full', palette='Reds', jitter=0.2)
-    sns.stripplot(data=subset[subset['away_cardinal']==0], x='trial_ori_pattern', y='pupils_z', hue='acc_trial_concrete_cued',  legend='full', palette='Blues', jitter=0.2)
 
-    plt.show()
 # %%
 import numpy as np
 import pandas as pd
@@ -1016,7 +866,7 @@ for sub in good_partis:
     epoch_file = f"{folder_path}/{sub}_even_newer-epo.fif"
     ep = mne.read_epochs(epoch_file, preload=True, verbose=None)
 
-    ep.metadata = df2.loc[df2["subID"] == sub].copy()
+    ep.metadata = df.loc[df["subID"] == sub].copy()
 
     # baseline + drop bad baseline epochs
     ep = apply_baseline_nan_aware(ep, bmin=-0.1, bmax=0.0)
@@ -1037,7 +887,7 @@ for sub in good_partis:
     meta["pupil_delay_mean"] = pupil_delay_mean
 
     # keep only what you need
-    keep = ["subID", "items_presented", "trial_ori_pattern", "acc_trial_concrete_cued", 'away_cardinal', "pupil_delay_mean"]
+    keep = ["subID", "items_presented", "trial_ori_pattern", "acc_trial_concrete_cued", 'dist_to_cardinal_mem', 'pressed_away_from_cardinal', "pupil_delay_mean"]
     rows.append(meta[keep])
 
 trial_df = pd.concat(rows, ignore_index=True)
@@ -1054,150 +904,6 @@ trial_df["pupil_delay_z"] = trial_df.groupby("subID")["pupil_delay_mean"].transf
     lambda x: (x - x.mean()) / x.std(ddof=0)
 )
 
-# %%
-import statsmodels.api as sm
-import statsmodels.formula.api as smf
-
-model = smf.gee(
-    "away_cardinal ~ pupil_delay_z * acc_trial_concrete_cued + pupil_delay_z * items_presented + pupil_delay_z * trial_ori_pattern",
-    groups="subID",
-    data=trial_df,
-    family=sm.families.Binomial()
-)
-res = model.fit()
-print(res.summary())
-
-
-# %%
-
-import numpy as np
-import pandas as pd
-import statsmodels.api as sm
-import statsmodels.formula.api as smf
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-# -----------------------------
-# 1) Subset to cardinal trials
-# -----------------------------
-card_df = trial_df[trial_df["trial_ori_pattern"] == "all_cardinal"].copy()
-
-# drop rows with missing values in key columns
-card_df = card_df.dropna(subset=["away_cardinal", "acc_trial_concrete_cued", "items_presented", "subID"]).copy()
-
-# now safe to cast
-card_df["away_cardinal"] = card_df["away_cardinal"].astype(int)
-card_df["acc_trial_concrete_cued"] = card_df["acc_trial_concrete_cued"].astype(int)
-card_df["items_presented"] = card_df["items_presented"].astype("category")
-card_df["subID"] = card_df["subID"].astype(str)
-
-
-# If you don't already have pupil_delay_z, create it (within-subject z-score)
-if "pupil_delay_z" not in card_df.columns:
-    card_df["pupil_delay_z"] = card_df.groupby("subID")["pupil_delay_mean"].transform(
-        lambda x: (x - x.mean()) / x.std(ddof=0)
-    )
-
-# Optional: remove rows with missing values in any model vars
-model_vars = ["away_cardinal", "pupil_delay_z", "acc_trial_concrete_cued", "items_presented", "subID"]
-card_df = card_df.dropna(subset=model_vars).copy()
-
-# ----------------------------------------------------
-# 2) (Optional) Descriptives: away rate by conditions
-# ----------------------------------------------------
-desc = (card_df
-        .groupby(["items_presented", "acc_trial_concrete_cued"])["away_cardinal"]
-        .agg(n="count", away_rate="mean")
-        .reset_index())
-print(desc)
-
-# ---------------------------------------------------------
-# 3) Plot: P(away) vs pupil, split by load and accuracy
-# ---------------------------------------------------------
-# Bin pupil for visualization (avoids messy scatter)
-card_df["pupil_bin"] = pd.qcut(card_df["pupil_delay_z"], q=10, duplicates="drop")
-plot_df = (card_df
-           .groupby(["items_presented", "acc_trial_concrete_cued", "pupil_bin"], as_index=False)
-           .agg(pupil_delay_z=("pupil_delay_z", "mean"),
-                p_away=("away_cardinal", "mean"),
-                n=("away_cardinal", "size")))
-
-g = sns.FacetGrid(
-    plot_df,
-    row="acc_trial_concrete_cued",
-    col="items_presented",
-    height=3.2,
-    aspect=1.2,
-    sharex=True,
-    sharey=True
-)
-g.map_dataframe(sns.lineplot, x="pupil_delay_z", y="p_away")
-g.set_axis_labels("Delay pupil (z, 3.0–6.5s)", "P(away_cardinal = 1)")
-g.set_titles(row_template="Accuracy={row_name}", col_template="Load={col_name}")
-plt.tight_layout()
-plt.show()
-
-# ---------------------------------------------------------
-# 4) Logistic GEE: away_cardinal predicted by pupil + mods
-# ---------------------------------------------------------
-# Start simpler if you want:
-# formula = "away_cardinal ~ pupil_delay_z + acc_trial_concrete_cued + items_presented"
-
-formula = (
-    "away_cardinal ~ "
-    "pupil_delay_z * acc_trial_concrete_cued + "
-    "pupil_delay_z * items_presented"
-)
-
-gee = smf.gee(
-    formula=formula,
-    groups="subID",
-    data=card_df,
-    family=sm.families.Binomial()
-).fit()
-
-print(gee.summary())
-
-# -----------------------------------------
-# 5) Odds ratios + 95% CI (more interpretable)
-# -----------------------------------------
-params = gee.params
-conf = gee.conf_int()
-or_table = pd.DataFrame({
-    "OR": np.exp(params),
-    "CI_low": np.exp(conf[0]),
-    "CI_high": np.exp(conf[1]),
-    "p": gee.pvalues
-}).round(4)
-
-print("\nOdds ratios (exp(beta)) with 95% CI:")
-print(or_table)
-
-
-
-# %%
-# it looks like the bias on incorrect trials is correlated with bigger pupils and only close to the cardinals??
-
-subset_card = evokeds_df_shifted[evokeds_df_shifted['dist_to_cardinal']==11.25]
-subset2 = subset_card[subset_card['acc_trial_concrete_cued']==0]
-print(subset2.groupby('away_cardinal')['pupils'].mean())
-
-subset_obli = evokeds_df_shifted[evokeds_df_shifted['dist_to_cardinal']==33.75]
-subset2 = subset_obli[subset_obli['acc_trial_concrete_cued']==0]
-print(subset2.groupby('away_cardinal')['pupils'].mean())
-
-
-# %%
-
-subset_only_inaccurate = evokeds_df_shifted[evokeds_df_shifted['acc_trial_concrete_cued']==0]
-subset_only_inaccurate_mean = subset_only_inaccurate.groupby(['dist_to_cardinal', 'away_cardinal', 'time'])['pupils'].mean().reset_index()
-
-subset_only_inaccurate_mean["time"] = subset_only_inaccurate_mean["time"].round(3)
-plt.figure()
-sns.lineplot(data=subset_only_inaccurate_mean[subset_only_inaccurate_mean['dist_to_cardinal']==11.25], x='time', y='pupils', hue='away_cardinal', errorbar='se', palette='Blues')
-sns.lineplot(data=subset_only_inaccurate_mean[subset_only_inaccurate_mean['dist_to_cardinal']==33.75], x='time', y='pupils', hue='away_cardinal', errorbar='se', palette='Reds')
-plt.show()
-# %%
 # %% trying to do cluster test on the above effect
 
 # Main effect of away_button press but divided by load conditions and only in all_cardinal trials
@@ -1210,7 +916,8 @@ for load in [1, 2, 3]:
     # Subset the data
     subset = evokeds_df_shifted_dw[evokeds_df_shifted_dw['items_presented'] == load]
     subset_card = subset[subset['dist_to_cardinal'] == 11.25]
-    subset_inaccurate = subset_card[subset_card['acc_trial_concrete_cued'] == 0]
+    subset_inaccurate = subset_card[subset_card['trial_ori_pattern'] == 'all_cardinal']
+    #subset_inaccurate=subset_card
     #subset_card = subset[subset['trial_ori_pattern'] == 'all_cardinal']
 
     df_away = subset_inaccurate[subset_inaccurate['away_cardinal'] == 1]
@@ -1228,15 +935,19 @@ for load in [1, 2, 3]:
     X2 = X2_df.loc[common_subs, common_times].to_numpy()
     times = common_times.to_numpy()
 
-    # Run cluster-based permutation test
-    T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
-        [X1, X2],
-        n_permutations=1000,
-        threshold=2.0,
+
+    Xdiff = X2 - X1                       # (n_subjects, n_times)
+    n_sub = Xdiff.shape[0]
+    tcrit = t.ppf(1 - 0.025, df=n_sub - 1)  # two-tailed cluster-forming threshold
+
+    T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
+        Xdiff,
+        n_permutations=n_perm,
+        threshold=tcrit,
         tail=0,
-        out_type='mask',
-        verbose=True,
-        stat_fun=paired_t
+        seed=seed,
+        out_type="mask",
+        verbose=True
     )
 
     cluster_summaries = []
@@ -1302,6 +1013,112 @@ for load in [1, 2, 3]:
     plt.ylabel('Pupil size')
     plt.show()
 
+
+    print(f"\nRunning cluster test for Load {load}...")
+
+
+#%%
+# same effect no load
+# Subset the data
+subset_card = evokeds_df_shifted_dw[evokeds_df_shifted_dw['dist_to_cardinal'] == 11.25]
+# subset_inaccurate = subset_card[subset_card['trial_ori_pattern'] == 'all_cardinal']
+
+subset_inaccurate=subset_card
+#subset_card = subset[subset['trial_ori_pattern'] == 'all_cardinal']
+
+df_away = subset_inaccurate[subset_inaccurate['away_cardinal'] == 1]
+df_tow = subset_inaccurate[subset_inaccurate['away_cardinal'] == 0]
+
+# Pivot to get subjects x timepoints
+X1_df = df_away.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+X2_df = df_tow.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+
+# Align subjects and timepoints
+common_subs = X1_df.index.intersection(X2_df.index)
+common_times = X1_df.columns.intersection(X2_df.columns)
+
+X1 = X1_df.loc[common_subs, common_times].to_numpy()
+X2 = X2_df.loc[common_subs, common_times].to_numpy()
+times = common_times.to_numpy()
+
+
+Xdiff = X2 - X1                       # (n_subjects, n_times)
+n_sub = Xdiff.shape[0]
+tcrit = t.ppf(1 - 0.025, df=n_sub - 1)  # two-tailed cluster-forming threshold
+
+T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
+    Xdiff,
+    n_permutations=n_perm,
+    threshold=tcrit,
+    tail=0,
+    seed=seed,
+    out_type="mask",
+    verbose=True
+)
+
+cluster_summaries = []
+for i, c in enumerate(clusters):
+    p_val = cluster_p_values[i]
+    time_inds = c[0]
+    F_vals = T_obs[time_inds]
+    mean_F = F_vals.mean()
+
+    # Extract descriptive means of each condition inside cluster
+    load_means = {
+        "mean_load1": np.nanmean(X1[:, time_inds]),
+        "mean_load2": np.nanmean(X2[:, time_inds])
+    }
+    cluster_entry = {
+        "cluster_id": i + 1,
+        "start_time": times[time_inds][0],
+        "end_time": times[time_inds][-1],
+        "p_value": p_val,
+        "mean_F": mean_F,
+    }
+    cluster_entry.update(load_means)
+
+    cluster_summaries.append(cluster_entry)
+
+# Save to DataFrame
+cluster_df = pd.DataFrame(cluster_summaries)
+# cluster_df.to_csv("cluster_results_load_by_mask.csv", index=False)
+display(cluster_df)
+
+# Plot
+plt.figure(figsize=(10, 5))
+plt.plot(times, T_obs, label='T-values')
+for i_c, c in enumerate(clusters):
+    if cluster_p_values[i_c] < 0.05:
+        plt.axvspan(times[c][0], times[c][-1], color='red', alpha=0.3)
+plt.axhline(0, color='black', linestyle='--')
+plt.title(f'Cluster Permutation Test (Load {load})')
+plt.xlabel('Time (s)')
+plt.ylabel('T-statistic')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+times = np.array(common_times)  # make sure it's ordered
+X1_mean = X1.mean(axis=0)
+X2_mean = X2.mean(axis=0)
+
+
+plt.plot(times, X1_mean, label='away')
+plt.plot(times, X2_mean, label='towards')
+
+
+# Highlight significant clusters
+for i_c, cluster in enumerate(clusters):
+    if cluster_p_values[i_c] < 0.05:
+        time_mask = cluster
+        plt.axvspan(times[time_mask][0], times[time_mask][-1], color='red', alpha=0.3)
+
+plt.legend()
+plt.title(f'Cluster Permutation Test Load Conditions and button press towards or away from cardinal')
+plt.xlabel('Time (s)')
+plt.ylabel('Pupil size')
+plt.show()
+
 # %%
 # Trying to do the same as I have done for the behavioural bias but for pupil dilation
 # creating a new evoked that has object cued rotation 
@@ -1324,7 +1141,7 @@ for sub in good_partis:
     pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
 
     # attach metadata (must already align with epochs)
-    pupil_epoch.metadata = df2.loc[df2["subID"] == sub].copy()
+    pupil_epoch.metadata = df.loc[df["subID"] == sub].copy()
 
     # baseline + drop bad baseline epochs
     pupil_epoch_bl = apply_baseline_nan_aware(pupil_epoch, bmin=-0.1, bmax=0.0)
@@ -1346,13 +1163,13 @@ for sub in good_partis:
         ep_load = pupil_epochs[f"items_presented == {load}"].copy().crop(-0.1, tmax_by_load[load])
 
         for away in (0, 1):
-            ep_away = ep_load[f"away_cardinal == {away}"]
+            ep_away = ep_load[f"pressed_away_from_cardinal == {away}"]
 
             # loop over dist_to_cardinal values *within this subset*
-            ori_vals = sorted(ep_away.metadata["object_cued_rot"].dropna().unique())
+            ori_vals = sorted(ep_away.metadata["dist_probe_to_cardinal"].dropna().unique())
 
             for ori in ori_vals:
-                ep_grp = ep_away[f"object_cued_rot == {ori}"]
+                ep_grp = ep_away[f"dist_probe_to_cardinal == {ori}"]
 
                 if len(ep_grp) == 0:
                     continue
@@ -1368,8 +1185,8 @@ for sub in good_partis:
                 # add identifiers
                 df_evk["subID"] = sub
                 df_evk["items_presented"] = load
-                df_evk["away_cardinal"] = away
-                df_evk["object_cued_rot"] = ori
+                df_evk["pressed_away_from_cardinal"] = away
+                df_evk["dist_probe_to_cardinal"] = ori
 
                 all_evoked_dfs.append(df_evk)
 
@@ -1391,7 +1208,7 @@ nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
 # Adding column for mask
 evokeds_df_shifted_object_ori['mask'] = evokeds_df_shifted_object_ori['subID'].apply(
     lambda x: 1 if x in mask_partis else 0)
-# %% 
+ 
 # %%
 # Data Preparation 
 
@@ -1404,102 +1221,18 @@ evokeds_df_shifted_object_ori_dw = evokeds_df_shifted_object_ori[(evokeds_df_shi
 
 evokeds_df_shifted_object_ori_dw['pupils_z'] = evokeds_df_shifted_object_ori_dw.groupby('subID')['pupils'].transform(lambda x: zscore(x, nan_policy='omit'))
 
-# %%
-# Subtracting - manually without the function
-# Calculating clockwise button press proportion for the orientations of interest (closest to the cardinal axes)
 
-# Grouping the data by the necessary keys and producing a mean for button press clockwise for every condition and orientation and subject ID
-
-df_grouped_z = evokeds_df_shifted_object_ori_dw.groupby(by=['subID', 'items_presented', 'object_cued_rot', 'away_cardinal'])['pupils_z'].mean().reset_index()
-df_grouped_z = df_grouped_z[df_grouped_z['away_cardinal']==1]
-# Grouping by Condition
-condition_grps = df_grouped_z.groupby('items_presented', as_index=False)
-
-seperated_con_difs = []        # List for condition-specific differences
-combined_con_difs = []  # List for differences across all conditions
-
-conditions = np.sort(df['items_presented'].unique())
-
-for condition in conditions:
-    current_condition = condition_grps.get_group(condition)
-    
-    for i in good_partis:
-        participant_grp = current_condition.groupby('subID', as_index=False)
-        participant_data = participant_grp.get_group(i)
-        differences = []
-        
-        # Define the pairs of orientations for subtraction
-        orientation_pairs = [(11.25, 348.75), (101.25, 78.75), (191.25, 168.75), (281.25, 258.75)]
-
-        # calculating the mean for that orientation within that participant and load condition
-        for ori_x, ori_y in orientation_pairs:
-            value_x = participant_data.loc[participant_data['object_cued_rot'] == ori_x, 'pupils_z'].mean()
-            value_y = participant_data.loc[participant_data['object_cued_rot'] == ori_y, 'pupils_z'].mean()
-        
-            # Calculate the difference and append to the list
-            difference = value_x - value_y
-            differences.append(difference)
-
-        mean_difference = np.mean(differences)
-        seperated_con_difs.append((i, mean_difference, condition))
-        
-    # Now, calculate the mean difference across all conditions (for the same participants) at the same time
-    df_grouped_all_con = evokeds_df_shifted_object_ori_dw.groupby(['subID', 'object_cued_rot', 'away_cardinal'])['pupils_z'].mean().reset_index()
-    df_grouped_all_con = df_grouped_all_con[df_grouped_all_con['away_cardinal']==1]
-    for i in good_partis:
-        participant_grp_all_con = df_grouped_all_con.groupby('subID', as_index=False)
-        participant_data_all_con = participant_grp_all_con.get_group(i)
-        differences_all_con = []
-
-        for ori_x, ori_y in orientation_pairs:
-            value_x_all_con = participant_data_all_con.loc[participant_data_all_con['object_cued_rot'] == ori_x, 'pupils_z'].mean()
-            value_y_all_con = participant_data_all_con.loc[participant_data_all_con['object_cued_rot'] == ori_y, 'pupils_z'].mean()
-
-            # Calculate the difference and append to the list
-            difference_all_con = value_x_all_con - value_y_all_con
-            differences_all_con.append(difference_all_con)
-            #print(i, value_x_all_con, value_y_all_con, difference_all_con, differences_all_con)
-
-        mean_difference_all_con = np.mean(differences_all_con)
-        combined_con_difs.append((i, mean_difference_all_con))
-
-# Create DataFrames for both condition-specific differences and all conditions combined
-seperated_con_difs_df = pd.DataFrame(seperated_con_difs, columns=['subID', 'Mean_Difference', 'items_presented'])
-combined_con_difs_df = pd.DataFrame(combined_con_difs, columns=['subID', 'Mean_Difference'])
-
-# Display the DataFrames
-display(seperated_con_difs_df)
-display(combined_con_difs_df)
-
-
-#%% 
-#  T-test against zero for all conditions together 
-ttest_results = pg.ttest(combined_con_difs_df['Mean_Difference'], 0)
-display(ttest_results.round(4))
-
-p_value = ttest_results['p-val'].values
-
-# Define the significance level (alpha)
-alpha = 0.05
-
-# Check if the p-value is less than alpha to determine significance
-if p_value < alpha:
-    print("The t-test indicates a significant difference in cardinal bias from 0 across all load conditions.")
-else:
-    print("The t-test does not indicate a significant difference in cardinal bias from 0 across all load conditions.")
-# %% 
-# same as above but:
-#  REPEATED MEASURES ANOVA comparing the cardinal repulsion in the load conditions
-# probably needs to be done like this since there are three values (one for every condition per participant)
-
-anova_results = pg.rm_anova(data=seperated_con_difs_df, dv='Mean_Difference', within='items_presented', subject='subID')
+#######
+#%%
+# interestingly it looks a little like the variability of the pupil size is bigger at probes that were moved towards the cardinal axis
+anova_results = pg.rm_anova(data=evokeds_df_shifted_object_ori_dw, dv='pupils_z', within=['dist_probe_to_cardinal', 'pressed_away_from_cardinal'], subject='subID')
 
 # Display ANOVA results
 display(anova_results.round(4))
 
 # Define the significance level (alpha)
 alpha = 0.05
-p_value = anova_results['p-unc'].values
+p_value = anova_results['p-unc'].values[2]
 if p_value < alpha:
     print("The ANOVA test indicates a significant difference among the load conditions.")
 else:
@@ -1508,16 +1241,17 @@ else:
 plt.figure(figsize=(10, 6))  # Set the figure size
 
 # Create a boxplot
-sns.stripplot(data=seperated_con_difs_df, x='items_presented', y='Mean_Difference')
-sns.pointplot(data=seperated_con_difs_df, x='items_presented', y='Mean_Difference', estimator='mean', linestyles='none')
+sns.boxplot(data=evokeds_df_shifted_object_ori_dw, x='dist_probe_to_cardinal', y='pupils_z')
+#sns.boxplot(data=evokeds_df_shifted_object_ori_dw, x='dist_probe_to_cardinal', y='pupils_z', estimator='mean', linestyles='none')
 plt.xlabel('Items Presented')
 plt.ylabel('Mean Cardinal Repulsion at Cardinal Positions')
 plt.title('Stripplot of Cardinal Repulsion Indices for Different Conditions')
 plt.show()
 
-
 # %%
 # polar plot of pupil sizes per orienation
+
+
 
 fig = plt.figure()
 
@@ -1536,12 +1270,12 @@ con3s = []
 all_cons = []
 colors = sns.hls_palette(17)
 # colors = sns.color_palette("mako", as_cmap=True)
-df_grouped_con1 = df_grouped_z[df_grouped_z['items_presented']==1]
-df_grouped_con2 = df_grouped_z[df_grouped_z['items_presented']==2]
-df_grouped_con3 = df_grouped_z[df_grouped_z['items_presented']==3]
+df_grouped_con1 = evokeds_df_shifted_object_ori_dw[evokeds_df_shifted_object_ori_dw['items_presented']==1]
+df_grouped_con2 = evokeds_df_shifted_object_ori_dw[evokeds_df_shifted_object_ori_dw['items_presented']==2]
+df_grouped_con3 = evokeds_df_shifted_object_ori_dw[evokeds_df_shifted_object_ori_dw['items_presented']==3]
 
 # Get ordered list of unique target orientations
-oris = df_grouped_z['object_cued_rot'].unique()
+oris = evokeds_df_shifted_object_ori_dw['dist_probe_to_cardinal'].unique()
 oris.sort()   
 oris = np.append(oris, oris[0])
 
@@ -1551,10 +1285,10 @@ for i in range(len(oris)):
     theta = np.radians(oris[i])
     theta_adjusted = -theta + ((np.pi/2)) % (2*np.pi)
 
-    all_con = df_grouped_z[df_grouped_z['object_cued_rot']==oris[i]]['pupils_z'].mean()
-    con1 = df_grouped_con1[df_grouped_con1['object_cued_rot']==oris[i]]['pupils_z'].mean()
-    con2 = df_grouped_con2[df_grouped_con2['object_cued_rot']==oris[i]]['pupils_z'].mean()
-    con3 = df_grouped_con3[df_grouped_con3['object_cued_rot']==oris[i]]['pupils_z'].mean()
+    all_con = evokeds_df_shifted_object_ori_dw[evokeds_df_shifted_object_ori_dw['dist_probe_to_cardinal']==oris[i]]['pupils_z'].mean()
+    con1 = df_grouped_con1[df_grouped_con1['dist_probe_to_cardinal']==oris[i]]['pupils_z'].mean()
+    con2 = df_grouped_con2[df_grouped_con2['dist_probe_to_cardinal']==oris[i]]['pupils_z'].mean()
+    con3 = df_grouped_con3[df_grouped_con3['dist_probe_to_cardinal']==oris[i]]['pupils_z'].mean()
     
     thetas.append(theta)
     thetas_adjusted.append(theta_adjusted)
