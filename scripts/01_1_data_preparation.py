@@ -124,6 +124,16 @@ df['trial_ori_pattern'] = np.where(
         'mixed'
     )
 )
+
+#%%
+mostly_cardinal = ['cnn', 'ccn', 'ccc', 'cco', 'coc', 'occ']
+mostly_oblique = ['onn', 'oon', 'ooo', 'coo', 'oco', 'ooc']
+category_map = {}
+category_map.update({cat: 'mostly_cardinal' for cat in mostly_cardinal})
+category_map.update({cat: 'mostly_oblique' for cat in mostly_oblique})
+
+df['cardinal_type'] = df['trial_ori_cat_combo'].map(lambda x: category_map.get(x, 'mixed'))
+
 #%%
 # creating categorical columns depending on probes and sample objects distance to the next cardinal and wether response
 # pressed the objects further or closer towards cardinal 
@@ -209,4 +219,3 @@ os.makedirs(csv_path, exist_ok=True)
 # Saving dataframe
 df.to_csv('../data/csv_files/df.csv', index=False)
 
-# %%

@@ -1,0 +1,689 @@
+#%%
+# Imports
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np 
+import scipy.stats as stats #(not in environment yet?)
+import sys
+from statsmodels.stats.multicomp import pairwise_tukeyhsd #(not in envirnoment yet)
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+import seaborn as sns
+import pingouin as pg
+from IPython.display import display
+
+# %% Load Metadata
+
+df = pd.read_csv('../data/csv_files/df.csv')
+good_partis = df['subID'].unique()
+    
+# Define paths for saving files
+csv_save_dir = '../data/csv_files'
+figures_save_dir = '../figures'
+
+
+#%%
+# Accuracy in test-orientations Polar Plot
+
+# Data
+mbp_df = df.groupby(by=['object_test_rot_cued'])['acc_trial_concrete_cued'].mean().reset_index()
+acc_overall = df['acc_trial_concrete_cued'].mean()
+mbp_df = df.groupby(by=['items_presented', 'object_test_rot_cued'])['acc_trial_concrete_cued'].mean().reset_index()
+
+mbp_con1 = mbp_df[mbp_df['items_presented'] == 1]
+mbp_con2 = mbp_df[mbp_df['items_presented'] == 2]
+mbp_con3 = mbp_df[mbp_df['items_presented'] == 3]
+
+# Polar Plot
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='polar')
+ylim = ax.get_ylim()
+
+# to store values for plotting full circle lines at the end
+thetas = []
+thetas_adjusted = []
+con1s = []
+con2s = []
+con3s = []
+all_cons = []
+
+colors_load = sns.color_palette("flare", 3)
+# colors = sns.color_palette("mako", as_cmap=True)
+
+# Get ordered list of unique target orientations
+oris = df['object_test_rot_cued'].unique()
+oris.sort()   
+oris = np.append(oris, oris[0])
+
+acc_overall_list = np.full(len(oris), acc_overall)
+
+for i in range(len(oris)):
+    theta = np.radians(oris[i])
+    theta_adjusted = -theta + ((np.pi/2)) % (2*np.pi)
+
+    all_con = mbp_df[mbp_df['object_test_rot_cued']==oris[i]]['acc_trial_concrete_cued'].mean()
+    con1 = mbp_con1[mbp_con1['object_test_rot_cued']==oris[i]]['acc_trial_concrete_cued'].mean()
+    con2 = mbp_con2[mbp_con2['object_test_rot_cued']==oris[i]]['acc_trial_concrete_cued'].mean()
+    con3 = mbp_con3[mbp_con3['object_test_rot_cued']==oris[i]]['acc_trial_concrete_cued'].mean()
+    
+    thetas.append(theta)
+    thetas_adjusted.append(theta_adjusted)
+    all_cons.append(all_con)
+    con1s.append(con1)
+    con2s.append(con2)
+    con3s.append(con3)
+
+    #ax.plot(theta_adjusted, all_con, 'o', color=colors_load[4], alpha=0.5)
+    ax.plot(theta_adjusted, con1, 'o', color=colors_load[0])
+    ax.plot(theta_adjusted, con2, 'o', color=colors_load[1])
+    ax.plot(theta_adjusted, con3, 'o', color=colors_load[2])
+
+
+# Plotting lines to connect dots
+# ax.plot(thetas_adjusted, all_cons, '--', color=colors_load[5], label='all loads average')
+ax.plot(thetas_adjusted, acc_overall_list, color='pink', linestyle='dashed', label='mean')
+ax.plot(thetas_adjusted, con1s, '-', color=colors_load[0], label='load 1')
+ax.plot(thetas_adjusted, con2s, '-', color=colors_load[1], label='load 2')
+ax.plot(thetas_adjusted, con3s, '-', color=colors_load[2], label='load 3')
+
+# Move r origin outwards to have a hollow circle in the middle for ~AesTHeTicS~
+rorigin = -0.5*ylim[1]
+ax.set_rorigin(rorigin)
+y_ticks = np.arange(0, 1, 0.2)
+ax.set_yticks(y_ticks)
+
+plt.title('Accuracy on Polar Plot by Load Condition')
+plt.legend()
+plt.savefig(os.path.join(figures_save_dir, 'polar_plot_probe_accuracy.png'))
+plt.show()
+
+
+# %%
+# Bar Polar plot
+
+partis = df['subID'].unique()
+
+# Get ordered list of unique target orientations
+oris = df['object_test_rot_cued'].unique()
+oris.sort()   
+
+fig = plt.figure(figsize=(7,7))
+
+# Change the projection to 'polar'
+ax = fig.add_subplot(111, projection='polar')
+
+# Get outer ylim for plotting radial lines
+ylim = ax.get_ylim()
+colors1 = sns.color_palette("Paired", 4)
+colors2 = sns.color_palette("Paired", 4)
+colors2.reverse()
+colors = np.vstack((colors1, colors2)*5)
+
+colors_load = sns.color_palette("flare", 3)
+
+colors1 = sns.diverging_palette(225, 15, s=70, n=4, l=50, center='light')
+colors2 = sns.diverging_palette(225, 15, s=70, n=4, l=50, center='light')
+colors2.reverse()
+
+colors = np.vstack((colors1, colors2)*10)
+
+# Plot a radial line for each target orientation - colour matched to its kde distribution
+# Then plot a radial line for the mean of each kde distribution
+for i in range(len(oris)):
+    theta = np.radians(oris[i])
+    mean_acc = (df[df['object_test_rot_cued']==oris[i]]['acc_trial_concrete_cued']).mean()
+    l1_acc = (df[(df['object_test_rot_cued']==oris[i])&(df['items_presented']== 1)]['acc_trial_concrete_cued']).mean()
+    l2_acc = (df[(df['object_test_rot_cued']==oris[i])&(df['items_presented']== 2)]['acc_trial_concrete_cued']).mean()
+    l3_acc = (df[(df['object_test_rot_cued']==oris[i])&(df['items_presented']== 3)]['acc_trial_concrete_cued']).mean()
+    
+    color = colors[i]
+    offset = 0.02
+    
+    # ax.plot([theta, theta], [0, mean_bp], 'o--', c=sns.hls_palette(16)[r], alpha = 0.5, markersize=10)
+    ax.bar([theta, theta], [0, mean_acc], color=color, alpha = 0.5, width = 0.1)
+    # ax.bar([theta-offset, theta-offset], [0, l1_acc], color=color, alpha = 0.3, width = 0.05)
+    # ax.bar([theta, theta], [0, l2_acc], color=color, alpha = 0.3, width = 0.05)
+    # ax.bar([theta-offset, theta-offset], [0, l3_acc], color=color, alpha = 0.3, width = 0.05)
+
+    ax.plot([theta, theta], [0, l1_acc], '--', c=color, alpha = 0.5, linewidth=1)
+    ax.plot([theta+offset, theta+offset], [0, l2_acc], '--', c=color, alpha = 0.5,linewidth=1)
+    ax.plot([theta-offset, theta-offset], [0, l3_acc], '--', c=color, alpha = 0.5, linewidth=1)
+    ax.plot([theta], [l1_acc], 'o', c=colors_load[0], alpha = 1, markersize=5, label='Load 1')
+    ax.plot([theta+offset], [l2_acc], 's', c=colors_load[1], alpha = 1, markersize=5, label='Load 2')
+    ax.plot([theta-offset], [l3_acc], '*', c=colors_load[2], alpha = 1, markersize=5, label='Load 3')
+
+# Move r origin outwards to have a hollow circle in the middle for ~AesTHeTicS~
+# ax.set_ylim(0.4)
+# ylim = ax.get_ylim()
+# rorigin = -0.005*ylim[1]
+# rorigin = 0.9*ylim[1]
+# ax.set_rorigin(rorigin)
+
+ax.set_rmin(0.4)
+ax.set_rorigin(0)
+ax.grid(True)
+y_ticks = np.arange(0.4, 1, 0.2)
+ax.set_yticks(y_ticks)
+
+handles, labels = ax.get_legend_handles_labels()
+by_label = dict(zip(labels, handles))
+ax.legend(by_label.values(), by_label.keys(), loc='center')
+
+# set x ticks to object_cued rotation
+# ticks = df['object_cued_rot'].unique()
+# ticks2 = np.radians(ticks)
+# ax.set_xticks(ticks2, minor=False)
+
+
+# Set the direction of the zero angle
+ax.set_theta_offset(np.pi/2)
+
+#plt.legend()
+plt.show()
+
+# %%
+# This might be useful, shows that when you disregard load, accuracy decreases with distance to cardinal axis but only for probe away and increases with dist for probe towards
+
+# general means of accuracy per dist to cardinal and probe away from cardinal:
+df.groupby(['dist_to_cardinal_mem','probe_away_from_cardinal'])['acc_trial_concrete_cued'].mean()
+
+# ANOVA
+anova_results = pg.rm_anova(data=df, dv='acc_trial_concrete_cued', within=['dist_to_cardinal_mem','probe_away_from_cardinal'], subject='subID')
+display(anova_results.round(3))
+# %%
+
+plot_df = (
+    df.groupby(
+        ["dist_to_cardinal_mem","probe_away_from_cardinal"]
+    )["acc_trial_concrete_cued"]
+    .mean()
+    .reset_index()
+)
+
+sns.pointplot(
+    data=plot_df,
+    x="dist_to_cardinal_mem",
+    y="acc_trial_concrete_cued",
+    hue="probe_away_from_cardinal"
+)
+
+#%% 
+plot_df = (
+    df.groupby(
+        ['items_presented', "dist_to_cardinal_mem","probe_away_from_cardinal"]
+    )["acc_trial_concrete_cued"]
+    .mean()
+    .reset_index()
+)
+
+# %%
+sns.catplot(
+    data=plot_df,
+    x="dist_to_cardinal_mem",
+    y="acc_trial_concrete_cued",
+    hue="probe_away_from_cardinal",
+    col="items_presented",
+    kind="point",
+    errorbar="se",
+    height=4,
+
+
+    aspect=1
+)
+#%%
+
+from matplotlib.legend import Legend
+
+colors = sns.diverging_palette(250, 30, s=80, l=65, n=6, center="light")
+colors2 = sns.diverging_palette(250, 30, s=80, l=65, n=6, center="light")
+colors2.reverse()
+colors_load = sns.color_palette("flare", 3)
+fig, ax = plt.subplots(figsize=(10,8))
+#line1, = 
+sns.pointplot(
+    data=plot_df[plot_df['probe_away_from_cardinal']==1],
+    x="dist_to_cardinal_mem",
+    y="acc_trial_concrete_cued",
+    hue="items_presented",
+    palette=colors_load,
+    markers='s',
+    ax=ax
+    # label='probe away'
+)
+#line2, = 
+sns.pointplot(
+    data=plot_df[plot_df['probe_away_from_cardinal']==0],
+    x="dist_to_cardinal_mem",
+    y="acc_trial_concrete_cued",
+    hue="items_presented", 
+    palette=colors_load,
+    markers='o',
+    linestyle='dashed',
+    legend='full',
+    ax=ax
+    # label='probe towards'
+)
+
+groups  = df.items_presented.unique()
+handles, labels = ax.get_legend_handles_labels()
+leg = Legend(ax, handles=handles, labels=groups, 
+             loc='upper left', frameon=False, title='Groups')
+ax.add_artist(leg);
+# # Increase font size of x and y tick labels
+# ax.tick_params(axis='x', labelsize=14)
+# ax.tick_params(axis='y', labelsize=14)
+
+# x_label = 'Distance of memory orientation to closest cardinal axis in degrees'
+# plt.xlabel(x_label, fontsize = 10)
+# y_label = 'Accuracy in %'
+# plt.ylabel(y_label, fontsize = 10)
+
+# # Adding a title
+# plt.suptitle('Accuracy', fontsize = 20)
+# plt.title('by probe direction and distance to closest cardinal axis', color='blue', alpha=0.4)
+
+# Adding a legend
+# ax.legend(loc='lower right', fontsize=12)
+# new_labels = ['Load 1 - probe away', 'Load 2 - probe away', 'Load 3 - probe away', 'Load 1 - probe towards', 'Load 2 - probe towards', 'Load 3 - probe towards']
+# for t, l in zip(ax.get_legend().texts, new_labels):
+#     t.set_text(l)
+
+
+
+plt.show()
+# %%
+# this is probably not statistically valid?
+
+baseline_load = (
+    df.groupby(["subID","items_presented"])
+    ["acc_trial_concrete_cued"]
+    .mean()
+    .rename("baseline_acc")
+)
+cond = (
+    df.groupby([
+        "subID",
+        "items_presented",
+        "dist_to_cardinal_mem",
+        "probe_away_from_cardinal"
+        ])["acc_trial_concrete_cued"].mean().reset_index())
+
+cond = cond.merge(baseline_load, on=["subID","items_presented"])
+
+cond["delta_acc"] = (cond["acc_trial_concrete_cued"] - cond["baseline_acc"])
+
+
+anova = pg.rm_anova(
+    data=cond,
+    dv="delta_acc",
+    within=[
+        "dist_to_cardinal_mem",
+        "probe_away_from_cardinal"
+    ],
+    subject="subID"
+)
+
+display(anova.round(4))
+
+
+
+
+# %%
+# Lineplot on difference
+agg = (cond.groupby(["items_presented","dist_to_cardinal_mem","probe_away_from_cardinal"])
+          .agg(mean_delta=("delta_acc","mean"),
+               sem_delta=("delta_acc", lambda x: x.std(ddof=1)/np.sqrt(len(x))))
+          .reset_index())
+fig, ax = plt.subplots()
+
+sns.lineplot(
+    data=agg,
+    x="dist_to_cardinal_mem",
+    y="mean_delta",
+    hue="items_presented",
+    style="probe_away_from_cardinal",
+    markers=True,
+    dashes=True,
+    ax=ax,
+    legend='full'
+)
+
+x_ticks = agg['dist_to_cardinal_mem'].unique()
+ax.set_xticks(x_ticks)
+
+handles, labels = ax.get_legend_handles_labels()
+new_labels = ["1", "2", "3"]
+leg1 = ax.legend(handles[1:4], new_labels, title="Load", loc="center left")
+new_labels2 = ["Toward cardinal", "Away from cardinal"]
+leg2 = ax.legend(handles[5:], new_labels2, title="Probe direction", loc="upper right")
+ax.add_artist(leg1)
+
+plt.show()
+
+# %%
+fig, ax = plt.subplots()
+
+sns.lineplot(
+    data=df,
+    x="dist_to_cardinal_mem",
+    y="acc_trial_concrete_cued",
+    hue="items_presented",
+    style="probe_away_from_cardinal",
+    markers=True,
+    dashes=True,
+    ax=ax,
+    errorbar=None,
+    legend='full'
+)
+
+x_ticks = agg['dist_to_cardinal_mem'].unique()
+ax.set_xticks(x_ticks)
+
+handles, labels = ax.get_legend_handles_labels()
+new_labels = ["1", "2", "3"]
+leg1 = ax.legend(handles[1:4], new_labels, title="Load", loc="center left")
+new_labels2 = ["Toward cardinal", "Away from cardinal"]
+leg2 = ax.legend(handles[5:], new_labels2, title="Probe direction", loc="upper right")
+ax.add_artist(leg1)
+
+
+plt.show()
+
+
+# %%
+sns.catplot(
+    data=agg,
+    x="dist_to_cardinal_mem",
+    y="mean_delta",
+    hue="items_presented",
+    col="probe_away_from_cardinal",
+    kind="bar",
+    errorbar="se",
+    height=4,
+    aspect=1
+)
+
+# %%
+# This plot shows the difference between assumed accuracy (per load and subject) and the accuracy 
+# per orientation of probe items
+# could maybe rename the x axis ticks to reflect the probe moved away thing better
+# this is now showing the difference in accuracy between probe away and probe towards in reference to mean accuracy in that cardinal or oblique orientation per subId
+# maybe remove the orienation specific accuracy again. Could in principle do both, if using orientation specific I am 
+# taking the oblique effect out of the equation and assuming that accuracy is the same for all orienations but different for probe direction
+
+baseline_load = (
+    df.groupby(["subID","items_presented"]) # , "dist_to_cardinal_mem"
+    ["acc_trial_concrete_cued"]
+    .mean()
+    .rename("baseline_acc")
+)
+
+groupi = (
+    df.groupby([
+        "subID",
+        "items_presented",
+        "dist_probe_to_cardinal",
+        "dist_to_cardinal_mem",
+        "probe_away_from_cardinal"
+
+
+        ])["acc_trial_concrete_cued"].mean().reset_index())
+
+groupi = groupi.merge(baseline_load, on=["subID","items_presented"]) # , "dist_to_cardinal_mem"
+
+groupi["delta_acc"] = (groupi["acc_trial_concrete_cued"] - groupi["baseline_acc"])
+
+fig, ax = plt.subplots()
+
+sns.barplot(
+    data=groupi,
+    x="dist_probe_to_cardinal",
+    y="delta_acc",
+    hue="items_presented",
+    errorbar="se",
+    ax=ax
+)
+
+# # or boxplot
+# sns.catplot(
+#     data=groupi,
+#     x="dist_probe_to_cardinal",
+#     y="acc_trial_concrete_cued",
+#     hue="items_presented",
+#     kind="box",
+#     errorbar="se",
+#     height=4,
+#     aspect=1,
+# )
+
+# 
+# ax.set_xticks(x_ticks)
+
+# cat_pos = np.arange(4)
+# extra_pos = [0.5, 2.5]
+
+# all_pos = sorted(list(cat_pos) + extra_pos)
+
+# labels = [
+#     "Towards",
+#     "11.25",        
+#     "Away",     # 19.25\n
+#     "Towards",
+#     "33.75",       
+#     "Away"
+# ]
+
+# ax.set_xticks(all_pos)
+# ax.set_xticklabels(labels)
+ax.set_xlabel("Distance of probe to closest cardinal in degree")
+ax.set_ylabel("Variation from subject mean accuracy")
+
+# x_ticks = groupi['dist_probe_to_cardinal'].unique()
+# x_ticks = [3.25, 11.25, 19.25, 25.75, 33.75, 41.75]
+# ax.set_xticks(range(len(x_ticks)))              # seaborn categorical positions
+# ax.set_xticklabels(x_ticks)
+# ax.set_xlabel("Distance to cardinal axis")
+# 
+
+# top = ax.twiny()
+# top.set_xlim(ax.get_xlim())
+# #top.set_xticks(ax.get_xticks())
+# ticklabels = ['Toward', 'Away','Toward', 'Away']
+# top.set_xticklabels([m for m in ticklabels])
+# top.set_xlabel("Direction probe relative to closest cardinal axis")
+
+plt.tight_layout()
+
+plt.show()
+
+#%%
+
+
+df_gee = df.dropna(subset=[
+    "acc_trial_concrete_cued",
+    "dist_to_cardinal_mem",
+    "probe_away_from_cardinal",
+    "items_presented",
+    "subID"
+]).copy()
+
+
+df_gee["probe_away_from_cardinal"] = df_gee["probe_away_from_cardinal"].astype(int)
+df_gee["items_presented"] = df_gee["items_presented"].astype(int)
+
+correlation = sm.cov_struct.Independence()
+
+geemodel = smf.gee(
+    "acc_trial_concrete_cued ~ C(dist_to_cardinal_mem) * probe_away_from_cardinal * C(items_presented)", # 
+    groups="subID",
+    data=df_gee,
+    family=sm.families.Binomial(),
+    cov_struct = correlation
+)
+
+model_results = geemodel.fit(cov_type='robust')
+
+model_results.summary()
+
+
+# %%
+# %%
+# Estimated Marginal Means (EMMs)
+
+# build grid
+grid = pd.DataFrame({"dist_to_cardinal_mem": [11.25, 33.75],})
+grid = grid.merge(pd.DataFrame({"probe_away_from_cardinal":[0,1]}), how="cross")
+grid = grid.merge(pd.DataFrame({"items_presented":[1,2,3]}), how="cross")
+
+
+# Get prediction from model results -> Estimated Marginal Means (EMMs)
+# predictions representing the average, expected value of a response variable for each level of a factor, adjusted for other variables
+pred = model_results.get_prediction(grid)
+sf = pred.summary_frame()  # mean, mean_se on *linear predictor* scale; plus CIs on linear scale
+
+# Combine with grid
+emms = grid.copy()
+emms["prob"] = sf["mean"]
+emms["se_prob"] = sf["mean_se"]
+emms["ci_low"] = sf["mean_ci_lower"]
+emms["ci_high"] = sf["mean_ci_upper"]
+
+
+#necessary?
+emms["dist_to_cardinal_mem"] = emms["dist_to_cardinal_mem"].astype(float)
+emms["items_presented"] = emms["items_presented"].astype(int)
+emms["probe_away_from_cardinal"] = emms["probe_away_from_cardinal"].astype(int)
+
+# full table:
+# emms:
+emms = emms.sort_values(["items_presented","dist_to_cardinal_mem","probe_away_from_cardinal"])
+
+# collapsed to look at contrasts by probe direction and distance and load with differences:
+# Create wide table by probe direction to compute differences
+dist_prob_load_emms = emms.pivot_table(
+    index=["items_presented","dist_to_cardinal_mem"],
+    columns="probe_away_from_cardinal",
+    values="prob"
+).reset_index()
+
+dist_prob_load_emms.columns = ["items_presented","dist_to_cardinal_mem","p_toward","p_away"]  # 0=toward, 1=away
+dist_prob_load_emms["diff_away_minus_toward"] = dist_prob_load_emms["p_away"] - dist_prob_load_emms["p_toward"]
+
+
+# collapsed to look at contrasts by probe direction and distancewith differences:
+dist_probe_emms = emms.pivot_table(
+    index=["dist_to_cardinal_mem"],
+    columns="probe_away_from_cardinal",
+    values="prob"
+).reset_index()
+
+dist_probe_emms.columns = ["dist_to_cardinal_mem","p_toward","p_away"]  # 0=toward, 1=away
+dist_probe_emms["diff_away_minus_toward"] = dist_probe_emms["p_away"] - dist_probe_emms["p_toward"]
+
+# collapsed to look at contrasts by probe direction and distance with differences:
+# but this time difference between cardinal and oblique orientation within pressed away category
+dist_probe_emms2 = emms.pivot_table(
+    index=["probe_away_from_cardinal"],
+    columns="dist_to_cardinal_mem",
+    values="prob"
+).reset_index()
+
+dist_probe_emms2.columns = ["probe_away_from_cardinal","11.25","33.75"]  # 0=toward, 1=away
+dist_probe_emms2["diff_near_minus_far"] = dist_probe_emms2["33.75"] - dist_probe_emms2["11.25"]
+
+# %%
+# Tests all simple effects?
+# “Does this predictor (or interaction) explain variance in accuracy in the population?”
+wald_terms = model_results.wald_test_terms(scalar=True)
+wald_terms = wald_terms.summary_frame().round(3)
+display(wald_terms)
+# all interpretations in notion
+
+# Still need Interaction specifc differences to go along with collapsed marginal means
+# Wald tests test against zero!
+# Repulsion near cardinal (because baseline) - already in wald_terms
+display(model_results.wald_test("probe_away_from_cardinal"))
+
+# repulsion at oblique () --??
+# "effect of probe moved towards the cardinal at orientation 11.25 at load 1" + intactions effect of probe moved towards cardinal at ori 33.75 and load 1?? 
+display(model_results.wald_test("probe_away_from_cardinal + C(dist_to_cardinal_mem)[T.33.75]:probe_away_from_cardinal"))
+
+# interaction, is repulsion significantly weaker/stronger when far from cardinal? - already in wald_terms
+# tests wethere the repulsion near is = to the repulsion far (or better wether slope is different from zero)
+# - Because that interaction is the difference.
+display(model_results.wald_test("C(dist_to_cardinal_mem)[T.33.75]:probe_away_from_cardinal"))
+
+# Optional
+# oblique vs cardinal (accross probe) - already in wald_terms
+display(model_results.wald_test("C(dist_to_cardinal_mem)[T.33.75] = 0"))
+
+
+
+
+# %%
+# Save somewhere else maybe
+# model_results.cov_params()
+# geemodel.groups
+# geemodel.formula
+# model_results.params
+# model_results.predict()
+# geemodel.endog_names # -> dependent variable
+# geemodel.exog_names # -> independent variable
+# geemodel.group_labels
+
+# ttest_results = model_results.t_test_pairwise(term_name='C(items_presented)')
+# ttest_results.result_frame
+
+# groups = geemodel.groups
+# model_results.cov_struct.covariance_matrix(sf, groups) # <- i think this is correct
+
+# np.exp(model_results.conf_int())[0][0]
+# np.exp(model_results.conf_int())[1][0]
+# np.exp(model_results.params)
+
+# predtr = model_results.get_prediction()
+# tr= predtr.summary_frame()
+
+
+
+
+
+#%%
+# Like t-test on coefficients
+# Wald tests to test interactions
+# testing: “Is this predictor / interaction statistically reliable?”
+# do I only test the significant coefficients??
+
+
+# is probe effect different at 33.75 than at 11.25(intercept/baseline):
+# toward vs away at far? - but at load 1??? because probe_away_from_cardinal is the baseline and is away=1
+print(model_results.wald_test("probe_away_from_cardinal + C(dist_to_cardinal_mem)[T.33.75]:probe_away_from_cardinal = 0", scalar=True))
+# toward vs away at near?
+# below doesnt work
+#print(model_results.wald_test("dist_to_cardinal_mem[T.33.75] + C(dist_to_cardinal_mem)[T.11.25]:probe_away_from_cardinal = 0"))
+
+
+
+print(model_results.wald_test("probe_away_from_cardinal + C(dist_to_cardinal_mem)[T.33.75]:C(items_presented)[T.3]"))
+
+# %%
+
+model_results.wald_test_terms("probe_away_from_cardinal + C(dist_to_cardinal_mem) + C(items_presented)[T.3]")
+
+
+#%%
+# Estimated marginal means 
+# predicted probabilities per condition and then compare them
+# tests how big the differences are
+# using the log odds (np.exp(coef)) and simply subtracting them to look at difference between conditions, do I test for significance here?
+# so basically the same as my previous tests but on the predicted means by the model?
+# %%
+plt.figure()
+#sns.barplot(emms, x='dist_to_cardinal_mem', y='prob', hue='probe_away_from_cardinal')
+
+#sns.barplot(dist_prob_load_emms, x='dist_to_cardinal_mem', y='diff_away_minus_toward', hue='items_presented')
+
+sns.lineplot(emms, x='dist_to_cardinal_mem', y='prob', hue='probe_away_from_cardinal', style='items_presented')
+plt.show()
+
+# %%

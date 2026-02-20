@@ -394,6 +394,7 @@ def paired_t(X1, X2):
 
 
 # Run paired-samples cluster t-test
+# probably needs to be 1samp cluster test instead
 T_obs_acc, clusters_acc, pvals_acc, H0_acc = permutation_cluster_test(
     [Xc, Xf],
     n_permutations=5000,

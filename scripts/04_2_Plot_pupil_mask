@@ -26,119 +26,266 @@ nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
 
 evoked_df_shifted = pd.read_csv('../data/csv_files/evoked_df_shifted.csv')
 
+evoked_df_shifted["time"] = evoked_df_shifted["time"].round(3)
+# then use x="time_r" in the helper + lineplot, and marker times as exact values
 
 # Z-score within each subject (across all times and trials)
-evoked_df_shifted['pupils'] = evoked_df_shifted.groupby('subID')['pupils'].transform(
+evoked_df_shifted['pupils_z'] = evoked_df_shifted.groupby('subID')['pupils'].transform(
     lambda x: zscore(x, nan_policy='omit')
 )
 # an evoked where I used the full time of the encoding period until delay (differing lengths for load conditions) as the baseline
-evoked_df_shifted_full_trial_bl = pd.read_csv('../data/csv_files/evoked_df_shifted_full_trial_bl.csv')
+#evoked_df_shifted_full_trial_bl = pd.read_csv('../data/csv_files/evoked_df_shifted_full_trial_bl.csv')
 
 # %%
 # Subsample of only participants without time issue
-evoked_df_no_time_partis_shifted = pd.read_csv('../data/csv_files/evoked_df_no_time_partis_shifted.csv')
+#evoked_df_no_time_partis_shifted = pd.read_csv('../data/csv_files/evoked_df_no_time_partis_shifted.csv')
+
+#%%
+marker_times = {
+    1: [2],
+    2: [1, 2],
+    3: [0, 1, 2]
+}
+
+def add_load_markers(ax, data, x="time", y="pupils_z", hue="Load"):
+
+    # Get line colors (for circle fills)
+    handles, labels = ax.get_legend_handles_labels()
+    color_map = {}
+    for h, lab in zip(handles, labels):
+        try:
+            key = int(lab)
+        except ValueError:
+            key = lab
+        color_map[key] = h.get_color()
+
+    # Mean timecourse
+    m = data.groupby([hue, x], as_index=False)[y].mean()
+
+    for load, times in marker_times.items():
+
+        mm = m[m[hue].eq(load) & m[x].isin(times)]
+
+        for i, (_, row) in enumerate(mm.iterrows(), start=1):
+
+            # Circle (Load color)
+            ax.scatter(
+                row[x], row[y],
+                s=160,
+                marker="o",
+                color=colors_load[i-1],
+                edgecolor="white",
+                linewidth=1,
+                zorder=10
+            )
+
+            # Number (position color)
+            ax.text(
+                row[x], row[y],
+                str(i),
+                color="white",
+                ha="center",
+                va="center",
+                fontsize=9,
+                weight="bold",
+                zorder=11
+            )
+
 
 # %% 
-
+colors_load = sns.color_palette("flare", 3)
 with sns.plotting_context(context='paper', font_scale=1.5): 
     
-    # fig, ax = plt.subplots(figsize=(10,8))
-
-    # #sns.lineplot(data=evoked_df_pos1_interpol_shifted[evoked_df_pos1_interpol_shifted['subID'].isin(no_time_partis)], hue='Load', palette='crest', x='time', y='pupils',  errorbar='se', ax=ax, legend='full') 
-    # sns.lineplot(data=evoked_df_pos1_interpol_shifted[evoked_df_pos1_interpol_shifted['subID'].isin(mask_partis)], hue='Load', palette='crest', x='time', y='pupils',  errorbar='se', ax=ax, legend='full') 
-    # sns.lineplot(data=evoked_df_pos1_interpol_shifted[evoked_df_pos1_interpol_shifted['subID'].isin(nomask_partis)], hue='Load',x='time', y='pupils', errorbar='se', ax=ax)
-    # sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
-    
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8), sharey=True)
-
+    markers_on = [0, 1, 2]
     # Plot for participants WITH mask (Left Plot)
+    mask_data = evoked_df_shifted[evoked_df_shifted["subID"].isin(mask_partis)]
     sns.lineplot(
-        data=evoked_df_shifted_full_trial_bl[evoked_df_shifted_full_trial_bl['subID'].isin(mask_partis)], 
-        hue='Load', palette='crest', x='time', y='pupils',  
-        errorbar='se', ax=ax1,
+        data=mask_data, 
+        hue='Load', x='time', y='pupils_z',  
+        errorbar='se', ax=ax1, palette=colors_load
     )
-    ax1.set_title('Masked Participants', y=1.2, fontsize=16)
+    
+    add_load_markers(ax1, mask_data)
+
     sns.despine(ax=ax1)
 
-    ax1.axvline(0, color='black', alpha=0.33)
-    ax1.axvline(1, color='black', alpha=0.66)
-    ax1.axvline(2, color='black')  
-    ax1.axvline(3, color='darkblue')  
-    ax1.axvline(6.5, color='blue')  
-
-    # Define y-coordinate for labels (as a fraction of the plot height)
-    label_y = 1.05
-
-    # Add labels above the vertical lines
-    ax1.text(0, ax1.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
-    ax1.text(1, ax1.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
-    ax1.text(2, ax1.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
-    ax1.text(3, ax1.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
-    ax1.text(6.5, ax1.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
-
-
     # Plot for participants WITHOUT mask (Right Plot)
+    nomask_data = evoked_df_shifted[evoked_df_shifted["subID"].isin(nomask_partis)]
     sns.lineplot(
-        data=evoked_df_shifted_full_trial_bl[evoked_df_shifted_full_trial_bl['subID'].isin(nomask_partis)], 
-        hue='Load', x='time', y='pupils', 
-        errorbar='se', ax=ax2, legend='full'
+        data=nomask_data, 
+        hue='Load', x='time', y='pupils_z', 
+        errorbar='se', ax=ax2, legend='full', palette=colors_load
     )
-    ax2.set_title('Non-Masked Participants', y=1.2, fontsize=16)
+    add_load_markers(ax2, nomask_data)
+    
     sns.despine(ax=ax2)
 
-    ax2.axvline(0, color='black', alpha=0.33)
-    ax2.axvline(1, color='black', alpha=0.66)
-    ax2.axvline(2, color='black')  
-    ax2.axvline(3, color='darkblue')  
-    ax2.axvline(6.5, color='blue')  
+    # Add mask time
+    ax1.axvspan(3, 3.1, color='blue', alpha=0.15)
+    ax1.text(3, 1.1, "mask \ndisplay", color='blue', alpha=0.5, fontsize=10)
 
-    # Define y-coordinate for labels (as a fraction of the plot height)
-    label_y = 1.05
-
-    # Add labels above the vertical lines
-    ax2.text(0, ax2.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
-    ax2.text(1, ax2.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
-    ax2.text(2, ax2.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
-    ax2.text(3, ax2.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
-    ax2.text(6.5, ax2.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
-
-
-    # Highlighting the baseline window
-    # baseline = (evoked_df_shifted.at[0, 'baseline_start'], evoked_df_shifted.at[0, 'baseline_end'])
-    # baseline_str = '_'.join(map(str, baseline))
-    # Include window that was used for the baseline
-    # maybe remove here because misleading with shifted data
-    # ax.axvspan(baseline[0], baseline[1], ymin=0, ymax=1, color='blue', alpha=0.4)
-
-    # alpha = 0.05
-    # for _, row in cluster_results_mask_vs_nomask.iterrows():
-    #     if row['p_value'] < alpha:
-    #         ax1.axvspan(row['start_time'], row['end_time'], color='red', alpha=0.15)
-    #         ax2.axvspan(row['start_time'], row['end_time'], color='red', alpha=0.15)
-
+    # Add probe
+    ylim = ax1.get_ylim()[1] 
+    ax1.axvline(3, color='black', alpha=0.5)
+    ax1.axvline(6.5, color='black', alpha=0.5)
+    ax2.axvline(3, color='black', alpha=0.5)
+    ax2.axvline(6.5, color='black', alpha=0.5)
+    
 
     # Set x-axis to show all whole numbers within range
     x_ticks = np.arange(int(evoked_df_shifted['time'].min()), int(evoked_df_shifted['time'].max()) + 1, 1)
     ax2.set_xticks(x_ticks)
     ax2.set_xticklabels(x_ticks)
+    ax1.set_xticks(x_ticks)
+    ax1.set_xticklabels(x_ticks)
+
+    ax1.set_title('Mask', y=1.1, fontsize=16)
+    ax2.set_title('No mask', y=1.1, fontsize=16)
+
+    ax1.set_ylabel('pupil size (z-scored)')
+    ax1.set_xlabel('time (s)')
+    ax2.set_xlabel('time (s)')
 
     # Increase font size of x and y tick labels
     ax2.tick_params(axis='x', labelsize=14)
     ax2.tick_params(axis='y', labelsize=14)
 
+    ax1.autoscale(enable=True, axis='y', tight=True)
+    ax2.autoscale(enable=True, axis='y', tight=True)
+
+    ax1.text(1.3, 2.3, "encoding", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax1.text(6.5+1.3, 2.3, "probe", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax1.text(3+1.75, 2.3, "delay", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax1.axhspan(2.25, 2.4, transform=ax1.transAxes, color='gray', alpha=0.15, clip_on=False)
+
+    ax2.text(1.3, 2.3, "encoding", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax2.text(6.5+1.3, 2.3, "probe", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax2.text(3+1.75, 2.3, "delay", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax2.axhspan(2.25, 2.4, transform=ax1.transAxes,  color='gray', alpha=0.15, clip_on=False)
     # Adding a title
-    plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize = 20)
+    # plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize = 20)
     # plt.title(f'Applied baseline {baseline}', y=1.25, color='blue', alpha=0.4)
     
     #Adding a legend
+    plt.legend()
     ax1.legend(loc='lower right', fontsize=12)
     ax2.legend(loc='lower right', fontsize=12)
 
 
     # Save the figure
-    # name=f"pupil_fig_pos1_interpol_shifted_bl{baseline_str}_mask_vs_nomask2.png"
-    # figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures'
-    # figure_filepath = os.path.join(figures_folder, name)
+    name=f"pupil_load_mask_vs_nomask.png"
+    figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures'
+    figure_filepath = os.path.join(figures_folder, name)
 
-    # plt.savefig(figure_filepath, bbox_inches = 'tight')
+    plt.savefig(figure_filepath, bbox_inches = 'tight')
+
+
+# %%
+# colors_load = sns.color_palette("flare", 3)
+# with sns.plotting_context(context='paper', font_scale=1.5): 
+    
+#     # fig, ax = plt.subplots(figsize=(10,8))
+
+#     # #sns.lineplot(data=evoked_df_pos1_interpol_shifted[evoked_df_pos1_interpol_shifted['subID'].isin(no_time_partis)], hue='Load', palette='crest', x='time', y='pupils',  errorbar='se', ax=ax, legend='full') 
+#     # sns.lineplot(data=evoked_df_pos1_interpol_shifted[evoked_df_pos1_interpol_shifted['subID'].isin(mask_partis)], hue='Load', palette='crest', x='time', y='pupils',  errorbar='se', ax=ax, legend='full') 
+#     # sns.lineplot(data=evoked_df_pos1_interpol_shifted[evoked_df_pos1_interpol_shifted['subID'].isin(nomask_partis)], hue='Load',x='time', y='pupils', errorbar='se', ax=ax)
+#     # sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
+    
+#     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8), sharey=True)
+#     markers_on = [0, 1, 2]
+#     # Plot for participants WITH mask (Left Plot)
+#     mask_data = evoked_df_shifted[evoked_df_shifted["subID"].isin(mask_partis)]
+#     sns.lineplot(
+#         data=mask_data, 
+#         hue='Load', x='time', y='pupils_z',  
+#         errorbar='se', ax=ax1, palette=colors_load
+#     )
+#     ax1.set_title('Masked Participants', y=1.2, fontsize=16)
+    
+
+#     sns.despine(ax=ax1)
+
+#     ax1.axvline(0, color='black', alpha=0.33)
+#     ax1.axvline(1, color='black', alpha=0.66)
+#     ax1.axvline(2, color='black')  
+#     ax1.axvline(3, color='darkblue')  
+#     ax1.axvline(6.5, color='blue')  
+
+#     # # Define y-coordinate for labels (as a fraction of the plot height)
+#     label_y = 1.05
+
+#     # # Add labels above the vertical lines
+#     ax1.text(0, ax1.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+#     ax1.text(1, ax1.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+#     ax1.text(2, ax1.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+#     ax1.text(3, ax1.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+#     ax1.text(6.5, ax1.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+
+
+#     # Plot for participants WITHOUT mask (Right Plot)
+#     nomask_data = evoked_df_shifted[evoked_df_shifted["subID"].isin(nomask_partis)]
+#     sns.lineplot(
+#         data=nomask_data, 
+#         hue='Load', x='time', y='pupils_z', 
+#         errorbar='se', ax=ax2, legend='full', palette=colors_load
+#     )
+    
+#     ax2.set_title('Non-Masked Participants', y=1.2, fontsize=16)
+#     sns.despine(ax=ax2)
+
+#     ax2.axvline(0, color='black', alpha=0.33)
+#     ax2.axvline(1, color='black', alpha=0.66)
+#     ax2.axvline(2, color='black')  
+#     ax2.axvline(3, color='darkblue')  
+#     ax2.axvline(6.5, color='blue')  
+
+#     # # Define y-coordinate for labels (as a fraction of the plot height)
+#     label_y = 1.05
+
+#     # # Add labels above the vertical lines
+#     ax2.text(0, ax2.get_ylim()[1] * label_y, "object position 1", color='black', alpha=0.33, fontsize=10, ha='center', rotation=45)
+#     ax2.text(1, ax2.get_ylim()[1] * label_y, "object position 2", color='black', alpha=0.66, fontsize=10, ha='center', rotation=45)
+#     ax2.text(2, ax2.get_ylim()[1] * label_y, "object position 3", color='black', fontsize=10, ha='center', rotation=45)
+#     ax2.text(3, ax2.get_ylim()[1] * label_y, "onset delay", color='darkblue', fontsize=10, ha='center', rotation=45)
+#     ax2.text(6.5, ax2.get_ylim()[1] * label_y, "onset probe object", color='blue', fontsize=10, ha='center', rotation=45)
+
+
+#     # Highlighting the baseline window'
+#     # baseline = (evoked_df_shifted.at[0, 'baseline_start'], evoked_df_shifted.at[0, 'baseline_end'])
+#     # baseline_str = '_'.join(map(str, baseline))
+#     # Include window that was used for the baseline
+#     # maybe remove here because misleading with shifted data
+#     # ax.axvspan(baseline[0], baseline[1], ymin=0, ymax=1, color='blue', alpha=0.4)
+
+
+#     ax1.axvspan(3, 3.1, color='blue', alpha=0.15)
+
+
+#     # Set x-axis to show all whole numbers within range
+#     x_ticks = np.arange(int(evoked_df_shifted['time'].min()), int(evoked_df_shifted['time'].max()) + 1, 1)
+#     ax2.set_xticks(x_ticks)
+#     ax2.set_xticklabels(x_ticks)
+#     ax1.set_xticks(x_ticks)
+#     ax1.set_xticklabels(x_ticks)
+
+#     # Increase font size of x and y tick labels
+#     ax2.tick_params(axis='x', labelsize=14)
+#     ax2.tick_params(axis='y', labelsize=14)
+
+#     # Adding a title
+#     plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize = 20)
+#     # plt.title(f'Applied baseline {baseline}', y=1.25, color='blue', alpha=0.4)
+    
+#     #Adding a legend
+#     ax1.legend(loc='lower right', fontsize=12)
+#     ax2.legend(loc='lower right', fontsize=12)
+
+
+#     # Save the figure
+#     # name=f"pupil_fig_pos1_interpol_shifted_bl{baseline_str}_mask_vs_nomask2.png"
+#     # figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures'
+#     # figure_filepath = os.path.join(figures_folder, name)
+
+#     # plt.savefig(figure_filepath, bbox_inches = 'tight')
 # %%

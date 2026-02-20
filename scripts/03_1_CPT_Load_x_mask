@@ -122,11 +122,13 @@ X2 = X2_df[common_times].values
 # not for f-test
 n1 = X1.shape[0]
 n2 = X2.shape[0]
+# Because we conduct a two-tailed test, we divide the p-value by 2 (which means
+# we're making use of both tails of the distribution).
 tcrit = t.ppf(1 - 0.025, df = (n1+n2-2))
 
 T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
     [X1, X2],
-    n_permutations=10000, # using 10000 here because close to 0.05
+    n_permutations=5000, # using 10000 here because close to 0.05
     threshold=tcrit,        
     tail=0,               # 0 = two-tailed (direction of effect could go either way), tail=0 is ignored on f-test, needs to be one-tailed
     stat_fun=independent_t,
@@ -212,9 +214,9 @@ df_post['time'] = df_post['time'].round(3)
 df_m = df_post
 
 # Build subject×time tables per load
-P1 = df_m[df_m['Load'] == 1].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-P2 = df_m[df_m['Load'] == 2].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-P3 = df_m[df_m['Load'] == 3].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+P1 = df_m[df_m['Load'] == 1].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+P2 = df_m[df_m['Load'] == 2].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+P3 = df_m[df_m['Load'] == 3].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
 
 # Align subjects and timepoints across ALL three loads (within-subjects!)
 common_subs  = P1.index.intersection(P2.index).intersection(P3.index)
@@ -234,6 +236,8 @@ X_lin = w[0]*X1 + w[1]*X2 + w[2]*X3   # shape (n_sub × n_time)
 
 # Cluster test vs 0
 n_sub = X_lin.shape[0]
+# Because we conduct a two-tailed test, we divide the p-value by 2 (which means
+# we're making use of both tails of the distribution).
 tcrit = t.ppf(1 - 0.025, df=n_sub-1)
 
 T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
@@ -318,9 +322,9 @@ rng = np.random.default_rng(42)
 df = delay_time_window.copy()
 df['time'] = df['time'].round(3)
 
-X1_df = df[df['Load'] == 1].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-X2_df = df[df['Load'] == 2].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-X3_df = df[df['Load'] == 3].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+X1_df = df[df['Load'] == 1].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+X2_df = df[df['Load'] == 2].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+X3_df = df[df['Load'] == 3].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
 
 common_subs  = X1_df.index.intersection(X2_df.index).intersection(X3_df.index)
 common_times = X1_df.columns.intersection(X2_df.columns).intersection(X3_df.columns)
@@ -453,31 +457,26 @@ plt.tight_layout()
 plt.show()
 
 # %%
-# 2.2 Load conditions main effect/post-hoc pairwise comparison cluster tests ---
+# 2.3 Load conditions main effect/post-hoc pairwise comparison cluster tests ---
 # fixed, now using permutation_cluster_1samp_test for within subjects design, which uses t-test against zero under
 # the hood to test whether the mean differences between conditions are different from zero across subjects
 # mathematically equivalent to ttest_rel, subtraction for difference curve just happens internally with ttest_rel
 # either use this or finicky self written omnibus f-test or linear contrast test
 # 
-
-
 # Safety copy and ensure common time grid
 df_post = delay_time_window.copy()
-df_post['time'] = df_post['time'].round(3)
 
 alpha = 0.05
 n_perm = 5000
 
 all_rows = []  # to collect summaries across both mask groups
 
-
-print(f"\n=== Post-hoc Load tests ===")
 df_m = df_post
 
 # Build subject×time tables per load
-P1 = df_m[df_m['Load'] == 1].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-P2 = df_m[df_m['Load'] == 2].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-P3 = df_m[df_m['Load'] == 3].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+P1 = df_m[df_m['Load'] == 1].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+P2 = df_m[df_m['Load'] == 2].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+P3 = df_m[df_m['Load'] == 3].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
 
 # Align subjects and timepoints across ALL three loads (within-subjects!)
 common_subs  = P1.index.intersection(P2.index).intersection(P3.index)
@@ -508,6 +507,8 @@ pairs = {
 for label, (XA, XB) in pairs.items():
     Xdiff = XA - XB                       # (n_subjects, n_times)
     n_sub = Xdiff.shape[0]
+    # Because we conduct a two-tailed test, we divide the p-value by 2 (which means
+    # we're making use of both tails of the distribution).
     tcrit = t.ppf(1 - 0.025, df=n_sub - 1)  # two-tailed cluster-forming threshold
 
     T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
@@ -605,7 +606,7 @@ posthoc_df = pd.DataFrame(all_rows).sort_values(["contrast","start_time"]).reset
 display(posthoc_df if not posthoc_df.empty else "No significant post-hoc clusters.")
 
 #%%
-# 2.3 - Load Conditions (seperated by mask)
+# 2.4 - Load Conditions (seperated by mask)
 # pairwise cluster tests for Load, split by mask ---
 
 # also fixed, using permutation_cluster_1samp_test instead now
@@ -628,9 +629,9 @@ for mask in [0, 1]:
     df_m = df_post[df_post['mask'] == mask]
 
     # Build subject×time tables per load
-    P1 = df_m[df_m['Load'] == 1].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-    P2 = df_m[df_m['Load'] == 2].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
-    P3 = df_m[df_m['Load'] == 3].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean')
+    P1 = df_m[df_m['Load'] == 1].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+    P2 = df_m[df_m['Load'] == 2].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+    P3 = df_m[df_m['Load'] == 3].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
 
     # Align subjects and timepoints across ALL three loads (within-subjects!)
     common_subs  = P1.index.intersection(P2.index).intersection(P3.index)
@@ -659,6 +660,8 @@ for mask in [0, 1]:
     for label, (XA, XB) in pairs.items():
         Xdiff = XA - XB                       # (n_subjects, n_times)
         n_sub = Xdiff.shape[0]
+        # Because we conduct a two-tailed test, we divide the p-value by 2 (which means
+        # we're making use of both tails of the distribution).
         tcrit = t.ppf(1 - 0.025, df=n_sub - 1)  # two-tailed cluster-forming threshold
 
         T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
@@ -756,12 +759,8 @@ posthoc_df = pd.DataFrame(all_rows).sort_values(["mask","contrast","start_time"]
 
 display(posthoc_df if not posthoc_df.empty else "No significant post-hoc clusters.")
 
-
-
-
-
 # %%
-# Mask x Load interaction
+# 2.5 Mask x Load interaction
 # contrast-based interaction cluster test (Mask × Load)
 
 # the linear trend in this case is the same as a high-low contrast (L3 - L1) in my case (but wouldn't if there were four or more levels)
@@ -795,9 +794,9 @@ for mask_val in [0, 1]:
     df_m = delay_time_window_copy[delay_time_window_copy['mask'] == mask_val]
 
     # Build per-load subject×time tables (aggregate duplicates at same time!)
-    P1 = (df_m[df_m['Load'] == 1].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean'))
-    P2 = (df_m[df_m['Load'] == 2].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean'))
-    P3 = (df_m[df_m['Load'] == 3].pivot_table(index='subID', columns='time', values='pupils', aggfunc='mean'))
+    P1 = (df_m[df_m['Load'] == 1].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean'))
+    P2 = (df_m[df_m['Load'] == 2].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean'))
+    P3 = (df_m[df_m['Load'] == 3].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean'))
 
     # Align subjects & timepoints WITHIN this mask group (within-subject contrast)
     common_subs  = P1.index.intersection(P2.index).intersection(P3.index)
@@ -837,6 +836,8 @@ print(f"[Interaction via Load contrast] n_no={C_no.shape[0]}, n_mask={C_mask.sha
 
 n1 = C_no.shape[0]
 n2 = C_mask.shape[0]
+# Because we conduct a two-tailed test, we divide the p-value by 2 (which means
+# we're making use of both tails of the distribution).
 tcrit = t.ppf(1 - 0.025, df = (n1+n2-2))
 # -------------------------------------------------------------------
 # Cluster permutation test: Does the Load contrast differ by Mask?
@@ -935,57 +936,8 @@ plt.tight_layout()
 plt.show()
 
 
-
 # %%
-# The below seems to simply correlate mean accuracy per participant with their mean pupil size during delay
-
-# Example: mean pupil in Load 3 delay window per subject
-mean_pupil = X3.mean(axis=1)   # (n_sub,)
-mean_pupil = delay_time_window[delay_time_window['mask'] == 0]
-# Example: subject accuracy in Load 3
-sub_acc = df[df['items_presented']==3].groupby('subID')['acc_trial_concrete_cued'].mean().loc[common_subs]
-
-# Correlation
-r, p = stats.pearsonr(mean_pupil, sub_acc)
-print(f"Correlation (Load 3): r={r:.2f}, p={p:.3f}")
-
-
-
-# %%
-# Example: mean pupil in Load 3 delay window per subject
-mean_pupil = X2.mean(axis=1)   # (n_sub,)
-
-# Example: subject accuracy in Load 3
-sub_acc = df[df['items_presented']==2].groupby('subID')['acc_trial_concrete_cued'].mean().loc[common_subs]
-
-# Correlation
-r, p = stats.pearsonr(mean_pupil, sub_acc)
-print(f"Correlation (Load 2): r={r:.2f}, p={p:.3f}")
-# %%
-# Example: mean pupil in Load 3 delay window per subject
-mean_pupil = X1.mean(axis=1)   # (n_sub,)
-
-# Example: subject accuracy in Load 3
-sub_acc = df[df['items_presented']==1].groupby('subID')['acc_trial_concrete_cued'].mean().loc[common_subs]
-
-# Correlation
-r, p = stats.pearsonr(mean_pupil, sub_acc)
-print(f"Correlation (Load 1): r={r:.2f}, p={p:.3f}")
-# %%
-# %%
-# mean pupil dilation on only accurate trials
-mean_pupil = X1.mean(axis=1)   # (n_sub,)
-
-# Example: subject accuracy in Load 3
-sub_acc = df[(df['items_presented']==1) & (df['items_presented']==1)].groupby('subID')['acc_trial_concrete_cued'].mean().loc[common_subs]
-
-# Correlation
-r, p = stats.pearsonr(mean_pupil, sub_acc)
-print(f"Correlation (Load 1): r={r:.2f}, p={p:.3f}")
-
-
-# %%
-
+# seperated_con_difs_df is from cardinal repulsion, difference score for cardinal repulsion
 seperated_con_difs_df = pd.read_csv('../data/csv_files/seperated_con_difs_df.csv')
 mbp_con1 = seperated_con_difs_df[seperated_con_difs_df['items_presented'] == 1]
 mbp_con2 = seperated_con_difs_df[seperated_con_difs_df['items_presented'] == 2]

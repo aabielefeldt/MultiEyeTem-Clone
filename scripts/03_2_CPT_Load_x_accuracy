@@ -19,18 +19,7 @@ evoked_df_accuracy = pd.read_csv('../data/csv_files/evoked_df_accuracy.csv')
 # %%
 # Data Preparation 
 
-median_acc = df.groupby(['subID'])['acc_trial_concrete_cued'].mean().median()
-median_acc
-all = df.groupby(['subID'])['acc_trial_concrete_cued'].mean()
-group_good = all[all>median_acc].index
-group_bad = all[all<=median_acc].index
-
 evoked_df_acc = evoked_df_accuracy_shifted.copy()
-
-evoked_df_acc['acc_group'] = evoked_df_acc['subID'].apply(
-    lambda x: 'high' if x in group_good else 'low')
-
-
 
 evoked_df_acc['time'] = evoked_df_acc['time'].round(3)
 
@@ -43,16 +32,9 @@ delay_time_window = evoked_df_acc[(evoked_df_acc['time'] >= start_time) & (evoke
 delay_time_window['pupils_z'] = delay_time_window.groupby('subID')['pupils'].transform(lambda x: zscore(x, nan_policy='omit'))
 
 # %%
-# defining t-test statistic
+# parameters
 
-def paired_t(X1, X2):
-    t_vals, _ = stats.ttest_rel(X1, X2, axis=0)
-    return t_vals
-
-def independent_t(X1, X2):
-    t_vals, _ = stats.ttest_ind(X1, X2, axis=0, equal_var=True)  # equal_var=False = Welch’s t-test vs equal_var=True -> pooled-variance t-test (Student’s t), use Welch only when groups are very unequal
-    return t_vals
-
+n_perm = 5000
 seed = 42
 
 # %%
@@ -68,14 +50,13 @@ seed = 42
 
 # Safety copy and ensure common time grid
 df_post = delay_time_window.copy()
-df_post['time'] = df_post['time'].round(3)
 
 alpha = 0.05
-n_perm = 5000
 
 all_rows = []  # to collect summaries across both mask groups
 
 # Subset the data
+
 df_correct = delay_time_window[delay_time_window['accuracy'] == 'correct']
 df_false = delay_time_window[delay_time_window['accuracy'] == 'false']
 
@@ -104,6 +85,8 @@ print("Aligned shapes:", X1.shape, X2.shape)  # (n_subjects, n_times)
 
 Xdiff = X2 - X1                       # (n_subjects, n_times)
 n_sub = Xdiff.shape[0]
+# Because we conduct a two-tailed test, we divide the p-value by 2 (which means
+# we're making use of both tails of the distribution).
 tcrit = t.ppf(1 - 0.025, df=n_sub - 1)  # two-tailed cluster-forming threshold
 
 T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
@@ -249,6 +232,8 @@ trend_I = w[0]*I1 + w[1]*I2 + w[2]*I3
 X = (trend_C - trend_I)                  # (n_sub × n_time)
 
 n = X.shape[0]
+# Because we conduct a two-tailed test, we divide the p-value by 2 (which means
+# we're making use of both tails of the distribution).
 threshold = t.ppf(1 - 0.025, df=n-1)
 
 # 1-sample cluster permutation test vs 0
@@ -373,6 +358,8 @@ for load in [1, 2, 3]:
 
     Xdiff = X2 - X1                       # (n_subjects, n_times)
     n_sub = Xdiff.shape[0]
+    # Because we conduct a two-tailed test, we divide the p-value by 2 (which means
+    # we're making use of both tails of the distribution).
     tcrit = t.ppf(1 - 0.025, df=n_sub - 1)  # two-tailed cluster-forming threshold
 
     # Run cluster-based permutation test
@@ -434,9 +421,6 @@ for load in [1, 2, 3]:
 
 
 # %%
-# Main effect of load but only on correct trials
-# maybe redundant
-
 # One-sample cluster test on a planned contrast.
 # a linear trend contrast cluster test against zero.
 # “Is the average difference between high and low load (per subject) reliably non-zero?” - answer no, there is a reliable difference
@@ -445,120 +429,8 @@ for load in [1, 2, 3]:
 
 # the difference between load conditions is reliably non-zero for only correct as well as 
 # for only false trials, however the effect was slightly bigger and more significant for correct trials
-df_post = delay_time_window.copy()
-df_post['time'] = df_post['time'].round(3)
-
-df_correct = df_post[df_post['accuracy'] == 'false']
-
-# Build subject×time tables per load
-P1 = df_correct[df_correct['Load'] == 1].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
-P2 = df_correct[df_correct['Load'] == 2].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
-P3 = df_correct[df_correct['Load'] == 3].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
-
-# Align subjects and timepoints across ALL three loads (within-subjects!)
-common_subs  = P1.index.intersection(P2.index).intersection(P3.index)
-common_times = P1.columns.intersection(P2.columns).intersection(P3.columns)
-common_times = np.array(sorted(common_times))
-
-X1 = P1.loc[common_subs, common_times].to_numpy()
-X2 = P2.loc[common_subs, common_times].to_numpy()
-X3 = P3.loc[common_subs, common_times].to_numpy()
-times = common_times
-
-# X1, X2, X3 already aligned: (subjects × time)
-w = np.array([-1, 0, 1])  # linear contrast weights
-
-# Compute per-subject contrast time series
-X_lin = w[0]*X1 + w[1]*X2 + w[2]*X3   # shape (n_sub × n_time)
-
-# Cluster test vs 0
-n_sub = X_lin.shape[0]
-tcrit = t.ppf(1 - 0.025, df=n_sub-1)
-
-T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
-    X_lin,
-    threshold=tcrit,
-    n_permutations=5000,
-    tail=0,         # two-tailed
-    seed=seed,
-    out_type='mask'
-)
-
-print(clusters)
-print(cluster_p_values)
-
-alpha = 0.05
-rows = []
-for i_c, c in enumerate(clusters):
-    p = float(cluster_p_values[i_c])
-    if p < alpha:
-        # c is a boolean mask (out_type='mask'); if it's a slice tuple, adapt accordingly
-        if isinstance(c, np.ndarray):
-            idx = np.flatnonzero(c)
-        else:
-            idx = np.arange(len(times))[c]
-
-        if idx.size == 0:
-            continue
+#####
 
 
-        start_t = float(times[idx[0]])
-        end_t   = float(times[idx[-1]])
-        mean_t  = float(np.mean(T_obs[idx]))
-        dur     = int(idx.size)
 
-        rows.append({
-            "effect": "linear trend",
-            "cluster_id": int(i_c + 1),
-            "start_time": start_t,
-            "end_time": end_t,
-            "duration_samps": dur,
-            "p_value": p,
-            "mean_t": mean_t,
-            "n_subjects": int(X_lin.shape[0]),
-        })
-
-summary = pd.DataFrame(rows).reset_index(drop=True)
-display(summary)
-# summary.to_csv("clusters_LoadxAccuracy_linearTrend_interaction_FIXED.csv", index=False)
-
-        
-# Plot t-curve with correctly shaded clusters
-plt.figure(figsize=(10,5))
-plt.plot(times, T_obs, label='t (load trend)')
-plt.axhline(0, color='k', linestyle=':', linewidth=0.8)
-
-for i_c, c in enumerate(clusters):
-    if cluster_p_values[i_c] < alpha:
-        if isinstance(c, np.ndarray):
-            idx = np.flatnonzero(c)
-        else:
-            idx = np.arange(len(times))[c]
-        plt.axvspan(float(times[idx[0]]), float(times[idx[-1]]), color='red', alpha=0.3)
-
-plt.xlabel("Time (s)")
-plt.ylabel("t") 
-plt.title("Linear trend of load effect")
-plt.tight_layout()
-plt.show()
-
-# %%
-# could try to median split high-accuracy and low-accuracy subIDs
-
-
-##########
-
-# using t-test (student's t) because more intepretable than f-test, using tcrit caluclated from function, two-tailed (tail=0), seed=42 to make result reproducible (42 is convention[meaning of life])
-# should all be correct
-
-# looks like mask is more of an influence in the low performing group, unequal number of 
-# subIDs with mask in low and high group
-# so this analysis probably doesn't make sense
-# df_maskuracy= df.groupby(['subID', 'mask'])['acc_trial_concrete_cued'].mean().reset_index()
-# df_maskuracy['acc_group'] = df_maskuracy['subID'].apply(
-#     lambda x: 'high' if x in group_good else 'low')
-# df_maskuracy.sort_values('acc_group')
-
-# deleted the actual test but should probably make a note of the idea somewhere
-
-# %%
+    

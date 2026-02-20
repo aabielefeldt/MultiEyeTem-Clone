@@ -2,13 +2,23 @@
 {
   "search.exclude": {
     "**/data/**": true,
+    "**/figures/**": true,
+    "**/csv_files/**": true,
     "**/.git/**": true,
     "**/.conda/**": true
   },
 
   "files.watcherExclude": {
     "**/data/**": true,
+    "**/figures/**": true,
+    "**/csv_files/**": true,
     "**/.git/**": true,
     "**/.conda/**": true
-  }
+  },
+
+
+  "python.languageServer": "Pylance",
+  "python.analysis.diagnosticMode": "openFilesOnly"
+  
 }
+

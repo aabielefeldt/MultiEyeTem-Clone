@@ -38,7 +38,7 @@ for i in good_partis:
 # mask_data = df.loc[df['mask'] == 1, 'acc_trial_concrete_cued']
 # nomask_data = df.loc[df['mask'] == 0, 'acc_trial_concrete_cued']
 
-
+# independent ttest
 result_df = pg.ttest(mask_data, no_mask_data, correction=False) #correction=False uses students t instead of welch
 display(result_df)
 
@@ -62,6 +62,7 @@ else:
 # Note: doublecheck wether the specified degrees are consistent with the actual upright position of object during the experiment
 # Note: are these the correct specifications for the degrees now? (90 - 270 & 270 - 90) - mind the vertical OR line
 # Note: the length of the data of upright shown items is different from the length of the data of upside down shown items, they add up to the total though. Why?
+# this would be true only if 90° was shown at the top
 
 results = []
 
@@ -97,7 +98,7 @@ display(mean_upsidedown2)
 # display(upright_df)
 
 # Perform paired t-test using pingouin
-ttest_result = pg.ttest(upright_df['mean_upright'], upright_df['mean_upside_down'])
+ttest_result = pg.ttest(upright_df['mean_upright'], upright_df['mean_upside_down'], paired=True)
 
 # Print the t-test result
 display(ttest_result)
@@ -206,9 +207,8 @@ for i in good_partis:
 results_acc_con = pd.concat(results)
 display(results_acc_con.round(4))
 
-##### !!!! Doesnt this need to be pg.rm_anova  - repeated measures? 
 # Pingouin ANOVA
-anova_result_acc_items = pg.anova(data=results_acc_con, dv='acc_trial_concrete_cued', between='items_presented')
+anova_result_acc_items = pg.rm_anova(data=results_acc_con, dv='acc_trial_concrete_cued', within='items_presented', subject='subID') 
 display(anova_result_acc_items.round(4))
 
 # Define the significance level (alpha)
@@ -316,11 +316,12 @@ print('The R2 of the model is 0.034 and the adjusted R2 is 0.033, which means th
 #  
 ########
 
+
 # mean per condition exactly the same as in previous version without collapsing by participant first. does that make sense?
 mean_per_con = df.groupby(['items_presented', 'trial_ori_pattern'])['acc_trial_concrete_cued'].mean()
 display(mean_per_con)
 
-palette = sns.color_palette("hls", n_colors=df['trial_ori_pattern'].nunique())
+palette = sns.color_palette("flare", n_colors=df['trial_ori_pattern'].nunique())
 results = []
 for i in good_partis:
     participant_data_acc = df.loc[df['subID'] == i].groupby(['subID', 'trial_ori_pattern'])['acc_trial_concrete_cued'].mean().reset_index()
@@ -329,7 +330,25 @@ for i in good_partis:
     results.append(participant_data_acc)
 
 results_acc_con = pd.concat(results)
-display(results_acc_con.round(4))
+
+# cannot do general anova because no mixed trials in load 1
+# anova_result_acc_items = pg.rm_anova(data=df, dv='acc_trial_concrete_cued', within=['items_presented', 'trial_ori_pattern'], subject='subID')
+# display(anova_result_acc_items)
+
+# this isn't ideal, should maybe do it in one or two tests afterall
+
+# need to report gg-corrected p values for the individual anovas for load 2 and 3 because sphericity is violated
+
+
+# Pingouin ANOVA only for load 2 and three where mixed trials exist
+data_load = df  # df[(df['items_presented']==2)|(df['items_presented']==3)]
+data = data_load.groupby(['subID', 'trial_ori_pattern'])['acc_trial_concrete_cued'].mean().reset_index()
+print(data.shape)
+anova_result_acc_items = pg.rm_anova(data=data, dv='acc_trial_concrete_cued', within=['trial_ori_pattern'], subject='subID')
+display(anova_result_acc_items.round(4))
+
+tukey = pg.pairwise_tukey(dv='acc_trial_concrete_cued', between='trial_ori_pattern', data=data)
+display(tukey.round(4))
 
 
 loads = [1,2,3]
@@ -337,8 +356,12 @@ for load in loads:
     # Pingouin ANOVA
     data_load = df[df['items_presented']==load]
     data = data_load.groupby(['subID', 'trial_ori_pattern'])['acc_trial_concrete_cued'].mean().reset_index()
+    print(data.shape)
     anova_result_acc_items = pg.rm_anova(data=data, dv='acc_trial_concrete_cued', within=['trial_ori_pattern'], subject='subID')
     display(anova_result_acc_items.round(4))
+
+    tukey = pg.pairwise_tukey(dv='acc_trial_concrete_cued', between='trial_ori_pattern', data=data)
+    display(tukey.round(4))
 
     # Boxplot (distribution summary, transparent so dots are visible)
     sns.boxplot(
@@ -346,6 +369,7 @@ for load in loads:
         y='acc_trial_concrete_cued',
         data=data,
         palette=palette,
+        hue='trial_ori_pattern',
         showcaps=True,
         showfliers=False,
         whiskerprops={'linewidth':1.5},
@@ -359,6 +383,7 @@ for load in loads:
         y='acc_trial_concrete_cued',
         data=data,
         palette=palette,
+        hue='trial_ori_pattern',
         edgecolor='black',
         linewidth=1,
         jitter=True,
@@ -371,21 +396,60 @@ for load in loads:
     plt.ylabel("Mean Accuracy")
     plt.show()
 
+
+# %% 
+# Check difference between mixed trials and fully one category trials
+# still very unequal amounts of trials (df_only_one=13758, df_mixed=9858)
+# if exluding load 1 (df_only_one=5886, df_mixed=9858)
+# how do I deal with that? maybe just to t-test welch?
+# if this is statistically sound - then mixed trials are always worse than either completely oblique or
+# completely cardinal trials
+
+
+df_exempt_load_1 = df[(df['items_presented']==2) | (df['items_presented']==3)]
+
+df_only_one = df_exempt_load_1[(df_exempt_load_1['trial_ori_pattern']=='all_cardinal') | (df_exempt_load_1['trial_ori_pattern']=='all_oblique')]
+
+df_mixed = df_exempt_load_1[df_exempt_load_1['trial_ori_pattern']=='mixed']
+
+X1_df = df_only_one.groupby('subID')['acc_trial_concrete_cued'].mean()
+X2_df = df_mixed.groupby('subID')['acc_trial_concrete_cued'].mean()
+
+
+# Make sure both have the same subjects and times
+common_subs = X1_df.index.intersection(X2_df.index)
+
+# Align them
+X1 = X1_df.loc[common_subs].to_numpy()
+X2 = X2_df.loc[common_subs].to_numpy()
+
+t_results = pg.ttest(X1, X2, paired=True, correction=True)
+display(t_results.round(4))
+
 # %%
-# How is accuracy varying with reaction time
+# Does the above effect vary with load?
+# No there seems to be no interaction between load and trial combo 
+df_exempt_load_1_copy = df_exempt_load_1.copy()
+
+one_category = ['all_cardinal', 'all_oblique']
+df_exempt_load_1_copy['category_only'] = df_exempt_load_1_copy['trial_ori_pattern'].apply(lambda x: np.nan if pd.isna(x) else 'one_category' if x in one_category else 'mixed')
+
+grps = df_exempt_load_1_copy.groupby(['subID', 'items_presented', 'category_only'])['acc_trial_concrete_cued'].mean().reset_index()
+
+pg.rm_anova(grps, dv='acc_trial_concrete_cued', within=['category_only', 'items_presented'], subject='subID')
+
+# %%
+# How is reatction time varying with accuracy and load
 
 df_dropped = df[df['acc_trial_concrete_cued'].notna()]
 
-#%%
+
 anova_result_acc_items = pg.rm_anova(data=df_dropped, dv='rt_resp_concrete_cued', within=['items_presented', 'acc_trial_concrete_cued'], subject='subID')
 display(anova_result_acc_items.round(4))
 
 #%%
+# How is reaction time varying with load
 df_dropped = df[df['acc_trial_concrete_cued'].notna()]
-# %%
-anova_result_acc_items = pg.rm_anova(data=df_dropped, dv='rt_resp_concrete_cued', within=['items_presented'], subject='subID')
-display(anova_result_acc_items.round(4))
-# %%
 
-anova_result_acc_items = pg.rm_anova(data=df_dropped, dv='acc_trial_concrete_cued', within=['items_presented', 'mask'], subject='subID')
+anova_result_acc_items = pg.rm_anova(data=df_dropped, dv='rt_resp_concrete_cued', within=['items_presented'], subject='subID')
 display(anova_result_acc_items.round(4))

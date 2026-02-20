@@ -36,7 +36,7 @@ def paired_t(X1, X2):
     return t_vals
 
 def independent_t(X1, X2):
-    t_vals, _ = stats.ttest_ind(X1, X2, axis=0, equal_var=False)  # Welch’s t-test
+    t_vals, _ = stats.ttest_ind(X1, X2, axis=0, equal_var=True)  # equal_var=False = Welch’s t-test vs equal_var=True -> pooled-variance t-test (Student’s t), use Welch only when groups are very unequal
     return t_vals
 
 
@@ -67,6 +67,8 @@ times = common_times.to_numpy()
 X1 = X1_df[common_times].values
 X2 = X2_df[common_times].values
 
+
+# needs to be 1samp cluster test!
 T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
     [X1, X2],
     n_permutations=5000,
