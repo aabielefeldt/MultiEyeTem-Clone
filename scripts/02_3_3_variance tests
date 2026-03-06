@@ -1,0 +1,80 @@
+#%%
+# Importsconda
+import mne
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import itertools
+import numpy as np
+from pupil_utils import annotate_velocity_blinks, remove_missing_data, plot_pupil_trace_and_velocity_mad, interpolate_blinks, merge_and_rename_annotations, set_zero_to_nan, get_annotations_per_epoch_custom
+import os
+from itertools import product
+import pingouin as pg
+from scipy.stats import levene
+
+#%%
+# if qt is used as backend the kernel crashes
+mne.viz.set_browser_backend('matplotlib')
+
+#%%
+df = pd.read_csv('../data/csv_files/df.csv')
+good_partis = df['subID'].unique()
+#%%
+all_baseline_epochs = pd.DataFrame()
+
+for i in good_partis:
+    
+    # reading epochs per participant
+    folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+    epoch_file = folder_path + "/" + i + "_even_newer-epo.fif"
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+
+    # combining channels
+    pupil_ix = mne.pick_channels(pupil_epoch.info["ch_names"], include=['pupil_left', 'pupil_right'])
+    roi_dict = dict(pupils=pupil_ix)
+    combine_nanmean = lambda data: np.nanmean(data, axis=1)
+    pupil_epochs_combined = mne.channels.combine_channels(pupil_epoch, roi_dict, method=combine_nanmean)
+
+    # cropping to baseline period
+    pupil_epochs_combined.crop(tmin=-0.1, tmax=0, include_tmax=True)
+
+    pupil_epochs_combined_df = pupil_epochs_combined.to_data_frame(scalings=1)
+    pupil_epochs_combined_df['subID'] = i
+
+    all_baseline_epochs = pd.concat([all_baseline_epochs, pupil_epochs_combined_df])
+
+#%%
+
+mask_partis = df[df['mask']==1]['subID'].unique().tolist()
+nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
+# Adding column for mask
+all_baseline_epochs['mask'] = all_baseline_epochs['subID'].apply(
+    lambda x: 1 if x in mask_partis else 0)
+
+sd = (
+    all_baseline_epochs.groupby(["subID", "mask"])["pupils"]
+    .std()
+    .reset_index(name="sd_pupil")
+)
+sd_mask = sd.loc[sd["mask"] == 1, "sd_pupil"]
+sd_nomask = sd.loc[sd["mask"] == 0, "sd_pupil"]
+
+resu = levene(sd_mask, sd_nomask)
+
+display(resu)
+
+# %%
+# also t-test for difference overall in baseline window
+mean = (
+    all_baseline_epochs.groupby(["subID", "mask"])["pupils"]
+    .mean()
+    .reset_index(name="baseline_mean")
+)
+sd_mask = mean.loc[mean["mask"] == 1, "baseline_mean"]
+sd_nomask = mean.loc[mean["mask"] == 0, "baseline_mean"]
+
+resu = pg.ttest(sd_mask, sd_nomask)
+
+display(resu)
+
+# %%

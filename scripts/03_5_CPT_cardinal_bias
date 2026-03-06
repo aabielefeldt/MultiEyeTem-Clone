@@ -23,6 +23,9 @@ good_partis = df['subID'].unique()
 
 evoked_df_everything = pd.read_csv('../data/csv_files/evoked_df_everything.csv')
 
+
+evoked_df_button_press = pd.read_csv('../data/csv_files/evoked_df_button_press.csv')
+
 #%%
 # parameters
 
@@ -38,8 +41,8 @@ def independent_t(X1, X2):
 #%%
 # Data preparation for tests:
 
-evoked_df_everything_dw = evoked_df_everything.copy()
-evoked_df_everything_dw['time'] = evoked_df_everything_dw['time'].round(3)
+evoked_df_everything_dw = evoked_df_button_press.copy()
+#evoked_df_everything_dw['time'] = evoked_df_everything_dw['time'].round(3)
 
 # cropping to delay time window
 start_time = 3
@@ -62,12 +65,13 @@ delay_time_window['pupils_z'] = delay_time_window.groupby('subID')['pupils'].tra
 
 subset = delay_time_window[(delay_time_window['dist_to_cardinal_mem']==11.25)] # & (delay_time_window['items_presented']==3)
 
-#subset = delay_time_window
+# subset = delay_time_window
 
-df_card = subset[(subset['probe_away_from_cardinal']==0) & (subset['acc_trial_concrete_cued']==0) | (subset['probe_away_from_cardinal']==1) & (subset['acc_trial_concrete_cued']==1)]
-df_obli = subset[(subset['probe_away_from_cardinal']==0) & (subset['acc_trial_concrete_cued']==1) | (subset['probe_away_from_cardinal']==1) & (subset['acc_trial_concrete_cued']==0)]
+# df_card = subset[(subset['probe_away_from_cardinal']==0) & (subset['acc_trial_concrete_cued']==0) | (subset['probe_away_from_cardinal']==1) & (subset['acc_trial_concrete_cued']==1)]
+# df_obli = subset[(subset['probe_away_from_cardinal']==0) & (subset['acc_trial_concrete_cued']==1) | (subset['probe_away_from_cardinal']==1) & (subset['acc_trial_concrete_cued']==0)]
 
-
+df_card = subset[(subset['pressed_away_from_cardinal']==0)]
+df_obli = subset[(subset['pressed_away_from_cardinal']==1)]
 # Use mean to aggregate multiple entries per subID/time
 X1_df = df_card.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
 X2_df = df_obli.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
@@ -98,14 +102,34 @@ T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
     verbose=True
 )
 
-# Store results
-cluster_results = {
-    "T_obs": T_obs,
-    "clusters": clusters,
-    "cluster_p_values": cluster_p_values,
-    "times": times
-}
-print(cluster_p_values)
+alpha = 0.05
+cluster_summaries = []
+cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
+
+
+for i, c in enumerate(clusters):
+    p_val = cluster_p_values[i]
+
+    time_inds = c[0]
+    t_vals = T_obs[time_inds]
+    mean_t = t_vals.mean()
+
+    cluster_summaries.append({
+        "cluster_id": i + 1,
+        "start_time": times[time_inds][0],
+        "end_time": times[time_inds][-1],
+        "p_value": p_val,
+        "mean_t": mean_t,
+        "cluster_mass": float(cluster_masses[i])
+    })
+
+# Turn into DataFrame
+cluster_results_button_press_card = pd.DataFrame(cluster_summaries)
+
+# Save to CSV
+cluster_results_button_press_card.to_csv('../data/csv_files/cluster_results_button_press_card.csv', index=False)
+
+display(cluster_results_button_press_card)
 
 # Plot
 plt.figure(figsize=(10, 5))
@@ -147,13 +171,16 @@ plt.show()
 
 
 # subset = delay_time_window[(delay_time_window['dist_to_cardinal_mem']==11.25)] # & (delay_time_window['items_presented']==3)
-
+cluster_summaries = []
 for load in [1,2,3]:
 
     subset = delay_time_window[(delay_time_window['items_presented']==load) & ((delay_time_window['dist_to_cardinal_mem']==11.25))]
 
-    df_card = subset[(subset['probe_away_from_cardinal']==0) & (subset['acc_trial_concrete_cued']==0) | (subset['probe_away_from_cardinal']==1) & (subset['acc_trial_concrete_cued']==1)]
-    df_obli = subset[(subset['probe_away_from_cardinal']==0) & (subset['acc_trial_concrete_cued']==1) | (subset['probe_away_from_cardinal']==1) & (subset['acc_trial_concrete_cued']==0)]
+    # df_card = subset[(subset['probe_away_from_cardinal']==0) & (subset['acc_trial_concrete_cued']==0) | (subset['probe_away_from_cardinal']==1) & (subset['acc_trial_concrete_cued']==1)]
+    # df_obli = subset[(subset['probe_away_from_cardinal']==0) & (subset['acc_trial_concrete_cued']==1) | (subset['probe_away_from_cardinal']==1) & (subset['acc_trial_concrete_cued']==0)]
+
+    df_card = subset[(subset['pressed_away_from_cardinal']==0)]
+    df_obli = subset[(subset['pressed_away_from_cardinal']==1)]
 
     # Use mean to aggregate multiple entries per subID/time
     X1_df = df_card.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
@@ -185,14 +212,33 @@ for load in [1,2,3]:
         verbose=True
         )
 
-    # Store results
-    cluster_results = {
-        "T_obs": T_obs,
-        "clusters": clusters,
-        "cluster_p_values": cluster_p_values,
-        "times": times
-        }
-    print(cluster_p_values)
+    alpha = 0.05
+    cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
+
+    for i, c in enumerate(clusters):
+        p_val = cluster_p_values[i]
+
+        time_inds = c[0]
+        t_vals = T_obs[time_inds]
+        mean_t = t_vals.mean()
+
+        cluster_summaries.append({
+            'load': load,
+            "cluster_id": i + 1,
+            "start_time": times[time_inds][0],
+            "end_time": times[time_inds][-1],
+            "p_value": p_val,
+            "mean_t": mean_t,
+            "cluster_mass": float(cluster_masses[i])
+        })
+
+    # Turn into DataFrame
+    cluster_results_button_press_card_load = pd.DataFrame(cluster_summaries)
+
+    # Save to CSV
+    cluster_results_button_press_card_load.to_csv('../data/csv_files/cluster_results_button_press_card_load.csv', index=False)
+
+    display(cluster_results_button_press_card_load)
 
     # Plot
     plt.figure(figsize=(10, 5))
@@ -270,14 +316,24 @@ nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
 df_cardinal_bias_acc_piv['mask'] = df_cardinal_bias_acc_piv['subID'].apply(
     lambda x: 1 if x in mask_partis else 0)
 
+
+df_cardinal_bias_acc_piv["median_split"] = (df_cardinal_bias_acc_piv.diff_card<df_cardinal_bias_acc_piv.diff_card.quantile()).replace({True:1, False:0})
+
+
 #%%
-# 2.1 comparing pupil when pressed away in high bias and low bias group -> could make this a contrast
+# 2.1 comparing pupil when pressed away in high bias and low bias group -> could make this a contrast 
+# (but then it would be between groups and within groups somehow? but within group contrast is easy and then contrast those contrasts)
+
+cluster_summaries = []
 for group in [diff_card_med_high, diff_card_med_low]:
 
     subset = delay_time_window[(delay_time_window['subID'].isin(group)) & (delay_time_window['dist_to_cardinal_mem']==11.25)]
 
-    df_card = subset[(subset['probe_away_from_cardinal']==0) & (subset['acc_trial_concrete_cued']==0) | (subset['probe_away_from_cardinal']==1) & (subset['acc_trial_concrete_cued']==1)]
-    df_obli = subset[(subset['probe_away_from_cardinal']==0) & (subset['acc_trial_concrete_cued']==1) | (subset['probe_away_from_cardinal']==1) & (subset['acc_trial_concrete_cued']==0)]
+    # df_card = subset[(subset['probe_away_from_cardinal']==0) & (subset['acc_trial_concrete_cued']==0) | (subset['probe_away_from_cardinal']==1) & (subset['acc_trial_concrete_cued']==1)]
+    # df_obli = subset[(subset['probe_away_from_cardinal']==0) & (subset['acc_trial_concrete_cued']==1) | (subset['probe_away_from_cardinal']==1) & (subset['acc_trial_concrete_cued']==0)]
+
+    df_card = subset[(subset['pressed_away_from_cardinal']==0)]
+    df_obli = subset[(subset['pressed_away_from_cardinal']==1)]
 
     # df_card = subset[subset['dist_to_cardinal_mem']==11.25]
     # df_obli = subset[subset['dist_to_cardinal_mem']==33.75]
@@ -312,14 +368,33 @@ for group in [diff_card_med_high, diff_card_med_low]:
         verbose=True
         )
 
-    # Store results
-    cluster_results = {
-        "T_obs": T_obs,
-        "clusters": clusters,
-        "cluster_p_values": cluster_p_values,
-        "times": times
-        }
-    print(cluster_p_values)
+    alpha = 0.05
+    cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
+
+    for i, c in enumerate(clusters):
+        p_val = cluster_p_values[i]
+
+        time_inds = c[0]
+        t_vals = T_obs[time_inds]
+        mean_t = t_vals.mean()
+
+        cluster_summaries.append({
+            'group': group,
+            "cluster_id": i + 1,
+            "start_time": times[time_inds][0],
+            "end_time": times[time_inds][-1],
+            "p_value": p_val,
+            "mean_t": mean_t,
+            "cluster_mass": float(cluster_masses[i])
+        })
+
+    # Turn into DataFrame
+    cluster_results_bp_groups = pd.DataFrame(cluster_summaries)
+
+    # Save to CSV
+    cluster_results_bp_groups.to_csv('../data/csv_files/cluster_results_bp_groups.csv', index=False)
+
+    display(cluster_results_bp_groups)
 
     # Plot
     plt.figure(figsize=(10, 5))
@@ -359,13 +434,16 @@ for group in [diff_card_med_high, diff_card_med_low]:
 # 2.2 comparing groups within load conditions
 # difference also significant only for low group, but only in load 2, but similar effect approaching significance in other load conditions so looks stable
 
+cluster_summaries = []
 for group in [diff_card_med_high, diff_card_med_low]:
     for load in [1,2,3]:
         subset = delay_time_window[(delay_time_window['subID'].isin(group)) & (delay_time_window['dist_to_cardinal_mem']==11.25) & (delay_time_window['items_presented']==load)]
 
-        df_card = subset[(subset['probe_away_from_cardinal']==0) & (subset['acc_trial_concrete_cued']==0) | (subset['probe_away_from_cardinal']==1) & (subset['acc_trial_concrete_cued']==1)]
-        df_obli = subset[(subset['probe_away_from_cardinal']==0) & (subset['acc_trial_concrete_cued']==1) | (subset['probe_away_from_cardinal']==1) & (subset['acc_trial_concrete_cued']==0)]
+        # df_card = subset[(subset['probe_away_from_cardinal']==0) & (subset['acc_trial_concrete_cued']==0) | (subset['probe_away_from_cardinal']==1) & (subset['acc_trial_concrete_cued']==1)]
+        # df_obli = subset[(subset['probe_away_from_cardinal']==0) & (subset['acc_trial_concrete_cued']==1) | (subset['probe_away_from_cardinal']==1) & (subset['acc_trial_concrete_cued']==0)]
 
+        df_card = subset[(subset['pressed_away_from_cardinal']==0)]
+        df_obli = subset[(subset['pressed_away_from_cardinal']==1)]
         # df_card = subset[subset['dist_to_cardinal_mem']==11.25]
         # df_obli = subset[subset['dist_to_cardinal_mem']==33.75]
 
@@ -399,14 +477,34 @@ for group in [diff_card_med_high, diff_card_med_low]:
             verbose=True
             )
 
-        # Store results
-        cluster_results = {
-            "T_obs": T_obs,
-            "clusters": clusters,
-            "cluster_p_values": cluster_p_values,
-            "times": times
-            }
-        print(cluster_p_values)
+        alpha = 0.05
+        cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
+
+        for i, c in enumerate(clusters):
+            p_val = cluster_p_values[i]
+
+            time_inds = c[0]
+            t_vals = T_obs[time_inds]
+            mean_t = t_vals.mean()
+
+            cluster_summaries.append({
+                'group': group,
+                'load': load,
+                "cluster_id": i + 1,
+                "start_time": times[time_inds][0],
+                "end_time": times[time_inds][-1],
+                "p_value": p_val,
+                "mean_t": mean_t,
+                "cluster_mass": float(cluster_masses[i])
+            })
+
+        # Turn into DataFrame
+        cluster_results_bp_groups_load = pd.DataFrame(cluster_summaries)
+
+        # Save to CSV
+        cluster_results_bp_groups_load.to_csv('../data/csv_files/cluster_results_bp_groups_load.csv', index=False)
+
+        display(cluster_results_bp_groups_load)
 
         # Plot
         plt.figure(figsize=(10, 5))
@@ -480,14 +578,33 @@ T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
     verbose=True
     )
 
-# Store results
-cluster_results = {
-    "T_obs": T_obs,
-    "clusters": clusters,
-    "cluster_p_values": cluster_p_values,
-    "times": times
-    }
-print(cluster_p_values)
+alpha = 0.05
+cluster_summaries = []
+cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
+
+for i, c in enumerate(clusters):
+    p_val = cluster_p_values[i]
+
+    time_inds = c[0]
+    t_vals = T_obs[time_inds]
+    mean_t = t_vals.mean()
+
+    cluster_summaries.append({
+        "cluster_id": i + 1,
+        "start_time": times[time_inds][0],
+        "end_time": times[time_inds][-1],
+        "p_value": p_val,
+        "mean_t": mean_t,
+        "cluster_mass": float(cluster_masses[i])
+    })
+
+# Turn into DataFrame
+cluster_results_mask_vs_nomask = pd.DataFrame(cluster_summaries)
+
+# Save to CSV
+cluster_results_mask_vs_nomask.to_csv('../data/csv_files/cluster_results_mask_vs_nomask.csv', index=False)
+
+display(cluster_results_mask_vs_nomask)
 
 # Plot
 plt.figure(figsize=(10, 5))
@@ -523,6 +640,109 @@ plt.xlabel('Time (s)')
 plt.ylabel('Pupil size')
 plt.show()
 
+#%%
+# 2.4 comparing groups directly in pupil shape but separated by load
+# seems like the high group has a less big peak in the beginning and a not so dramatic dip in the end of delay,
+# both in mask and no mask but shifted towards the end of the delay for mask
+df_card = delay_time_window[(delay_time_window['subID'].isin(diff_card_med_high))] # & (delay_time_window['mask']==0)] #  & (delay_time_window['dist_to_cardinal_mem']==11.25)]
+df_obli = delay_time_window[(delay_time_window['subID'].isin(diff_card_med_low))] # & (delay_time_window['mask']==0)] #  & (delay_time_window['dist_to_cardinal_mem']==11.25)]
+
+for load in [1,2,3]:
+
+    df_card_load = df_card[df_card['items_presented']==load]
+    df_obli_load = df_obli[df_obli['items_presented']==load]
+    # Use mean to aggregate multiple entries per subID/time
+    X1_df = df_card_load.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+    X2_df = df_obli_load.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+
+    # Make sure to have the same times - no subjetzt intersection here because between subjects test
+    # common_subjects = X1_df.index.intersection(X2_df.index)
+    common_times = X1_df.columns.intersection(X2_df.columns)
+    times = common_times.to_numpy()
+
+    # Align them
+    # also common subs?
+    X1 = X1_df[common_times].values
+    X2 = X2_df[common_times].values
+
+    n1 = X1.shape[0]
+    n2 = X2.shape[0]
+    # Because we conduct a two-tailed test, we divide the p-value by 2 (which means
+    # we're making use of both tails of the distribution).
+    tcrit = t.ppf(1 - 0.025, df = (n1+n2-2))
+
+    T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
+        [X1, X2],
+        n_permutations=n_perm,
+        threshold=tcrit,
+        tail=0,
+        seed=seed,
+        stat_fun=independent_t,
+        out_type="mask",
+        verbose=True
+        )
+
+    alpha = 0.05
+    cluster_summaries = []
+    cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
+
+    for i, c in enumerate(clusters):
+        p_val = cluster_p_values[i]
+
+        time_inds = c[0]
+        t_vals = T_obs[time_inds]
+        mean_t = t_vals.mean()
+
+        cluster_summaries.append({
+            "cluster_id": i + 1,
+            "start_time": times[time_inds][0],
+            "end_time": times[time_inds][-1],
+            "p_value": p_val,
+            "mean_t": mean_t,
+            "cluster_mass": float(cluster_masses[i])
+        })
+
+    # Turn into DataFrame
+    cluster_results_mask_vs_nomask = pd.DataFrame(cluster_summaries)
+
+    # Save to CSV
+    cluster_results_mask_vs_nomask.to_csv('../data/csv_files/cluster_results_mask_vs_nomask.csv', index=False)
+
+    display(cluster_results_mask_vs_nomask)
+
+    # Plot
+    plt.figure(figsize=(10, 5))
+    plt.plot(times, T_obs, label='T-values')
+    for i_c, c in enumerate(clusters):
+        if cluster_p_values[i_c] < 0.05:
+            plt.axvspan(times[c][0], times[c][-1], color='red', alpha=0.3)
+    plt.axhline(0, color='black', linestyle='--')
+    plt.title(f'Cluster Permutation Test (cardinal vs oblique trials)')
+    plt.xlabel('Time (s)')
+    plt.ylabel('T-statistic')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+    times = np.array(common_times)  # make sure it's ordered
+    X1_mean = X1.mean(axis=0)
+    X2_mean = X2.mean(axis=0)
+
+    plt.plot(times, X1_mean, label='high bias group')
+    plt.plot(times, X2_mean, label='low bias group')
+
+    # Highlight significant clusters
+    for i_c, cluster in enumerate(clusters):
+        if cluster_p_values[i_c] < 0.05:
+            time_mask = cluster
+            plt.axvspan(times[time_mask][0], times[time_mask][-1], color='red', alpha=0.3)
+
+    plt.legend()
+    plt.title(f'Cluster Permutation Test Mask Conditions')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Pupil size')
+    plt.show()
 #%%
 # 3.1
 # difference between correct and false per load but this time only for dist 11.25
@@ -568,13 +788,15 @@ for load in [1, 2, 3]:
         out_type='mask',
         verbose=True
     )
+    cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
     print(cluster_p_values.round(3))
     # Store results
     cluster_results[load] = {
         "T_obs": T_obs,
         "clusters": clusters,
         "cluster_p_values": cluster_p_values,
-        "times": times
+        "times": times,
+        "cluster_mass": float(cluster_masses[i])
     }
     print(cluster_results[load]['cluster_p_values'])
 
@@ -646,13 +868,15 @@ T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
     out_type='mask',
     verbose=True
 )
+cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
 print(cluster_p_values.round(3))
 # Store results
 cluster_results[load] = {
     "T_obs": T_obs,
     "clusters": clusters,
     "cluster_p_values": cluster_p_values,
-    "times": times
+    "times": times,
+    "cluster_mass": float(cluster_masses[i])
 }
 print(cluster_results[load]['cluster_p_values'])
 
@@ -690,11 +914,5 @@ plt.title(f'Cluster Permutation Test Accuracy')
 plt.xlabel('Time (s)')
 plt.ylabel('Pupil size')
 plt.show()
-# %%
-
-seperated_con_difs_df = pd.read_csv('../data/csv_files/seperated_con_difs_df.csv')
-mbp_con1 = seperated_con_difs_df[seperated_con_difs_df['items_presented'] == 1].sort_values('Mean_Difference')
-mbp_con2 = seperated_con_difs_df[seperated_con_difs_df['items_presented'] == 2].sort_values('Mean_Difference')
-mbp_con3 = seperated_con_difs_df[seperated_con_difs_df['items_presented'] == 3].sort_values('Mean_Difference')
 
 # %%

@@ -87,7 +87,7 @@ for sub in good_partis:
                         evk = ep_grp.average(method=evoked_nan_mean)
 
                         # convert to df; keep only time + the single channel
-                        df_evk = evk.to_data_frame()  # columns typically: time, pups/pupils (and maybe 'condition')
+                        df_evk = evk.to_data_frame(scalings=1)  # columns typically: time, pups/pupils (and maybe 'condition')
 
                         df_evk = df_evk[["time", "pupils"]].copy()
 

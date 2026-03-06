@@ -1,0 +1,361 @@
+# %%
+# Importsconda
+import mne
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from scipy.stats import zscore
+from scipy.stats import levene
+import pingouin as pg
+
+# %% 
+# read evoked dataframe and associated significant results 
+df = pd.read_csv('../data/csv_files/df.csv')
+good_partis = df['subID'].unique()
+mask_partis = df[df['mask']==1]['subID'].unique().tolist()
+nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
+
+# evoked_df_pos1_interpol_shifted = pd.read_csv('../data/csv_files/evoked_df_pos1_interpol_shifted.csv')
+# sig_results_pos1_interpol_shifted = pd.read_csv('../data/csv_files/sig_results_pos1_interpol_shifted.csv')
+
+# # Participants with time issue
+# issue_partis = ['REUNMA', '1UVQEK', '35T018', '4A2K27', '30K8XE', 'R8CW7K']
+
+# no_time_partis = good_partis[~np.isin(good_partis, issue_partis)].tolist()
+# cluster_results_mask_vs_nomask = pd.read_csv('../data/csv_files/cluster_results_mask_vs_nomask.csv')
+evoked_df_button_press = pd.read_csv('../data/csv_files/evoked_df_button_press.csv')
+
+evoked_df_button_press["time"] = evoked_df_button_press["time"].round(3)
+# then use x="time_r" in the helper + lineplot, and marker times as exact values
+#%%
+
+delay_start, delay_end = 3.0, 6.5   # adjust if needed (inclusive/exclusive is up to you)
+
+# Boolean mask for delay period
+is_delay = evoked_df_button_press["time"].between(delay_start, delay_end, inclusive="both")
+
+def delay_zscore_apply_all(g):
+    # compute mean/sd from delay only, apply to all rows of that subject
+    delay_vals = g.loc[is_delay.loc[g.index], "pupils"].to_numpy()
+
+    mu = np.nanmean(delay_vals)
+    sd = np.nanstd(delay_vals, ddof=0)
+
+    # avoid division-by-zero if sd == 0 or all NaN
+    if not np.isfinite(sd) or sd == 0:
+        return pd.Series(np.nan, index=g.index)
+
+    return (g["pupils"] - mu) / sd
+
+evoked_df_button_press["pupils_z_delay"] = (
+    evoked_df_button_press
+    .groupby("subID", group_keys=False)
+    .apply(delay_zscore_apply_all)
+)
+
+
+# Z-score within each subject (across all times and trials) - should maybe be based on zscore only of delay period because that is what I am analysing
+evoked_df_button_press['pupils_z'] = evoked_df_button_press.groupby('subID')['pupils'].transform(
+    lambda x: zscore(x, nan_policy='omit')
+)
+# an evoked where I used the full time of the encoding period until delay (differing lengths for load conditions) as the baseline
+#evoked_df_shifted_full_trial_bl = pd.read_csv('../data/csv_files/evoked_df_shifted_full_trial_bl.csv')
+
+
+df_cardinal_bias_acc = df.groupby(['subID', 'dist_probe_to_cardinal'])['acc_trial_concrete_cued'].mean().reset_index()
+df_cardinal_bias_acc = df_cardinal_bias_acc.sort_values('dist_probe_to_cardinal')
+df_cardinal_bias_acc_piv = df_cardinal_bias_acc.pivot(index=['subID'], columns='dist_probe_to_cardinal', values='acc_trial_concrete_cued').reset_index()
+df_cardinal_bias_acc_piv['diff_card'] = df_cardinal_bias_acc_piv[3.25] - df_cardinal_bias_acc_piv[19.25]
+
+df_cardinal_bias_acc_piv['diff_obli'] = df_cardinal_bias_acc_piv[25.75] - df_cardinal_bias_acc_piv[41.75]
+
+diff_card_med = df_cardinal_bias_acc_piv['diff_card'].median()
+
+diff_card_med_high = df_cardinal_bias_acc_piv[df_cardinal_bias_acc_piv['diff_card']>= diff_card_med]['subID']
+diff_card_med_low = df_cardinal_bias_acc_piv[df_cardinal_bias_acc_piv['diff_card']< diff_card_med]['subID']
+
+evoked_df_button_press['group'] = np.where(
+    evoked_df_button_press['subID'].isin(diff_card_med_high), 'high', 'low'
+)
+#%%
+evoked_df_button_press['bp_away'] = evoked_df_button_press['pressed_away_from_cardinal']
+evoked_df_button_press['Load'] = evoked_df_button_press['items_presented']
+# variance testing within delay
+# not significant
+# no difference between mask and no mask in terms of variance during the delay
+# means I can savely use z-scoring during delay I guess
+
+#%%
+# variance in delay (significant)
+delay = evoked_df_button_press[
+    evoked_df_button_press["time"].between(3, 6.5)
+]
+
+delay_sd = delay.groupby(["subID", 'group'])["pupils"].std().reset_index(name="sd_pupil")
+
+sd_mask = delay_sd[delay_sd["group"] == 'high']["sd_pupil"]
+sd_nomask = delay_sd[delay_sd["group"] == 'low']["sd_pupil"]
+
+lev_resu = levene(sd_mask, sd_nomask)
+plt.figure()
+sns.boxplot(data=delay_sd, x="group", y="sd_pupil")
+sns.stripplot(data=delay_sd, x="group", y="sd_pupil", color="black", alpha=0.6)
+display(lev_resu)
+
+# variance overall (not significant)
+delay = evoked_df_button_press[
+    evoked_df_button_press["time"].between(0, 9)
+]
+
+delay_sd = delay.groupby(["subID", 'group'])["pupils"].std().reset_index(name="sd_pupil")
+
+sd_mask = delay_sd[delay_sd["group"] == 'high']["sd_pupil"]
+sd_nomask = delay_sd[delay_sd["group"] == 'low']["sd_pupil"]
+
+lev_resu = levene(sd_mask, sd_nomask)
+plt.figure()
+sns.boxplot(data=delay_sd, x="group", y="sd_pupil")
+display(lev_resu)
+
+# %% means of the groups
+
+# mean in delay (not significant)
+delay = evoked_df_button_press[
+    evoked_df_button_press["time"].between(3, 6.5)
+]
+delay_mean = delay.groupby(["subID", 'group'])["pupils"].mean().reset_index(name="mean_pupil")
+
+mean_high = delay_mean[delay_mean["group"] == 'high']["mean_pupil"]
+mean_low = delay_mean[delay_mean["group"] == 'low']["mean_pupil"]
+
+resu = pg.ttest(mean_high, mean_low)
+plt.figure()
+sns.boxplot(data=delay_mean, x="group", y="mean_pupil")
+display(resu)
+
+# mean in delay (not significant)
+delay = evoked_df_button_press[
+    evoked_df_button_press["time"].between(0, 9)
+]
+delay_mean = delay.groupby(["subID", 'group'])["pupils"].mean().reset_index(name="mean_pupil")
+
+mean_high = delay_mean[delay_mean["group"] == 'high']["mean_pupil"]
+mean_low = delay_mean[delay_mean["group"] == 'low']["mean_pupil"]
+
+resu = pg.ttest(mean_high, mean_low)
+plt.figure()
+sns.boxplot(data=delay_mean, x="group", y="mean_pupil")
+display(resu)
+#%%
+marker_times = {
+    1: [2],
+    2: [1, 2],
+    3: [0, 1, 2]
+}
+
+def add_load_markers(ax, data, x="time", y="pupils_z_delay", hue="Load"):
+
+    # Get line colors (for circle fills)
+    handles, labels = ax.get_legend_handles_labels()
+    color_map = {}
+    for h, lab in zip(handles, labels):
+        try:
+            key = int(lab)
+        except ValueError:
+            key = lab
+        color_map[key] = h.get_color()
+
+    # Mean timecourse
+    m = data.groupby([hue, x], as_index=False)[y].mean()
+
+    for load, times in marker_times.items():
+
+        mm = m[m[hue].eq(load) & m[x].isin(times)]
+
+        for i, (_, row) in enumerate(mm.iterrows(), start=1):
+
+            # Circle (Load color)
+            ax.scatter(
+                row[x], row[y],
+                s=160,
+                marker="o",
+                color=colors_load[i-1],
+                edgecolor="white",
+                linewidth=1,
+                zorder=10
+            )
+
+            # Number (position color)
+            ax.text(
+                row[x], row[y],
+                str(i),
+                color="white",
+                ha="center",
+                va="center",
+                fontsize=9,
+                weight="bold",
+                zorder=11
+            )
+
+
+# %% 
+colors_load = sns.color_palette("flare", 3)
+
+with sns.plotting_context(context='paper', font_scale=1.5): 
+    
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8), sharey=True)
+
+    # Plot for participants WITH mask (Left Plot)
+    mask_data = evoked_df_button_press[evoked_df_button_press["group"]=='high']
+    sns.lineplot(
+        data=mask_data, 
+        hue='Load', x='time', y='pupils_z_delay', style='bp_away',
+        errorbar='se', ax=ax1, palette=colors_load
+    )
+    
+    # Plot for participants WITHOUT mask (Right Plot)
+    nomask_data = evoked_df_button_press[evoked_df_button_press["group"]=='low']
+    sns.lineplot(
+        data=nomask_data, 
+        hue='Load', x='time', y='pupils_z_delay', style='bp_away',
+        errorbar='se', ax=ax2, legend='full', palette=colors_load
+    )
+
+    add_load_markers(ax1, mask_data)
+    add_load_markers(ax2, nomask_data)
+
+    sns.despine(ax=ax1)
+    sns.despine(ax=ax2)
+
+    # # Add mask time
+    # ax1.axvspan(3, 3.1, color='blue', alpha=0.15)
+    # ax1.text(3, 1.1, "mask \ndisplay", color='blue', alpha=0.5, fontsize=10)
+
+    # Add probe
+    ylim = ax1.get_ylim()[1] 
+    ax1.axvline(3, color='black', alpha=0.5)
+    ax1.axvline(6.5, color='black', alpha=0.5)
+    ax2.axvline(3, color='black', alpha=0.5)
+    ax2.axvline(6.5, color='black', alpha=0.5)
+    
+
+    # Set x-axis to show all whole numbers within range
+    x_ticks = np.arange(int(evoked_df_button_press['time'].min()), int(evoked_df_button_press['time'].max()) + 1, 1)
+    ax2.set_xticks(x_ticks)
+    ax2.set_xticklabels(x_ticks)
+    ax1.set_xticks(x_ticks)
+    ax1.set_xticklabels(x_ticks)
+
+    ax1.set_title('High bias group', y=1.1, fontsize=16)
+    ax2.set_title('Low bias group', y=1.1, fontsize=16)
+
+    ax1.set_ylabel('pupil size (z-scored)')
+    ax1.set_xlabel('time (s)')
+    ax2.set_xlabel('time (s)')
+
+    # Increase font size of x and y tick labels
+    ax2.tick_params(axis='x', labelsize=14)
+    ax2.tick_params(axis='y', labelsize=14)
+
+    ax1.autoscale(enable=True, axis='y', tight=True)
+    ax2.autoscale(enable=True, axis='y', tight=True)
+
+    ax1.text(1.3, 2.3, "encoding", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax1.text(6.5+1.3, 2.3, "probe", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax1.text(3+1.75, 2.3, "delay", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax1.axhspan(2.25, 2.4, transform=ax1.transAxes, color='gray', alpha=0.15, clip_on=False)
+
+    ax2.text(1.3, 2.3, "encoding", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax2.text(6.5+1.3, 2.3, "probe", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax2.text(3+1.75, 2.3, "delay", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax2.axhspan(2.25, 2.4, transform=ax1.transAxes,  color='gray', alpha=0.15, clip_on=False)
+    # Adding a title
+    # plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize = 20)
+    # plt.title(f'Applied baseline {baseline}', y=1.25, color='blue', alpha=0.4)
+    
+    #Adding a legend
+    plt.legend()
+    ax1.legend(loc='lower right', fontsize=12)
+    ax2.legend(loc='lower right', fontsize=12)
+
+
+    # Save the figure
+    name=f"pupil_high_vs_low_bias.png"
+    figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures'
+    figure_filepath = os.path.join(figures_folder, name)
+
+    plt.savefig(figure_filepath, bbox_inches = 'tight')
+
+# %%
+start_time = 3.0
+end_time = 6.5
+delay_time_window = evoked_df_button_press[(evoked_df_button_press['time'] >= start_time) & (evoked_df_button_press['time'] <= end_time)]
+
+# # z-scoring data
+# delay_time_window = delay_time_window.copy()
+
+# # Z-score within each subject (across all times and trials)
+# delay_time_window['pupils_z'] = delay_time_window.groupby('subID')['pupils'].transform(
+#     lambda x: zscore(x, nan_policy='omit')
+# )
+
+colors_load = sns.color_palette("flare", 3)
+
+with sns.plotting_context(context='paper', font_scale=1.5): 
+    
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+    # Plot for participants WITH mask (Left Plot)
+    sns.lineplot(
+        data=delay_time_window, 
+        hue='group', x='time', y='pupils_z_delay', style='bp_away',
+        errorbar='se', ax=ax)
+
+    #add_load_markers(ax, evoked_df_button_press)
+    sns.despine(ax=ax)
+
+    # # # Add mask time
+    # ax.axvspan(3, 3.1, color='blue', alpha=0.15)
+    # ax.text(3, 1.1, "mask \ndisplay", color='blue', alpha=0.5, fontsize=10)
+
+    # Add probe
+    # ylim = ax.get_ylim()[1] 
+    ax.axvline(3, color='black', alpha=0.5)
+    ax.axvline(6.5, color='black', alpha=0.5)
+
+    # Set x-axis to show all whole numbers within range
+    x_ticks = np.arange(int(delay_time_window['time'].min()), int(delay_time_window['time'].max()) + 1, 0.5)
+    ax.set_xticks(x_ticks)
+    ax.set_xticklabels(x_ticks)
+    y_ticks = np.arange(-1,1.5,0.25)
+    ax.set_yticks(y_ticks)
+    ax.set_yticklabels(y_ticks)
+
+    ax.set_title('Bias groups', y=1, fontsize=16)
+
+    ax.set_ylabel('pupil size (z-scored)')
+    ax.set_xlabel('time (s)')
+
+    ax.autoscale(enable=True, axis='y', tight=True)
+
+    #ax.text(1.3, 2.3, "encoding", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    #ax.text(6.5+1.3, 2.3, "probe", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax.text(3+1.75, 1.3, "delay", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax.axhspan(1.25, 1.4, transform=ax.transAxes, color='gray', alpha=0.15, clip_on=False)
+
+    # Adding a title
+    #plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize = 20)
+    
+    #Adding a legend
+    plt.legend()
+    ax.legend(loc='lower right', fontsize=12)
+
+    # Save the figure
+    # name=f"pupil_high_vs_low_bias_all_load.png"
+    # figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures'
+    # figure_filepath = os.path.join(figures_folder, name)
+
+    # plt.savefig(figure_filepath, bbox_inches = 'tight')
+
+# %%

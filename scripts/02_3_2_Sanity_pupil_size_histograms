@@ -95,7 +95,7 @@ plt.show()
 
 all_baseline_means = pd.DataFrame()
 
-for i in good_partis[0:10]:
+for i in good_partis:
     
     # reading epochs per participant
     folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
@@ -111,7 +111,7 @@ for i in good_partis[0:10]:
     # cropping to baseline period
     pupil_epochs_combined.crop(tmin=-0.1, tmax=0, include_tmax=True)
 
-    pupil_epochs_combined_df = pupil_epochs_combined.to_data_frame()
+    pupil_epochs_combined_df = pupil_epochs_combined.to_data_frame(scalings=1)
     pupil_epochs_combined_df['subID'] = i
 
     print('len of data and number of nans within this participants baseline period', len(pupil_epochs_combined_df), pupil_epochs_combined_df['pupils'].isna().sum())
@@ -127,10 +127,10 @@ for i in good_partis[0:10]:
     all_baseline_means = pd.concat([all_baseline_means, baseline_df[['baseline_mean', 'baseline_mean_centered', 'subID', 'epoch']]], ignore_index=True)
 
 
-    plt.figure()
-    plt.title(f'SubID {i} - distribution of pupil size during periods used for baseline ')
-    sns.histplot(data=baseline_df, bins=50, stat='density', x='baseline_mean', legend=True)
-    plt.show()
+    # plt.figure()
+    # plt.title(f'SubID {i} - distribution of pupil size during periods used for baseline ')
+    # sns.histplot(data=baseline_df, bins=50, stat='density', x='baseline_mean', legend=True)
+    # plt.show()
 
     # Save the figure
     # name=f"pupil_size_histogram_during_baseline_{i}.png"

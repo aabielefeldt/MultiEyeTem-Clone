@@ -12,8 +12,7 @@ from scipy.ndimage import gaussian_filter1d
 from scipy.stats import t, ttest_rel, zscore, f, ttest_ind
 from IPython.display import display
 import pingouin as pg
-
-
+from scipy.stats import levene
 
 #%%
 #####
@@ -92,7 +91,26 @@ def independent_t(X1, X2):
 
 seed = 42
 #%%
+# variance testing within delay
+# not significant
+# no difference between mask and no mask in terms of variance during the delay
+# means I can savely use z-scoring during delay I guess
 
+delay = evoked_df_shifted[
+    evoked_df_shifted["time"].between(3, 6.5)
+]
+
+sd = (
+    delay.groupby(["subID", "mask"])["pupils"]
+    .std()
+    .reset_index(name="sd_pupil")
+)
+sd_mask = sd[sd["mask"] == 1]["sd_pupil"]
+sd_nomask = sd[sd["mask"] == 0]["sd_pupil"]
+
+lev_resu = levene(sd_mask, sd_nomask)
+
+#%%
 ## 1 - Mask vs no Mask
 ##########
 
@@ -128,7 +146,7 @@ tcrit = t.ppf(1 - 0.025, df = (n1+n2-2))
 
 T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
     [X1, X2],
-    n_permutations=5000, # using 10000 here because close to 0.05
+    n_permutations=5000, 
     threshold=tcrit,        
     tail=0,               # 0 = two-tailed (direction of effect could go either way), tail=0 is ignored on f-test, needs to be one-tailed
     stat_fun=independent_t,
@@ -139,6 +157,7 @@ T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
 
 alpha = 0.05
 cluster_summaries = []
+cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
 
 for i, c in enumerate(clusters):
     p_val = cluster_p_values[i]
@@ -154,7 +173,8 @@ for i, c in enumerate(clusters):
         "end_time": times[time_inds][-1],
         "p_value": p_val,
         "mean_t": mean_t,
-        "direction": direction
+        "direction": direction,
+        "cluster_mass": float(cluster_masses[i])
     })
 
 # Turn into DataFrame
@@ -249,10 +269,9 @@ T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
     out_type='mask'
 )
 
-print(clusters)
-print(cluster_p_values)
-
 alpha = 0.05
+cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
+
 rows = []
 for i_c, c in enumerate(clusters):
     p = float(cluster_p_values[i_c])
@@ -281,6 +300,7 @@ for i_c, c in enumerate(clusters):
             "p_value": p,
             "mean_t": mean_t,
             "n_subjects": int(X_lin.shape[0]),
+            "cluster_mass": float(cluster_masses[i_c])
         })
 
 summary = pd.DataFrame(rows).reset_index(drop=True)
@@ -521,10 +541,12 @@ for label, (XA, XB) in pairs.items():
         verbose=True,
     )
 
-    print(cluster_p_values.round(3))
+
     # Summarize significant clusters
     alpha = 0.05
     n_times = len(times)
+    cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
+
 
     # ---- Summarize significant clusters (no helper) ----
     for i_c, c in enumerate(clusters):
@@ -557,6 +579,7 @@ for label, (XA, XB) in pairs.items():
                 "start_time": t_start,
                 "end_time": t_end,
                 "p_value": p,
+                "cluster_mass": float(cluster_masses[i_c]),
                 "mean_t": mean_t,
                 "mean_diff": mean_diff,
                 "n_subjects": int(XA.shape[0])
@@ -601,7 +624,7 @@ plt.show()
 
 # Save combined summary across
 posthoc_df = pd.DataFrame(all_rows).sort_values(["contrast","start_time"]).reset_index(drop=True)
-# posthoc_df.to_csv("posthoc_load_pairwise_clusters.csv", index=False)
+posthoc_df.to_csv("posthoc_load_pairwise_clusters.csv", index=False)
 
 display(posthoc_df if not posthoc_df.empty else "No significant post-hoc clusters.")
 
@@ -674,7 +697,8 @@ for mask in [0, 1]:
             verbose=True
         )
 
-        print(cluster_p_values.round(3))
+        cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
+
         # Summarize significant clusters
         alpha = 0.05
         n_times = len(times)
@@ -711,6 +735,7 @@ for mask in [0, 1]:
                     "start_time": t_start,
                     "end_time": t_end,
                     "p_value": p,
+                    "cluster_mass": float(cluster_masses[i_c]),
                     "mean_t": mean_t,
                     "mean_diff": mean_diff,
                     "n_subjects": int(XA.shape[0])
@@ -755,7 +780,7 @@ for mask in [0, 1]:
 
 # Save combined summary across masks
 posthoc_df = pd.DataFrame(all_rows).sort_values(["mask","contrast","start_time"]).reset_index(drop=True)
-# posthoc_df.to_csv("posthoc_load_pairwise_clusters_by_mask.csv", index=False)
+posthoc_df.to_csv("posthoc_load_pairwise_clusters_by_mask.csv", index=False)
 
 display(posthoc_df if not posthoc_df.empty else "No significant post-hoc clusters.")
 
@@ -775,7 +800,7 @@ display(posthoc_df if not posthoc_df.empty else "No significant post-hoc cluster
 
 # CONFIG
 alpha = 0.05
-n_perm = 10000
+n_perm = 5000
 two_tailed = 0     # two-tailed test
 time_decimals = 3  # round times to align (important!)
 
@@ -852,6 +877,8 @@ T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
     verbose=True
 )
 
+cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
+
 # -------------------------------------------------------------------
 # Summarize significant clusters
 # -------------------------------------------------------------------
@@ -878,6 +905,7 @@ for i_c, c in enumerate(clusters):
             "start_time": float(times[idx[0]]),
             "end_time": float(times[idx[-1]]),
             "p_value": p,
+            "cluster_mass": float(cluster_masses[i_c]),
             "mean_t": float(np.mean(t_vals)),
             "mean_contrast_mask": mean_contrast_mask,
             "mean_contrast_nomask": mean_contrast_no,

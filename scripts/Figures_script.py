@@ -357,8 +357,8 @@ for i,j in enumerate(oris[2:4]):
     
     # Labels
     ax.text(theta, r, str(j), fontsize=15, ha='center', va='center')
-    ax.text((theta - diff), r+0.13, (str(j-8)), fontsize=10, ha='center', va='center', color='black', alpha=1)
-    ax.text((theta + diff), r+0.13, (str(j+8)), fontsize=10, ha='center', va='center', color='black', alpha=1)
+    ax.text((theta - diff), r+0.13, (str('away')), fontsize=8, ha='center', va='center', color='black', alpha=1)
+    ax.text((theta + diff), r+0.13, (str('towards')), fontsize=8, ha='center', va='center', color='black', alpha=1)
 
 
 ax.set_xticks([np.pi/2, np.pi/4])
@@ -459,6 +459,129 @@ ax.set_xticks([0, np.pi/2, np.pi, 3*np.pi/2])
 ax.tick_params(axis='x', colors='pink')
 
 plt.show()
+
+# %%
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.markers import MarkerStyle
+from matplotlib.transforms import Affine2D
+
+colors1 = sns.diverging_palette(225, 15, s=70, n=2, l=50, center='light')
+colors2 = sns.diverging_palette(225, 15, s=70, n=2, l=50, center='light')
+colors2.reverse()
+
+colors = np.vstack((colors1, colors2)*10)
+
+fig = plt.figure(figsize=(10,10))
+ax = fig.add_subplot(111, projection='polar')
+
+ax.set_yticklabels([])
+#ax.set_facecolor('None')
+# ax.set_ylim(0, 0.7)
+
+ax.set_axisbelow(True)
+ax.yaxis.grid(color='gray', linestyle='dashed')
+ax.spines['polar'].set_visible(False)
+#ax.grid(False)
+#ax.set_rticks([])
+#ax.xaxis.grid(True, color='pink', linestyle='--')
+
+for i,j in enumerate(oris):
+    theta = np.radians(j)
+    diff = np.radians(8)
+    diff2 = np.radians(2)
+
+    r = 0.3
+    
+    color = colors[i]
+
+    # Main dot
+    ax.plot(theta, r, 'o', color=color, markersize=60, alpha=1)
+
+    # --- Compute outward radial angle ---
+    ang_left  = np.degrees(theta-diff)+180
+    ang_right = np.degrees(theta+diff)
+
+    ang_left_left  = np.degrees(theta-diff-diff2)+180
+    ang_right_right= np.degrees(theta+diff+diff2)
+    ang_left_right  = np.degrees(theta-diff+diff2)
+    ang_right_left= np.degrees(theta+diff-diff2)+180
+
+    ang_s = np.degrees(theta-diff)-45
+    ang_s2 = np.degrees(theta+diff)+45
+
+    ang = np.degrees(theta)
+    ang180 = np.degrees(theta)+180
+
+    ax.scatter(theta-diff, r+0.13,
+        marker=(4, 0, ang_s),   # triangle rotated by angle
+        s=1800,
+        c=[color],
+        alpha=0.8)
+    
+    ax.scatter(theta+diff, r+0.13,
+        marker=(4, 0, ang_s2),   # triangle rotated by angle
+        s=1800,
+        c=[color],
+        alpha=0.8)
+
+    # ax.scatter(theta-diff-diff2, r+0.18,
+    #     marker=(3, 0, ang_left_left),   # triangle rotated by angle
+    #     s=70,
+    #     c='red',
+    #     alpha=1)
+    
+    # ax.scatter(theta-diff+diff2, r+0.18,
+    #     marker=(3, 0, ang_left_right),   # triangle rotated by angle
+    #     s=70,
+    #     c='green',
+    #     alpha=1)
+
+    # ax.scatter(theta+diff+diff2, r+0.18,
+    #     marker=(3, 0, ang_right_right),   # triangle rotated by angle
+    #     s=70,
+    #     c='red',
+    #     alpha=1)
+    
+    # ax.scatter(theta+diff-diff2, r+0.18,
+    #     marker=(3, 0, ang_right_left),   # triangle rotated by angle
+    #     s=70,
+    #     c='green',
+    #     alpha=1)
+    
+    # tiny = np.radians(1.6)
+
+    # ax.plot([theta-diff+diff2-tiny, theta-diff+diff2], [r+0.18, r+0.18], linestyle='-', color='green', clip_on=False)
+    # ax.plot([theta-diff-diff2, theta-diff-diff2+ tiny], [r+0.18, r+0.18], linestyle='-', color='red', clip_on=False)
+
+    # ax.plot([theta+diff-diff2, theta+diff-diff2+tiny], [r+0.18, r+0.18], linestyle='-', color='green', clip_on=False)
+    # ax.plot([theta+diff+diff2-tiny, theta+diff+diff2], [r+0.18, r+0.18], linestyle='-', color='red', clip_on=False)
+    
+    # Labels
+    ax.text(theta, r, str(j), fontsize=15, ha='center', va='center')
+    ax.text((theta - diff), r+0.13, (str(j-8)), fontsize=10, ha='center', va='center', color='black', alpha=1)
+    ax.text((theta + diff), r+0.13, (str(j+8)), fontsize=10, ha='center', va='center', color='black', alpha=1)
+
+
+# ax.set_xticks([np.pi/2, np.pi/4])
+# ax.tick_params(axis='x', colors='black', labelsize=13)
+
+# # ax.set_thetamin(45)
+# # ax.set_thetamax(90)
+ax.set_rmax(0.5)
+# ax.set_rmin(0)
+# ax.set_rorigin(0)
+# ax.grid(True)
+# y_ticks = np.arange(0.3, 0.75, 0.1)
+# ax.set_yticks(y_ticks)
+
+# handles, labels = ax.get_legend_handles_labels()
+# by_label = dict(zip(labels, handles))
+# ax.legend(by_label.values(), by_label.keys(), loc='center')
+
+plt.show()
+
+
 # %%
 # Set up the color wheel map
 unbiased = np.full(17, 0.4)

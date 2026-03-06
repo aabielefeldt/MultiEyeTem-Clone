@@ -180,7 +180,7 @@ posthoc_df = pd.DataFrame(all_rows).reset_index(drop=True)
 
 display(posthoc_df if not posthoc_df.empty else "No significant post-hoc clusters.")
 #%%
-# Test the interaction between Load and Accuracy with a contrast based interaction test
+# 2.1 Test the interaction between Load and Accuracy with a contrast based interaction test
 # this should be all correct I think but check again
 # this is testing whether the linear trend for the load conditions is the same in correct vs incorrect trials
 # for the whole trial timeline it isnt (-> there is a difference during test)
@@ -333,7 +333,7 @@ plt.show()
 
 
 # %%
-# Main effect of accuracy but divided by load conditions
+# 2.2 Main effect of accuracy but divided by load conditions
 cluster_results = {}
 
 for load in [1, 2, 3]:

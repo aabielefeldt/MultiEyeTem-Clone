@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from scipy.stats import zscore  
 
 # %% 
 # read evokes seperated by oblique vs cardinal
@@ -15,9 +16,65 @@ good_partis = df['subID'].unique()
 mask_partis = df[df['mask']==1]['subID'].unique().tolist()
 nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
 
+evoked_df_all_combos_shifted["time"] = evoked_df_all_combos_shifted["time"].round(3)
+# then use x="time_r" in the helper + lineplot, and marker times as exact values
 
+# Z-score within each subject (across all times and trials)
+evoked_df_all_combos_shifted['pupils_z'] = evoked_df_all_combos_shifted.groupby('subID')['pupils'].transform(
+    lambda x: zscore(x, nan_policy='omit'))
+
+# %% 
+marker_times = {
+    1: [2],
+    2: [1, 2],
+    3: [0, 1, 2]
+}
+
+def add_load_markers(ax, data, x="time", y="pupils_z", hue="Load"):
+
+    # Get line colors (for circle fills)
+    handles, labels = ax.get_legend_handles_labels()
+    color_map = {}
+    for h, lab in zip(handles, labels):
+        try:
+            key = int(lab)
+        except ValueError:
+            key = lab
+        color_map[key] = h.get_color()
+
+    # Mean timecourse
+    m = data.groupby([hue, x], as_index=False)[y].mean()
+
+    for load, times in marker_times.items():
+
+        mm = m[m[hue].eq(load) & m[x].isin(times)]
+
+        for i, (_, row) in enumerate(mm.iterrows(), start=1):
+
+            # Circle (Load color)
+            ax.scatter(
+                row[x], row[y],
+                s=160,
+                marker="o",
+                color=colors_load[i-1],
+                edgecolor="white",
+                linewidth=1,
+                zorder=10
+            )
+
+            # Number (position color)
+            ax.text(
+                row[x], row[y],
+                str(i),
+                color="white",
+                ha="center",
+                va="center",
+                fontsize=9,
+                weight="bold",
+                zorder=11
+            )
 # %%
-
+colors_load = sns.color_palette("flare", 3)
 with sns.plotting_context(context='paper', font_scale=1.5): 
     
     fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(12, 10), sharex=True, sharey=True)
@@ -38,6 +95,8 @@ with sns.plotting_context(context='paper', font_scale=1.5):
             # evoked_df_only_Oblique_shifted.loc[evoked_df_only_Oblique_shifted['Load']==3
             # sns.lineplot(data=evoked_df_only_Oblique_shifted[evoked_df_only_Oblique_shifted['Cardinal_Category']=='Oblique'], x='time', y='pupils', hue='Load', errorbar='se', ax=ax)
             sns.despine(fig=fig, ax=None, top=True, right=True, left=False, bottom=False, offset=None, trim=False)
+
+            add_load_markers(ax, subset)
 
             if i == 0:
                 ax.set_title(f"Mask = {mask}", y=1.4)

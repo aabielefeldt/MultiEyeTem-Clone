@@ -1,0 +1,109 @@
+# %%
+# Importsconda
+import mne
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from pupil_utils import apply_baseline_nan_aware
+from scipy.stats import zscore
+from mne.stats import permutation_cluster_test, f_oneway, permutation_cluster_1samp_test
+from scipy import stats
+from scipy.stats import t, ttest_rel, zscore, f
+import pingouin as pg
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+
+# %% Load Metadata
+
+df = pd.read_csv('../data/csv_files/df.csv')
+good_partis = df['subID'].unique()
+
+#%% trying to attach the new metadata and run evokeds depending on bias
+drop_log_rows = []
+all_evoked_dfs = []
+
+folder_path = "/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/data/Epochs_even_newer"
+
+# nan-mean across epochs (returns shape: n_channels x n_times)
+evoked_nan_mean = lambda x: np.nanmean(x, axis=0)
+
+# crop rules per load
+tmax_by_load = {1: 7, 2: 8, 3: 9}
+
+for sub in good_partis:
+    epoch_file = f"{folder_path}/{sub}_even_newer-epo.fif"
+
+    pupil_epoch = mne.read_epochs(epoch_file, preload=True, verbose=None)
+
+    # attach metadata (must already align with epochs)
+    pupil_epoch.metadata = df.loc[df["subID"] == sub].copy()
+
+    # baseline + drop bad baseline epochs
+    pupil_epoch_bl = apply_baseline_nan_aware(pupil_epoch, bmin=-0.1, bmax=0.0)
+
+    # # count dropped
+    # sum_dropped = sum("BAD_baseline_nan_both_eyes" in entry for entry in pupil_epoch_bl.drop_log)
+    # drop_log_rows.append({"subID": sub, "sum_dropped": sum_dropped})
+
+    # combine pupil channels into one channel called "pupils"
+    pupil_ix = mne.pick_channels(pupil_epoch_bl.info["ch_names"], include=["pupil_left", "pupil_right"])
+    roi_dict = dict(pupils=pupil_ix)
+    pupil_epochs = mne.channels.combine_channels(
+        pupil_epoch_bl, roi_dict, method=lambda data: np.nanmean(data, axis=1)
+    )
+
+    # loop over groups: Load x away_cardinal
+    for load in (1, 2, 3):
+        # select load and crop
+        ep_load = pupil_epochs[f"items_presented == {load}"].copy().crop(-0.1, tmax_by_load[load])
+
+    # loop over dist_to_cardinal values *within this subset*
+        dist_vals = sorted(ep_load.metadata["dist_to_cardinal_mem"].dropna().unique())
+
+        for dist in dist_vals:
+            ep_dist = ep_load[f"dist_to_cardinal_mem == {dist}"]
+
+            for away in (0, 1):
+                ep_bp = ep_dist[f"pressed_away_from_cardinal == {away}"]
+                        
+                # average across epochs with nanmean
+                evk = ep_bp.average(method=evoked_nan_mean)
+
+                # convert to df; keep only time + the single channel
+                df_evk = evk.to_data_frame(scalings=1)  # columns typically: time, pups/pupils (and maybe 'condition')
+
+                df_evk = df_evk[["time", "pupils"]].copy()
+
+                # add identifiers
+                df_evk["subID"] = sub
+                df_evk["items_presented"] = load
+                df_evk["dist_to_cardinal_mem"] = dist
+                df_evk["pressed_away_from_cardinal"] = away
+
+                all_evoked_dfs.append(df_evk)
+
+# final outputs
+evokeds_df = pd.concat(all_evoked_dfs, ignore_index=True)
+# drop_log_df = pd.DataFrame(drop_log_rows)
+# %%
+# Shifting
+
+# shifting the conditions so that the epochs that are epoched on pos1 are time-locked to the test onset
+evokeds_df_shifted = evokeds_df.copy()
+evokeds_df_shifted.loc[evokeds_df_shifted['items_presented']==1, 'time'] +=2
+evokeds_df_shifted.loc[evokeds_df_shifted['items_presented']==2, 'time'] +=1
+evokeds_df_shifted.loc[evokeds_df_shifted['items_presented']==3, 'time'] +=0
+
+#%%
+mask_partis = df[df['mask']==1]['subID'].unique().tolist()
+nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
+# Adding column for mask
+evokeds_df_shifted['mask'] = evokeds_df_shifted['subID'].apply(
+    lambda x: 1 if x in mask_partis else 0)
+
+# also include rounding here
+evokeds_df_shifted['time'] = evokeds_df_shifted['time'].round(3)
+
+evokeds_df_shifted.to_csv('../data/csv_files/evoked_df_button_press.csv', index=False)
+# %%

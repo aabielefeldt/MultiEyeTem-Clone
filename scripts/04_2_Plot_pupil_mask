@@ -24,10 +24,36 @@ nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
 # cluster_results_mask_vs_nomask = pd.read_csv('../data/csv_files/cluster_results_mask_vs_nomask.csv')
 
 
-evoked_df_shifted = pd.read_csv('../data/csv_files/evoked_df_shifted.csv')
+evoked_df_shifted = pd.read_csv('../data/csv_files/evoked_df_load_shifted.csv')
 
 evoked_df_shifted["time"] = evoked_df_shifted["time"].round(3)
 # then use x="time_r" in the helper + lineplot, and marker times as exact values
+#%%
+
+delay_start, delay_end = 3, 6.5   # adjust if needed (inclusive/exclusive is up to you)
+
+# Boolean mask for delay period
+is_delay = evoked_df_shifted["time"].between(delay_start, delay_end, inclusive="both")
+
+def delay_zscore_apply_all(g):
+    # compute mean/sd from delay only, apply to all rows of that subject
+    delay_vals = g.loc[is_delay.loc[g.index], "pupils"].to_numpy()
+
+    mu = np.nanmean(delay_vals)
+    sd = np.nanstd(delay_vals, ddof=0)
+
+    # avoid division-by-zero if sd == 0 or all NaN
+    if not np.isfinite(sd) or sd == 0:
+        return pd.Series(np.nan, index=g.index)
+
+    return (g["pupils"] - mu) / sd
+
+evoked_df_shifted["pupils_z_delay"] = (
+    evoked_df_shifted
+    .groupby("subID", group_keys=False)
+    .apply(delay_zscore_apply_all)
+)
+
 
 # Z-score within each subject (across all times and trials)
 evoked_df_shifted['pupils_z'] = evoked_df_shifted.groupby('subID')['pupils'].transform(
@@ -47,7 +73,7 @@ marker_times = {
     3: [0, 1, 2]
 }
 
-def add_load_markers(ax, data, x="time", y="pupils_z", hue="Load"):
+def add_load_markers(ax, data, x="time", y="pupils_z_delay", hue="Load"):
 
     # Get line colors (for circle fills)
     handles, labels = ax.get_legend_handles_labels()
@@ -94,31 +120,31 @@ def add_load_markers(ax, data, x="time", y="pupils_z", hue="Load"):
 
 # %% 
 colors_load = sns.color_palette("flare", 3)
+
 with sns.plotting_context(context='paper', font_scale=1.5): 
     
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8), sharey=True)
-    markers_on = [0, 1, 2]
+
     # Plot for participants WITH mask (Left Plot)
     mask_data = evoked_df_shifted[evoked_df_shifted["subID"].isin(mask_partis)]
     sns.lineplot(
         data=mask_data, 
-        hue='Load', x='time', y='pupils_z',  
+        hue='Load', x='time', y='pupils',  
         errorbar='se', ax=ax1, palette=colors_load
     )
     
-    add_load_markers(ax1, mask_data)
-
-    sns.despine(ax=ax1)
-
     # Plot for participants WITHOUT mask (Right Plot)
     nomask_data = evoked_df_shifted[evoked_df_shifted["subID"].isin(nomask_partis)]
     sns.lineplot(
         data=nomask_data, 
-        hue='Load', x='time', y='pupils_z', 
+        hue='Load', x='time', y='pupils', 
         errorbar='se', ax=ax2, legend='full', palette=colors_load
     )
+
+    add_load_markers(ax1, mask_data)
     add_load_markers(ax2, nomask_data)
-    
+
+    sns.despine(ax=ax1)
     sns.despine(ax=ax2)
 
     # Add mask time

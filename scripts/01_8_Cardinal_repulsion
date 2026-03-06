@@ -50,7 +50,7 @@ con1s = []
 con2s = []
 con3s = []
 all_cons = []
-colors = sns.hls_palette(17)
+colors = sns.color_palette('flare', 3)
 # colors = sns.color_palette("mako", as_cmap=True)
 
 # Get ordered list of unique target orientations
@@ -76,10 +76,10 @@ for i in range(len(oris)):
     con2s.append(con2)
     con3s.append(con3)
 
-    ax.plot(theta_adjusted, all_con, 'o', color=colors[1])
-    ax.plot(theta_adjusted, con1, 'o', color=colors[5])
-    ax.plot(theta_adjusted, con2, 'o', color=colors[9])
-    ax.plot(theta_adjusted, con3, 'o', color=colors[13])
+    ax.plot(theta_adjusted, all_con, 'o', color='black')
+    ax.plot(theta_adjusted, con1, 'o', color=colors[0])
+    ax.plot(theta_adjusted, con2, 'o', color=colors[1])
+    ax.plot(theta_adjusted, con3, 'o', color=colors[2])
 
     # Add text labels for each point to inspect if needed
     # text_positions = np.full(17, 0.55)[i]
@@ -89,16 +89,27 @@ for i in range(len(oris)):
 
 
 # Plotting lines to connect dots
-ax.plot(thetas_adjusted, all_cons, '--', color='black', label='all loads average')
-ax.plot(thetas_adjusted, con1s, '-', color=colors[5], label='load 1')
-ax.plot(thetas_adjusted, con2s, '-', color=colors[9], label='load 2')
-ax.plot(thetas_adjusted, con3s, '-', color=colors[13], label='load 3')
+#ax.plot(thetas_adjusted, all_cons, '--', color='black', label='all loads average')
+ax.plot(thetas_adjusted, con1s, '-', color=colors[0], label='load 1')
+ax.plot(thetas_adjusted, con2s, '-', color=colors[1], label='load 2')
+ax.plot(thetas_adjusted, con3s, '-', color=colors[2], label='load 3')
 
-ax.plot(thetas_adjusted, unbiased_assumption, color=colors[16], linestyle='dashed')
+ax.plot(thetas_adjusted, unbiased_assumption, color='green', linestyle='dashed')
+
+ax.set_rmin(0.4)
+ax.set_rorigin(0)
+ax.grid(True)
+y_ticks = np.arange(0.3, 0.75, 0.1)
+ax.set_yticks(y_ticks)
+
+handles, labels = ax.get_legend_handles_labels()
+by_label = dict(zip(labels, handles))
+ax.legend(by_label.values(), by_label.keys(), loc='center')
 
 # plt.legend()
 
 plt.show()
+
 
 #%%
 # Repulsion in sample-orientations Polar Plot

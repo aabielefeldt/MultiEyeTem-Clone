@@ -95,14 +95,17 @@ T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
     out_type="mask",
     verbose=True
 )
-
+cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
 # Store results
 cluster_results = {
     "T_obs": T_obs,
     "clusters": clusters,
     "cluster_p_values": cluster_p_values,
-    "times": times
+    "times": times,
+    "cluster_mass": cluster_masses
 }
+
+
 print(cluster_p_values)
 
 # Plot
@@ -162,13 +165,15 @@ for load in [1, 2, 3]:
         out_type="mask",
         verbose=True
     )
+    cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
 
     # Store results
     cluster_results[load] = {
         "T_obs": T_obs,
         "clusters": clusters,
         "cluster_p_values": cluster_p_values,
-        "times": times
+        "times": times,
+        "cluster_mass": cluster_masses
     }
     print(cluster_results[load]['cluster_p_values'])
 
@@ -221,7 +226,7 @@ for load in [1, 2, 3]:
 
 # now running seperately for load, effect only exists in load 3 
 # but also needs to be seperated per load otherwise an unequal number of trials from either load is contributing to the conditions
-
+cluster_summaries = []
 for load in [2,3]:
 
     df_load = delay_time_window[delay_time_window['Load']==load]
@@ -256,15 +261,32 @@ for load in [2,3]:
         out_type="mask",
         verbose=True
     )
+    cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
 
-    # Store results
-    cluster_results = {
-        "T_obs": T_obs,
-        "clusters": clusters,
-        "cluster_p_values": cluster_p_values,
-        "times": times
-    }
-    print(cluster_p_values)
+    for i, c in enumerate(clusters):
+        p_val = cluster_p_values[i]
+
+        time_inds = c[0]
+        t_vals = T_obs[time_inds]
+        mean_t = t_vals.mean()
+
+        cluster_summaries.append({
+            'load': load,
+            "cluster_id": i + 1,
+            "start_time": times[time_inds][0],
+            "end_time": times[time_inds][-1],
+            "p_value": p_val,
+            "mean_t": mean_t,
+            "cluster_mass": float(cluster_masses[i])
+        })
+
+    # Turn into DataFrame
+    cluster_results_cat_all_vs_mixed_load = pd.DataFrame(cluster_summaries)
+
+    # Save to CSV
+    cluster_results_cat_all_vs_mixed_load.to_csv('../data/csv_files/cluster_results_cat_all_vs_mixed_load.csv', index=False)
+
+    display(cluster_results_cat_all_vs_mixed_load)
 
     # Plot
     plt.figure(figsize=(10, 5))
@@ -376,13 +398,15 @@ for mask in [0, 1]:
         out_type="mask",
         verbose=True
     )
+    cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
 
     # Store results
     cluster_results[mask] = {
         "T_obs": T_obs,
         "clusters": clusters,
         "cluster_p_values": cluster_p_values,
-        "times": times
+        "times": times,
+        "cluster_mass": cluster_masses
     }
     print(cluster_results[mask]['cluster_p_values'])
 
@@ -478,6 +502,7 @@ for mask_val in [0, 1]:
             out_type="mask",
             verbose=True
         )
+        cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
 
         # Store results
         key = f"Load{load_val}_Mask{mask_val}"
@@ -486,7 +511,8 @@ for mask_val in [0, 1]:
             "clusters": clusters,
             "cluster_p_values": cluster_p_values,
             "times": times,
-            "subjects": list(common_subs)
+            "subjects": list(common_subs),
+            "cluster_mass": cluster_masses
         }
 
         print(cluster_results[key]['cluster_p_values'])
@@ -572,6 +598,8 @@ for load_val in [1, 2, 3]:
         verbose=True
     )
 
+    cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
+
     # Store results
     key = f"Load{load_val}_Mask{mask_val}"
     cluster_results[key] = {
@@ -579,7 +607,8 @@ for load_val in [1, 2, 3]:
         "clusters": clusters,
         "cluster_p_values": cluster_p_values,
         "times": times,
-        "subjects": list(common_subs)
+        "subjects": list(common_subs),
+        "cluster_mass": cluster_masses
     }
 
     print(cluster_results[key]['cluster_p_values'])
@@ -686,6 +715,8 @@ T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
 )
 
 rows = []
+cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
+
 for i_c, c in enumerate(clusters):
     p = float(cluster_p_values[i_c])
     if p < alpha:
@@ -713,6 +744,7 @@ for i_c, c in enumerate(clusters):
             "p_value": p,
             "mean_t": mean_t,
             "n_subjects": int(X.shape[0]),
+            "cluster_mass": cluster_masses[i_c]
         })
 
 summary = pd.DataFrame(rows).reset_index(drop=True)

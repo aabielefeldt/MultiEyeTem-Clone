@@ -86,11 +86,21 @@ ax.plot(thetas_adjusted, con1s, '-', color=colors_load[0], label='load 1')
 ax.plot(thetas_adjusted, con2s, '-', color=colors_load[1], label='load 2')
 ax.plot(thetas_adjusted, con3s, '-', color=colors_load[2], label='load 3')
 
-# Move r origin outwards to have a hollow circle in the middle for ~AesTHeTicS~
-rorigin = -0.5*ylim[1]
-ax.set_rorigin(rorigin)
-y_ticks = np.arange(0, 1, 0.2)
+# # Move r origin outwards to have a hollow circle in the middle for ~AesTHeTicS~
+# rorigin = -0.5*ylim[1]
+# ax.set_rorigin(rorigin)
+# y_ticks = np.arange(0, 1, 0.2)
+# ax.set_yticks(y_ticks)
+
+ax.set_rmin(0.4)
+ax.set_rorigin(0)
+ax.grid(True)
+y_ticks = np.arange(0.4, 1, 0.2)
 ax.set_yticks(y_ticks)
+
+handles, labels = ax.get_legend_handles_labels()
+by_label = dict(zip(labels, handles))
+ax.legend(by_label.values(), by_label.keys(), loc='center')
 
 plt.title('Accuracy on Polar Plot by Load Condition')
 plt.legend()
@@ -497,7 +507,7 @@ plt.tight_layout()
 plt.show()
 
 #%%
-
+# Generalized estimating equations
 
 df_gee = df.dropna(subset=[
     "acc_trial_concrete_cued",
@@ -534,7 +544,6 @@ model_results.summary()
 grid = pd.DataFrame({"dist_to_cardinal_mem": [11.25, 33.75],})
 grid = grid.merge(pd.DataFrame({"probe_away_from_cardinal":[0,1]}), how="cross")
 grid = grid.merge(pd.DataFrame({"items_presented":[1,2,3]}), how="cross")
-
 
 # Get prediction from model results -> Estimated Marginal Means (EMMs)
 # predictions representing the average, expected value of a response variable for each level of a factor, adjusted for other variables
@@ -591,33 +600,68 @@ dist_probe_emms2 = emms.pivot_table(
 dist_probe_emms2.columns = ["probe_away_from_cardinal","11.25","33.75"]  # 0=toward, 1=away
 dist_probe_emms2["diff_near_minus_far"] = dist_probe_emms2["33.75"] - dist_probe_emms2["11.25"]
 
+emms_dist_load = emms.pivot_table(
+    index=["dist_to_cardinal_mem"],
+    columns="items_presented",
+    values="prob"
+).reset_index()
+emms_dist_load
+
+emms_dist_load.columns = ["dist_to_cardinal_mem", 1,2,3]  # 0=toward, 1=away
+emms_dist_load["diff_1_minus_2"] = emms_dist_load[1] - emms_dist_load[2]
+emms_dist_load["diff_2_minus_3"] = emms_dist_load[2] - emms_dist_load[3]
+
+# %%
+emms = emms.round(3).reset_index()
+dist_prob_load_emms = dist_prob_load_emms.round(3).reset_index()
+dist_probe_emms = dist_probe_emms.round(3).reset_index()
+dist_probe_emms2 = dist_probe_emms2.round(3).reset_index()
+emms_dist_load = emms_dist_load.round(3).reset_index()
+
+emms.to_csv('../data/csv_files/emms.csv', index=False)
+dist_prob_load_emms.to_csv('../data/csv_files/dist_prob_load_emms.csv', index=False)
+dist_probe_emms.to_csv('../data/csv_files/dist_probe_emms.csv', index=False)
+dist_probe_emms2.to_csv('../data/csv_files/dist_probe_emms2.csv', index=False)
+emms_dist_load.to_csv('../data/csv_files/emms_dist_load.csv', index=False)
+
 # %%
 # Tests all simple effects?
 # “Does this predictor (or interaction) explain variance in accuracy in the population?”
-wald_terms = model_results.wald_test_terms(scalar=True)
-wald_terms = wald_terms.summary_frame().round(3)
-display(wald_terms)
+wald_terms_simple = model_results.wald_test_terms(scalar=True)
+wald_terms_simple = wald_terms_simple.summary_frame().round(3).reset_index()
+display(wald_terms_simple)
+wald_terms_simple.to_csv('../data/csv_files/wald_terms_simple.csv', index=False)
 # all interpretations in notion
+
+#%%
+# Like t-test on coefficients
+# Wald tests to test interactions
+# testing: “Is this predictor / interaction statistically reliable?”
+# do I only test the significant coefficients??
 
 # Still need Interaction specifc differences to go along with collapsed marginal means
 # Wald tests test against zero!
 # Repulsion near cardinal (because baseline) - already in wald_terms
-display(model_results.wald_test("probe_away_from_cardinal"))
+#display(model_results.wald_test("probe_away_from_cardinal"))
 
 # repulsion at oblique () --??
-# "effect of probe moved towards the cardinal at orientation 11.25 at load 1" + intactions effect of probe moved towards cardinal at ori 33.75 and load 1?? 
-display(model_results.wald_test("probe_away_from_cardinal + C(dist_to_cardinal_mem)[T.33.75]:probe_away_from_cardinal"))
+# "effect of probe moved towards the cardinal at orientation 11.25 at load 1" + intactions effect of probe moved towards cardinal at ori 33.75 and load 1??
+# # is probe effect different at 33.75 than at 11.25(intercept/baseline):
+# toward vs away at far? 
+# apparently this is "is the probe effect at distance 33.75 equal to zero" 
+display(model_results.wald_test("probe_away_from_cardinal + C(dist_to_cardinal_mem)[T.33.75]:probe_away_from_cardinal", scalar=True))
 
 # interaction, is repulsion significantly weaker/stronger when far from cardinal? - already in wald_terms
 # tests wethere the repulsion near is = to the repulsion far (or better wether slope is different from zero)
 # - Because that interaction is the difference.
-display(model_results.wald_test("C(dist_to_cardinal_mem)[T.33.75]:probe_away_from_cardinal"))
+#display(model_results.wald_test("C(dist_to_cardinal_mem)[T.33.75]:probe_away_from_cardinal"))
 
 # Optional
 # oblique vs cardinal (accross probe) - already in wald_terms
-display(model_results.wald_test("C(dist_to_cardinal_mem)[T.33.75] = 0"))
+#display(model_results.wald_test("C(dist_to_cardinal_mem)[T.33.75] = 0"))
 
-
+# one more test comparing load 3 vs load 2, load 1 vs load 2 and load 1 vs load 3 are tested in omnibus wald I think
+display(model_results.wald_test("C(items_presented)[T.3] - C(items_presented)[T.2]", scalar=True))
 
 
 # %%
@@ -634,6 +678,8 @@ display(model_results.wald_test("C(dist_to_cardinal_mem)[T.33.75] = 0"))
 # ttest_results = model_results.t_test_pairwise(term_name='C(items_presented)')
 # ttest_results.result_frame
 
+# model_results.standard_errors()
+
 # groups = geemodel.groups
 # model_results.cov_struct.covariance_matrix(sf, groups) # <- i think this is correct
 
@@ -644,31 +690,12 @@ display(model_results.wald_test("C(dist_to_cardinal_mem)[T.33.75] = 0"))
 # predtr = model_results.get_prediction()
 # tr= predtr.summary_frame()
 
+# useful? not sure what this is exactly
+# Estimated marginal effects for a regression model fit with GEE.
+# margins = model_results.get_margeff(at='overall', dummy=True)
+# margins.summary_frame()
 
 
-
-
-#%%
-# Like t-test on coefficients
-# Wald tests to test interactions
-# testing: “Is this predictor / interaction statistically reliable?”
-# do I only test the significant coefficients??
-
-
-# is probe effect different at 33.75 than at 11.25(intercept/baseline):
-# toward vs away at far? - but at load 1??? because probe_away_from_cardinal is the baseline and is away=1
-print(model_results.wald_test("probe_away_from_cardinal + C(dist_to_cardinal_mem)[T.33.75]:probe_away_from_cardinal = 0", scalar=True))
-# toward vs away at near?
-# below doesnt work
-#print(model_results.wald_test("dist_to_cardinal_mem[T.33.75] + C(dist_to_cardinal_mem)[T.11.25]:probe_away_from_cardinal = 0"))
-
-
-
-print(model_results.wald_test("probe_away_from_cardinal + C(dist_to_cardinal_mem)[T.33.75]:C(items_presented)[T.3]"))
-
-# %%
-
-model_results.wald_test_terms("probe_away_from_cardinal + C(dist_to_cardinal_mem) + C(items_presented)[T.3]")
 
 
 #%%
