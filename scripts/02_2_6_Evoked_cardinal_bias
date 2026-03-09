@@ -105,5 +105,5 @@ evokeds_df_shifted['mask'] = evokeds_df_shifted['subID'].apply(
 # also include rounding here
 evokeds_df_shifted['time'] = evokeds_df_shifted['time'].round(3)
 
-evokeds_df_shifted.to_csv('../data/csv_files/evoked_df_button_press.csv', index=False)
+evokeds_df_shifted.to_csv('../data/csv_files/evoked_df_button_press_long_bl.csv', index=False)
 # %%

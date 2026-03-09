@@ -317,8 +317,6 @@ df_cardinal_bias_acc_piv['mask'] = df_cardinal_bias_acc_piv['subID'].apply(
     lambda x: 1 if x in mask_partis else 0)
 
 
-df_cardinal_bias_acc_piv["median_split"] = (df_cardinal_bias_acc_piv.diff_card<df_cardinal_bias_acc_piv.diff_card.quantile()).replace({True:1, False:0})
-
 
 #%%
 # 2.1 comparing pupil when pressed away in high bias and low bias group -> could make this a contrast 
@@ -743,6 +741,121 @@ for load in [1,2,3]:
     plt.xlabel('Time (s)')
     plt.ylabel('Pupil size')
     plt.show()
+
+#%%
+# 2.5 comparing load effect between the two groups
+# not significant (but looks like its not too far off) - means load effect is the same in both groups
+
+df_card = delay_time_window[(delay_time_window['subID'].isin(diff_card_med_high))] # & (delay_time_window['mask']==0)] #  & (delay_time_window['dist_to_cardinal_mem']==11.25)]
+df_obli = delay_time_window[(delay_time_window['subID'].isin(diff_card_med_low))] # & (delay_time_window['mask']==0)] #  & (delay_time_window['dist_to_cardinal_mem']==11.25)]
+
+lins = []
+
+for group in [diff_card_med_high, diff_card_med_low]:
+
+    df_m = delay_time_window[(delay_time_window['subID'].isin(group))]
+    # Build subject×time tables per load
+    P1 = df_m[df_m['items_presented'] == 1].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+    P2 = df_m[df_m['items_presented'] == 2].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+    P3 = df_m[df_m['items_presented'] == 3].pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+
+    # Align subjects and timepoints across ALL three loads (within-subjects!)
+    common_subs  = P1.index.intersection(P2.index).intersection(P3.index)
+    common_times = P1.columns.intersection(P2.columns).intersection(P3.columns)
+    common_times = np.array(sorted(common_times))
+
+    X1 = P1.loc[common_subs, common_times].to_numpy()
+    X2 = P2.loc[common_subs, common_times].to_numpy()
+    X3 = P3.loc[common_subs, common_times].to_numpy()
+    times = common_times
+
+    # X1, X2, X3 already aligned: (subjects × time)
+    w = np.array([-1, 0, 1])  # linear contrast weights
+
+    # Compute per-subject contrast time series
+    X_lin = w[0]*X1 + w[1]*X2 + w[2]*X3   # shape (n_sub × n_time)
+
+    lins.append(X_lin)
+
+
+n1 = lins[0].shape[0]
+n2 = lins[1].shape[0]
+# Because we conduct a two-tailed test, we divide the p-value by 2 (which means
+# we're making use of both tails of the distribution).
+tcrit = t.ppf(1 - 0.025, df = (n1+n2-2))
+
+T_obs, clusters, cluster_p_values, H0 = permutation_cluster_test(
+    [lins[0], lins[1]],
+    n_permutations=n_perm,
+    threshold=tcrit,
+    tail=0,
+    seed=seed,
+    stat_fun=independent_t,
+    out_type="mask",
+    verbose=True
+    )
+
+alpha = 0.05
+cluster_summaries = []
+cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
+
+for i, c in enumerate(clusters):
+    p_val = cluster_p_values[i]
+
+    time_inds = c[0]
+    t_vals = T_obs[time_inds]
+    mean_t = t_vals.mean()
+
+    cluster_summaries.append({
+        "cluster_id": i + 1,
+        "start_time": times[time_inds][0],
+        "end_time": times[time_inds][-1],
+        "p_value": p_val,
+        "mean_t": mean_t,
+        "cluster_mass": float(cluster_masses[i])
+    })
+
+# Turn into DataFrame
+cluster_results_mask_vs_nomask = pd.DataFrame(cluster_summaries)
+
+# Save to CSV
+cluster_results_mask_vs_nomask.to_csv('../data/csv_files/cluster_results_mask_vs_nomask.csv', index=False)
+
+display(cluster_results_mask_vs_nomask)
+
+# Plot
+plt.figure(figsize=(10, 5))
+plt.plot(times, T_obs, label='T-values')
+for i_c, c in enumerate(clusters):
+    if cluster_p_values[i_c] < 0.05:
+        plt.axvspan(times[c][0], times[c][-1], color='red', alpha=0.3)
+plt.axhline(0, color='black', linestyle='--')
+plt.title(f'Cluster Permutation Test (cardinal vs oblique trials)')
+plt.xlabel('Time (s)')
+plt.ylabel('T-statistic')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+
+times = np.array(common_times)  # make sure it's ordered
+X1_mean = lins[0].mean(axis=0)
+X2_mean = lins[1].mean(axis=0)
+
+plt.plot(times, X1_mean, label='high bias group')
+plt.plot(times, X2_mean, label='low bias group')
+
+# Highlight significant clusters
+for i_c, cluster in enumerate(clusters):
+    if cluster_p_values[i_c] < 0.05:
+        time_mask = cluster
+        plt.axvspan(times[time_mask][0], times[time_mask][-1], color='red', alpha=0.3)
+
+plt.legend()
+plt.title(f'Cluster Permutation Test Mask Conditions')
+plt.xlabel('Time (s)')
+plt.ylabel('Pupil size')
+plt.show()
 #%%
 # 3.1
 # difference between correct and false per load but this time only for dist 11.25

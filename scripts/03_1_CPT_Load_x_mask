@@ -109,6 +109,7 @@ sd_mask = sd[sd["mask"] == 1]["sd_pupil"]
 sd_nomask = sd[sd["mask"] == 0]["sd_pupil"]
 
 lev_resu = levene(sd_mask, sd_nomask)
+display(lev_resu)
 
 #%%
 ## 1 - Mask vs no Mask

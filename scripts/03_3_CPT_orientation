@@ -62,11 +62,11 @@ delay_time_window['pupils_z'] = delay_time_window.groupby('subID')['pupils'].tra
 # same number of trials in all trial-orientation combos and load conditions
 # cluster permutation test of only cardinal trials vs only oblique trials (ignoring mixed trials, and ignoring load and mask)
 # now with time window, rounding and z-scoring
-
 df_card = delay_time_window[delay_time_window['cardinal_type_only_one']=='only_cardinal']
 df_obli = delay_time_window[delay_time_window['cardinal_type_only_one']=='only_oblique']
 #df_mixed = delay_time_window[delay_time_window['cardinal_type_only_one']=='mixed']
 
+# Use mean to aggregate multiple entries per subID/time
 # Use mean to aggregate multiple entries per subID/time
 X1_df = df_card.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
 X2_df = df_obli.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
@@ -771,3 +771,114 @@ plt.title("Interaction via linear trend (C − I) — cluster summary (fixed map
 plt.tight_layout()
 plt.show()
 
+# %%
+# testing whether the two groups differ in pupil dilation to different encoded orientations
+df_cardinal_bias_acc = df.groupby(['subID', 'dist_probe_to_cardinal'])['acc_trial_concrete_cued'].mean().reset_index()
+df_cardinal_bias_acc = df_cardinal_bias_acc.sort_values('dist_probe_to_cardinal')
+df_cardinal_bias_acc_piv = df_cardinal_bias_acc.pivot(index=['subID'], columns='dist_probe_to_cardinal', values='acc_trial_concrete_cued').reset_index()
+df_cardinal_bias_acc_piv['diff_card'] = df_cardinal_bias_acc_piv[3.25] - df_cardinal_bias_acc_piv[19.25]
+
+df_cardinal_bias_acc_piv['diff_obli'] = df_cardinal_bias_acc_piv[25.75] - df_cardinal_bias_acc_piv[41.75]
+
+diff_card_med = df_cardinal_bias_acc_piv['diff_card'].median()
+
+diff_card_med_high = df_cardinal_bias_acc_piv[df_cardinal_bias_acc_piv['diff_card']>= diff_card_med]['subID']
+diff_card_med_low = df_cardinal_bias_acc_piv[df_cardinal_bias_acc_piv['diff_card']< diff_card_med]['subID']
+
+df_cardinal_bias_acc_piv['group'] = np.where(
+    df_cardinal_bias_acc_piv['diff_card'] >= diff_card_med, 'high', 'low'
+)
+
+mask_partis = df[df['mask']==1]['subID'].unique().tolist()
+nomask_partis = df[df['mask']==0]['subID'].unique().tolist()
+# Adding column for mask
+df_cardinal_bias_acc_piv['mask'] = df_cardinal_bias_acc_piv['subID'].apply(
+    lambda x: 1 if x in mask_partis else 0)
+
+
+df_cardinal_bias_acc_piv["median_split"] = (df_cardinal_bias_acc_piv.diff_card<df_cardinal_bias_acc_piv.diff_card.quantile()).replace({True:1, False:0})
+
+def independent_t(X1, X2):
+    t_vals, _ = stats.ttest_ind(X1, X2, axis=0, equal_var=True)  # equal_var=False = Welch’s t-test vs equal_var=True -> pooled-variance t-test (Student’s t), use Welch only when groups are very unequal
+    return t_vals
+
+diffs = []
+for group in [diff_card_med_high, diff_card_med_low]:
+
+    df_card = delay_time_window[(delay_time_window['subID'].isin(group)) & (delay_time_window['cardinal_type_only_one']=='only_cardinal')]
+    df_obli = delay_time_window[(delay_time_window['subID'].isin(group)) & (delay_time_window['cardinal_type_only_one']=='only_oblique')]
+    #df_mixed = delay_time_window[delay_time_window['cardinal_type_only_one']=='mixed']
+
+    # Use mean to aggregate multiple entries per subID/time
+    X1_df = df_card.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+    X2_df = df_obli.pivot_table(index='subID', columns='time', values='pupils_z', aggfunc='mean')
+
+    # Make sure both have the same subjects and times
+    common_subs = X1_df.index.intersection(X2_df.index)
+    common_times = X1_df.columns.intersection(X2_df.columns)
+    times = common_times.to_numpy()
+
+    # Align them
+    X1 = X1_df.loc[common_subs, common_times].to_numpy()
+    X2 = X2_df.loc[common_subs, common_times].to_numpy()
+
+    Xdiff = X2 - X1                       # (n_subjects, n_times)
+    # Because we conduct a two-tailed test, we divide the p-value by 2 (which means
+    # we're making use of both tails of the distribution).
+    tcrit = 2
+
+    T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
+        Xdiff,
+        n_permutations=n_perm,
+        threshold=tcrit,
+        tail=0,
+        seed=seed,
+        out_type="mask",
+        verbose=True
+        )
+    cluster_masses = np.array([T_obs[c].sum() for c in clusters])  # signed mass (t_power=1 default)
+    # Store results
+    cluster_results = {
+        "T_obs": T_obs,
+        "clusters": clusters,
+        "cluster_p_values": cluster_p_values,
+        "times": times,
+        "cluster_mass": cluster_masses
+    }
+
+
+    print(cluster_p_values)
+
+    # Plot
+    plt.figure(figsize=(10, 5))
+    plt.plot(times, T_obs, label='T-values')
+    for i_c, c in enumerate(clusters):
+        if cluster_p_values[i_c] < 0.05:
+            plt.axvspan(times[c][0], times[c][-1], color='red', alpha=0.3)
+    plt.axhline(0, color='black', linestyle='--')
+    plt.title(f'Cluster Permutation Test (cardinal vs oblique trials)')
+    plt.xlabel('Time (s)')
+    plt.ylabel('T-statistic')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+    times = np.array(common_times)  # make sure it's ordered
+    X1_mean = X1.mean(axis=0)
+    X2_mean = X2.mean(axis=0)
+
+    plt.plot(times, X1_mean, label='pressed away from cardinal')
+    plt.plot(times, X2_mean, label='pressed towards cardinal')
+
+    # Highlight significant clusters
+    for i_c, cluster in enumerate(clusters):
+        if cluster_p_values[i_c] < 0.05:
+            time_mask = cluster
+            plt.axvspan(times[time_mask][0], times[time_mask][-1], color='red', alpha=0.3)
+
+    plt.legend()
+    plt.title(f'Cluster Permutation Test Mask Conditions')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Pupil size')
+    plt.show()
+# %%

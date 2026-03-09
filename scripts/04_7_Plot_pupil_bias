@@ -103,6 +103,7 @@ sns.boxplot(data=delay_sd, x="group", y="sd_pupil")
 sns.stripplot(data=delay_sd, x="group", y="sd_pupil", color="black", alpha=0.6)
 display(lev_resu)
 
+#%%
 # variance overall (not significant)
 delay = evoked_df_button_press[
     evoked_df_button_press["time"].between(0, 9)

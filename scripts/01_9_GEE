@@ -107,7 +107,98 @@ plt.legend()
 plt.savefig(os.path.join(figures_save_dir, 'polar_plot_probe_accuracy.png'))
 plt.show()
 
+# Clockwise button press Repulsion Polar Plot
 
+# Define paths for saving files
+csv_save_dir = '../data/csv_files'
+figures_save_dir = '../figures'
+
+# Data
+mbp_df = df.groupby(by=['object_cued_rot', 'items_presented'])['pressed_away_from_cardinal'].mean().reset_index()
+
+mbp_all = df.groupby('object_cued_rot')['pressed_away_from_cardinal'].mean().reset_index()
+mbp_con1 = mbp_df[mbp_df['items_presented'] == 1]
+mbp_con2 = mbp_df[mbp_df['items_presented'] == 2]
+mbp_con3 = mbp_df[mbp_df['items_presented'] == 3]
+
+mbp_all_rounded = mbp_all.round(4)
+
+#%%
+# Cardinal press away Polar Plot
+fig = plt.figure()
+
+# Change the projection to 'polar'
+ax = fig.add_subplot(111, projection='polar')
+
+# Get outer ylim for plotting radial lines
+ylim = ax.get_ylim()
+
+# to store values for plotting full circle lines at the end
+thetas = []
+thetas_adjusted = []
+con1s = []
+con2s = []
+con3s = []
+all_cons = []
+colors = sns.color_palette('flare', 3)
+# colors = sns.color_palette("mako", as_cmap=True)
+
+# Get ordered list of unique target orientations
+oris = df['object_cued_rot'].unique()
+oris.sort()   
+oris = np.append(oris, oris[0])
+
+unbiased_assumption = np.full(17, 0.5)
+
+for i in range(len(oris)):
+    theta = np.radians(oris[i])
+    theta_adjusted = -theta + ((np.pi/2)) % (2*np.pi)
+
+    all_con = mbp_all[mbp_all['object_cued_rot']==oris[i]]['pressed_away_from_cardinal'].mean()
+    con1 = mbp_con1[mbp_con1['object_cued_rot']==oris[i]]['pressed_away_from_cardinal'].mean()
+    con2 = mbp_con2[mbp_con2['object_cued_rot']==oris[i]]['pressed_away_from_cardinal'].mean()
+    con3 = mbp_con3[mbp_con3['object_cued_rot']==oris[i]]['pressed_away_from_cardinal'].mean()
+    
+    thetas.append(theta)
+    thetas_adjusted.append(theta_adjusted)
+    all_cons.append(all_con)
+    con1s.append(con1)
+    con2s.append(con2)
+    con3s.append(con3)
+
+    ax.plot(theta_adjusted, all_con, 'o', color='black')
+    ax.plot(theta_adjusted, con1, 'o', color=colors[0])
+    ax.plot(theta_adjusted, con2, 'o', color=colors[1])
+    ax.plot(theta_adjusted, con3, 'o', color=colors[2])
+
+    # Add text labels for each point to inspect if needed
+    # text_positions = np.full(17, 0.55)[i]
+    # label_offset = 0.0  # Adjust this value for label position
+    # ax.text(theta_adjusted, text_positions + label_offset, str(oris[i]), fontsize=9, ha='center', va='center', color='black')
+
+
+
+# Plotting lines to connect dots
+#ax.plot(thetas_adjusted, all_cons, '--', color='black', label='all loads average')
+ax.plot(thetas_adjusted, con1s, '-', color=colors[0], label='load 1')
+ax.plot(thetas_adjusted, con2s, '-', color=colors[1], label='load 2')
+ax.plot(thetas_adjusted, con3s, '-', color=colors[2], label='load 3')
+
+ax.plot(thetas_adjusted, unbiased_assumption, color='grey', linestyle='dashed')
+
+ax.set_rmin(0.4)
+ax.set_rorigin(0)
+ax.grid(True)
+y_ticks = np.arange(0.3, 0.75, 0.1)
+ax.set_yticks(y_ticks)
+
+handles, labels = ax.get_legend_handles_labels()
+by_label = dict(zip(labels, handles))
+ax.legend(by_label.values(), by_label.keys(), loc='center')
+
+# plt.legend()
+
+plt.show()
 # %%
 # Bar Polar plot
 

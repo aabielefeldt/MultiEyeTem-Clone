@@ -22,8 +22,8 @@ for i in partis:
     if results.loc[results['subID'] == i, 'p-value'].values[0] > 0.05:
         subjects_to_exclude.append(i)
 
-# %%
-# Use boolean indexing to drop rows where 'subID' is in the exclusion list
+# # %%
+# # Use boolean indexing to drop rows where 'subID' is in the exclusion list
 df = df[~df['subID'].isin(subjects_to_exclude)]
 
 good_partis = df['subID'].unique()
