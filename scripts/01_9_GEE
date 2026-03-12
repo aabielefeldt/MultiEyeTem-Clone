@@ -82,9 +82,9 @@ for i in range(len(oris)):
 # Plotting lines to connect dots
 # ax.plot(thetas_adjusted, all_cons, '--', color=colors_load[5], label='all loads average')
 ax.plot(thetas_adjusted, acc_overall_list, color='pink', linestyle='dashed', label='mean')
-ax.plot(thetas_adjusted, con1s, '-', color=colors_load[0], label='load 1')
-ax.plot(thetas_adjusted, con2s, '-', color=colors_load[1], label='load 2')
-ax.plot(thetas_adjusted, con3s, '-', color=colors_load[2], label='load 3')
+ax.plot(thetas_adjusted, con1s, '-', color=colors_load[0], label='set size 1')
+ax.plot(thetas_adjusted, con2s, '-', color=colors_load[1], label='set size 2')
+ax.plot(thetas_adjusted, con3s, '-', color=colors_load[2], label='set size 3')
 
 # # Move r origin outwards to have a hollow circle in the middle for ~AesTHeTicS~
 # rorigin = -0.5*ylim[1]
@@ -92,7 +92,7 @@ ax.plot(thetas_adjusted, con3s, '-', color=colors_load[2], label='load 3')
 # y_ticks = np.arange(0, 1, 0.2)
 # ax.set_yticks(y_ticks)
 
-ax.set_rmin(0.4)
+ax.set_rlim(0.4, 1.0)
 ax.set_rorigin(0)
 ax.grid(True)
 y_ticks = np.arange(0.4, 1, 0.2)
@@ -102,7 +102,7 @@ handles, labels = ax.get_legend_handles_labels()
 by_label = dict(zip(labels, handles))
 ax.legend(by_label.values(), by_label.keys(), loc='center')
 
-plt.title('Accuracy on Polar Plot by Load Condition')
+# plt.title('Accuracy on Polar Plot by Load Condition')
 plt.legend()
 plt.savefig(os.path.join(figures_save_dir, 'polar_plot_probe_accuracy.png'))
 plt.show()
@@ -122,6 +122,84 @@ mbp_con2 = mbp_df[mbp_df['items_presented'] == 2]
 mbp_con3 = mbp_df[mbp_df['items_presented'] == 3]
 
 mbp_all_rounded = mbp_all.round(4)
+
+
+#%%
+# Oblique effect Polar Plot
+fig = plt.figure()
+
+# Change the projection to 'polar'
+ax = fig.add_subplot(111, projection='polar')
+
+# Get outer ylim for plotting radial lines
+ylim = ax.get_ylim()
+
+# to store values for plotting full circle lines at the end
+thetas = []
+thetas_adjusted = []
+con1s = []
+con2s = []
+con3s = []
+all_cons = []
+colors = sns.color_palette('flare', 3)
+# colors = sns.color_palette("mako", as_cmap=True)
+
+# Get ordered list of unique target orientations
+oris = df['object_cued_rot'].unique()
+oris.sort()   
+oris = np.append(oris, oris[0])
+
+unbiased_assumption = np.full(17, 0.5)
+
+for i in range(len(oris)):
+    theta = np.radians(oris[i])
+    theta_adjusted = -theta + ((np.pi/2)) % (2*np.pi)
+
+    all_con = df[df['object_cued_rot']==oris[i]]['acc_trial_concrete_cued'].mean()
+    con1 = df[(df['object_cued_rot']==oris[i]) & (df['items_presented']==1)]['acc_trial_concrete_cued'].mean()
+    con2 = df[(df['object_cued_rot']==oris[i]) & (df['items_presented']==2)]['acc_trial_concrete_cued'].mean()
+    con3 = df[(df['object_cued_rot']==oris[i]) & (df['items_presented']==3)]['acc_trial_concrete_cued'].mean()
+    
+    thetas.append(theta)
+    thetas_adjusted.append(theta_adjusted)
+    all_cons.append(all_con)
+    con1s.append(con1)
+    con2s.append(con2)
+    con3s.append(con3)
+
+    #ax.plot(theta_adjusted, all_con, 'o', color='black')
+    ax.plot(theta_adjusted, con1, 'o', color=colors[0])
+    ax.plot(theta_adjusted, con2, 'o', color=colors[1])
+    ax.plot(theta_adjusted, con3, 'o', color=colors[2])
+
+    # Add text labels for each point to inspect if needed
+    # text_positions = np.full(17, 0.55)[i]
+    # label_offset = 0.0  # Adjust this value for label position
+    # ax.text(theta_adjusted, text_positions + label_offset, str(oris[i]), fontsize=9, ha='center', va='center', color='black')
+
+
+
+# Plotting lines to connect dots
+#ax.plot(thetas_adjusted, all_cons, '--', color='black', label='all loads average')
+ax.plot(thetas_adjusted, con1s, '-', color=colors[0], label='set size 1')
+ax.plot(thetas_adjusted, con2s, '-', color=colors[1], label='set size 2')
+ax.plot(thetas_adjusted, con3s, '-', color=colors[2], label='set size 3')
+
+#ax.plot(thetas_adjusted, unbiased_assumption, color='grey', linestyle='dashed')
+
+ax.set_rlim(0.4, 1.0)
+ax.set_rorigin(0)
+ax.grid(True)
+y_ticks = np.arange(0.4, 1, 0.2)
+ax.set_yticks(y_ticks)
+
+handles, labels = ax.get_legend_handles_labels()
+by_label = dict(zip(labels, handles))
+ax.legend(by_label.values(), by_label.keys(), loc='center')
+
+# plt.legend()
+
+plt.show()
 
 #%%
 # Cardinal press away Polar Plot
@@ -180,16 +258,15 @@ for i in range(len(oris)):
 
 # Plotting lines to connect dots
 #ax.plot(thetas_adjusted, all_cons, '--', color='black', label='all loads average')
-ax.plot(thetas_adjusted, con1s, '-', color=colors[0], label='load 1')
-ax.plot(thetas_adjusted, con2s, '-', color=colors[1], label='load 2')
-ax.plot(thetas_adjusted, con3s, '-', color=colors[2], label='load 3')
+ax.plot(thetas_adjusted, con1s, '-', color=colors[0], label='set size 1')
+ax.plot(thetas_adjusted, con2s, '-', color=colors[1], label='set size 2')
+ax.plot(thetas_adjusted, con3s, '-', color=colors[2], label='set size 3')
 
-ax.plot(thetas_adjusted, unbiased_assumption, color='grey', linestyle='dashed')
-
-ax.set_rmin(0.4)
-ax.set_rorigin(0)
+#ax.plot(thetas_adjusted, unbiased_assumption, color='grey', linestyle='dashed')
+ax.set_rlim(0.4, 0.7)
+ax.set_rorigin(0.2)
 ax.grid(True)
-y_ticks = np.arange(0.3, 0.75, 0.1)
+y_ticks = np.arange(0.4, 0.7, 0.1)
 ax.set_yticks(y_ticks)
 
 handles, labels = ax.get_legend_handles_labels()
@@ -281,6 +358,8 @@ ax.set_theta_offset(np.pi/2)
 
 #plt.legend()
 plt.show()
+
+
 
 # %%
 # This might be useful, shows that when you disregard load, accuracy decreases with distance to cardinal axis but only for probe away and increases with dist for probe towards
@@ -624,9 +703,76 @@ geemodel = smf.gee(
 
 model_results = geemodel.fit(cov_type='robust')
 
-model_results.summary()
+# %%
+# Build a clean coefficient table
+coefs_table = pd.DataFrame({
+    "term": model_results.params.index,
+    "estimate": model_results.params.values,
+    "std_error": model_results.bse.values,
+    "z": model_results.tvalues.values,
+    "p_value": model_results.pvalues.values,
+    "ci_lower": model_results.conf_int()[0].values,
+    "ci_upper": model_results.conf_int()[1].values,
+})
 
+# Optional: odds ratios for logistic GEE
+coefs_table["odds_ratio"] = np.exp(coefs_table["estimate"])
+# coefs_table["or_ci_lower"] = np.exp(coefs_table["ci_lower"])
+# coefs_table["or_ci_upper"] = np.exp(coefs_table["ci_upper"])
 
+# Create APA-style CI column
+coefs_table["95% CI"] = (
+    "[" 
+    + coefs_table["ci_lower"].map("{:.2f}".format)
+    + ", "
+    + coefs_table["ci_upper"].map("{:.2f}".format)
+    + "]"
+)
+
+coefs_table = coefs_table.rename(columns={
+    "term": "Term",
+    "estimate": "Estimate",
+    "std_error": "SE",
+    "z": "z",
+    "p_value": "p",
+    # "ci_lower": "CI Lower",
+    # "ci_upper": "CI Upper",
+    "odds_ratio": "OR",
+    # "or_ci_lower": "OR CI Lower",
+    # "or_ci_upper": "OR CI Upper",
+}).round(3)
+
+coefs_table["Term"] = (
+    coefs_table["Term"]
+    .str.replace(r"C\(dist_to_cardinal_mem\)", "Distance", regex=True)
+    .str.replace(r"C\(items_presented\)", "Set size", regex=True)
+    .str.replace("probe_away_from_cardinal", "Probe away", regex=False)
+    .str.replace(r"\[T\.", " ", regex=True)   # level indicator
+    .str.replace(r"\]", "", regex=True)
+    .str.replace(":", " × ", regex=False)     # interaction separator
+)
+coefs_table["p"] = (
+    coefs_table["p"]
+    .apply(lambda x: "< .001" if x < 0.001 else f"{x:.3f}".lstrip("0").rstrip("0").rstrip("."))
+)
+
+# Drop separate CI columns
+coefs_table = coefs_table.drop(columns=["ci_lower", "ci_upper"])
+
+# Reorder columns
+coefs_table = coefs_table[
+    ["Term", "Estimate", "SE", "z", "p", "OR", "95% CI"]
+]
+
+# Save CSV
+coefs_table.to_csv("../data/csv_files/gee_coefficients_table.csv", index=False)
+
+# Save LaTeX
+coefs_table.to_latex(
+    "../data/csv_files/gee_coefficients_table.tex",
+    index=False,
+    float_format="%.3f"
+)
 # %%
 # %%
 # Estimated Marginal Means (EMMs)
@@ -669,6 +815,7 @@ dist_prob_load_emms = emms.pivot_table(
 dist_prob_load_emms.columns = ["items_presented","dist_to_cardinal_mem","p_toward","p_away"]  # 0=toward, 1=away
 dist_prob_load_emms["diff_away_minus_toward"] = dist_prob_load_emms["p_away"] - dist_prob_load_emms["p_toward"]
 
+dist_probe_emms_nopiv = emms.groupby(['dist_to_cardinal_mem', 'probe_away_from_cardinal'])['prob'].mean().reset_index()
 
 # collapsed to look at contrasts by probe direction and distancewith differences:
 dist_probe_emms = emms.pivot_table(
@@ -708,12 +855,14 @@ dist_prob_load_emms = dist_prob_load_emms.round(3).reset_index()
 dist_probe_emms = dist_probe_emms.round(3).reset_index()
 dist_probe_emms2 = dist_probe_emms2.round(3).reset_index()
 emms_dist_load = emms_dist_load.round(3).reset_index()
+dist_probe_emms_nopiv = dist_probe_emms_nopiv.round(3).reset_index()
 
 emms.to_csv('../data/csv_files/emms.csv', index=False)
 dist_prob_load_emms.to_csv('../data/csv_files/dist_prob_load_emms.csv', index=False)
 dist_probe_emms.to_csv('../data/csv_files/dist_probe_emms.csv', index=False)
 dist_probe_emms2.to_csv('../data/csv_files/dist_probe_emms2.csv', index=False)
 emms_dist_load.to_csv('../data/csv_files/emms_dist_load.csv', index=False)
+dist_probe_emms_nopiv.to_csv('../data/csv_files/dist_probe_emms_nopiv.csv', index=False)
 
 # %%
 # Tests all simple effects?
@@ -804,4 +953,126 @@ plt.figure()
 sns.lineplot(emms, x='dist_to_cardinal_mem', y='prob', hue='probe_away_from_cardinal', style='items_presented')
 plt.show()
 
+# %%
+sns.barplot(emms, x='dist_to_cardinal_mem', y='prob', hue='probe_away_from_cardinal')
+
+#%%
+baseline_load = (
+    df.groupby(["subID","items_presented"]) # , "dist_to_cardinal_mem"
+    ["acc_trial_concrete_cued"]
+    .mean()
+    .rename("baseline_acc")
+)
+
+groupi = (
+    df.groupby([
+        "subID",
+        "items_presented",
+        "dist_probe_to_cardinal",
+        "dist_to_cardinal_mem",
+        "probe_away_from_cardinal"
+        ])["acc_trial_concrete_cued"].mean().reset_index())
+
+groupi = groupi.merge(baseline_load, on=["subID","items_presented"]) # , "dist_to_cardinal_mem"
+
+groupi["delta_acc"] = (groupi["acc_trial_concrete_cued"] - groupi["baseline_acc"])
+
+# %%
+g = sns.catplot(
+    data=groupi,
+    x="probe_away_from_cardinal",
+    y="delta_acc",
+    hue="items_presented",
+    col="dist_to_cardinal_mem",
+    kind="bar",
+    errorbar="se",
+    height=4,
+    aspect=1,
+)
+
+# axis labels
+g.set_axis_labels(
+    "Probe direction",
+    "Accuracy deviation from subject mean"
+)
+
+# rename facet titles
+g.set_titles("Distance to cardinal axis: {col_name}°")
+
+# change x tick labels
+for ax in g.axes.flat:
+    ax.set_xticklabels(["Toward cardinal", "Away from cardinal"])
+
+# set y limits
+g.set(ylim=(-0.15, 0.15))
+
+# remove seaborn legend
+g._legend.remove()
+
+plt.legend(
+    title="Set size",
+    loc="upper right"
+)
+
+plt.tight_layout()
+plt.show()
+# %%
+colors_load = sns.color_palette("flare", 3)
+plt.figure(figsize=(10, 15))
+baseline_load = (
+    emms.groupby(["items_presented"]) # , "dist_to_cardinal_mem"
+    ["prob"]
+    .mean()
+    .rename("baseline_acc")
+)
+
+groupi = (
+    emms.groupby([
+        "items_presented",
+        "dist_to_cardinal_mem",
+        "probe_away_from_cardinal"
+        ])["prob"].mean().reset_index())
+
+groupi = groupi.merge(baseline_load, on=["items_presented"]) # , "dist_to_cardinal_mem"
+
+groupi["delta_acc"] = (groupi["prob"] - groupi["baseline_acc"])
+
+g = sns.catplot(
+    data=groupi,
+    x="probe_away_from_cardinal",
+    y="delta_acc",
+    hue="items_presented",
+    col="dist_to_cardinal_mem",
+    kind="bar",
+    errorbar="se",
+    height=4,
+    aspect=1,
+)
+
+# axis labels
+g.set_axis_labels(
+    "Probe direction",
+    "Estimated deviation from mean accuracy"
+)
+
+# rename facet titles
+g.set_titles("Distance sample object: {col_name}°")
+
+# change x tick labels
+for ax in g.axes.flat:
+    ax.set_xticklabels(["Toward", "Away"])
+
+# set y limits
+g.set(ylim=(-0.15, 0.15))
+
+# remove seaborn legend
+g._legend.remove()
+
+plt.legend(
+    title="Set size",
+    loc="upper right"
+)
+
+plt.tight_layout()
+plt.show()
 # %%

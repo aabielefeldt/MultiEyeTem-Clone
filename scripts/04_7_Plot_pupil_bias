@@ -360,3 +360,264 @@ with sns.plotting_context(context='paper', font_scale=1.5):
     # plt.savefig(figure_filepath, bbox_inches = 'tight')
 
 # %%
+# %%
+start_time = 3.0
+end_time = 6.5
+delay_time_window = evoked_df_button_press[(evoked_df_button_press['time'] >= start_time) & (evoked_df_button_press['time'] <= end_time)]
+
+# # z-scoring data
+# delay_time_window = delay_time_window.copy()
+
+# # Z-score within each subject (across all times and trials)
+# delay_time_window['pupils_z'] = delay_time_window.groupby('subID')['pupils'].transform(
+#     lambda x: zscore(x, nan_policy='omit')
+# )
+
+colors_load = sns.color_palette("flare", 3)
+for group in ['high', 'low']:
+    data_gr = delay_time_window[delay_time_window['group']==group]
+    with sns.plotting_context(context='paper', font_scale=1.5): 
+        
+        fig, ax = plt.subplots(figsize=(10, 8))
+
+        # Plot for participants WITH mask (Left Plot)
+        sns.lineplot(
+            data=data_gr, 
+            hue='items_presented', x='time', y='pupils_z_delay', style='bp_away',
+            errorbar='se', ax=ax)
+
+        #add_load_markers(ax, evoked_df_button_press)
+        sns.despine(ax=ax)
+
+        # # # Add mask time
+        # ax.axvspan(3, 3.1, color='blue', alpha=0.15)
+        # ax.text(3, 1.1, "mask \ndisplay", color='blue', alpha=0.5, fontsize=10)
+
+        # Add probe
+        # ylim = ax.get_ylim()[1] 
+        ax.axvline(3, color='black', alpha=0.5)
+        ax.axvline(6.5, color='black', alpha=0.5)
+
+        # Set x-axis to show all whole numbers within range
+        x_ticks = np.arange(int(delay_time_window['time'].min()), int(delay_time_window['time'].max()) + 1, 0.5)
+        ax.set_xticks(x_ticks)
+        ax.set_xticklabels(x_ticks)
+        y_ticks = np.arange(-1,1.5,0.25)
+        ax.set_yticks(y_ticks)
+        ax.set_yticklabels(y_ticks)
+
+        ax.set_title('Bias groups', y=1, fontsize=16)
+
+        ax.set_ylabel('pupil size (z-scored)')
+        ax.set_xlabel('time (s)')
+
+        ax.autoscale(enable=True, axis='y', tight=True)
+
+        #ax.text(1.3, 2.3, "encoding", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+        #ax.text(6.5+1.3, 2.3, "probe", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+        ax.text(3+1.75, 1.3, "delay", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+        ax.axhspan(1.25, 1.4, transform=ax.transAxes, color='gray', alpha=0.15, clip_on=False)
+
+        # Adding a title
+        #plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize = 20)
+        
+        #Adding a legend
+        plt.legend()
+        ax.legend(loc='lower right', fontsize=12)
+
+        # Save the figure
+        # name=f"pupil_high_vs_low_bias_all_load.png"
+        # figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures'
+        # figure_filepath = os.path.join(figures_folder, name)
+
+        # plt.savefig(figure_filepath, bbox_inches = 'tight')
+# %%
+
+# %%
+
+from matplotlib.lines import Line2D
+
+# Copy if you don't want to modify the original df
+delay_data = delay_time_window.copy()
+
+# Map button press direction labels
+delay_data['bp_label'] = delay_data['bp_away'].map({
+    0: 'towards',
+    1: 'away'
+})
+
+
+colors_load = sns.color_palette("flare", 3)
+
+groups = ['high', 'low']
+items_levels = sorted(delay_data['items_presented'].unique())  # 3 conditions
+
+sig_clusters = {
+    # (group, items_presented): (start, end, p)
+    ('low', items_levels[1]): (4.368, 5.36, 0.049),
+    ('low',  items_levels[2]): (3.076, 4.98, 0.022),
+}
+
+# Use only actual data span
+x_min = delay_data['time'].min()
+x_max = delay_data['time'].max()
+
+with sns.plotting_context(context='paper', font_scale=1.4):
+    fig, axes = plt.subplots(
+        nrows=len(items_levels),
+        ncols=len(groups),
+        figsize=(14, 12),
+        sharex=True,
+        sharey=True
+    )
+
+    axes = np.atleast_2d(axes)
+
+    for col, group in enumerate(groups):
+        for row, item in enumerate(items_levels):
+            ax = axes[row, col]
+
+            data_sub = delay_data[
+                (delay_data['group'] == group) &
+                (delay_data['items_presented'] == item)
+            ]
+
+            sns.lineplot(
+                data=data_sub,
+                x='time',
+                y='pupils_z_delay',
+                style='bp_label',
+                style_order=['towards', 'away'],
+                errorbar='se',
+                color=colors_load[row],
+                ax=ax
+            )
+            cluster = sig_clusters.get((group, item))
+
+            if cluster is not None:
+                start, end, pval = cluster
+
+                ymin, ymax = ax.get_ylim()
+                y_bar = ymin + 0.02 * (ymax - ymin)
+
+                # cluster bar
+                ax.hlines(
+                    y=y_bar,
+                    xmin=start,
+                    xmax=end,
+                    color='red',
+                    alpha=0.7,
+                    linewidth=2.5
+                )
+
+                # # optional small end caps
+                # ax.vlines([start, end],
+                #         y_bar - 0.01 * (ymax - ymin),
+                #         y_bar + 0.01 * (ymax - ymin),
+                #         color='red',
+                #         alpha=0.7,
+                #         linewidth=1.9)
+
+                # p-value label
+                ax.text(
+                    (start + end) / 2,
+                    y_bar + 0.03 * (ymax - ymin),
+                    f"p = {pval:.3f}",
+                    ha='center',
+                    va='bottom',
+                    fontsize=9
+                )
+
+            sns.despine(ax=ax)
+
+            # Task markers
+            ax.text(
+                4.75, 1.3, "delay",
+                color='black', alpha=0.8, fontsize=10,
+                ha='center', clip_on=False
+            )
+            ax.axhspan(1.25, 1.4, transform=ax.transAxes, color='gray', alpha=0.15, clip_on=False)
+            # Column titles
+            if row == 0:
+                ax.set_title(f'{group}', fontsize=16, pad=20)
+
+            # Row labels on the far left only
+            if col == 0:
+                ax.annotate(
+                    f'set size {item}',
+                    xy=(-0.2, 0.5),
+                    xycoords='axes fraction',
+                    ha='center',
+                    va='center',
+                    rotation=90,
+                    fontsize=14
+                )
+                ax.set_ylabel('pupil size (z-scored)')
+            else:
+                ax.set_ylabel('')
+
+            # X labels only on bottom row
+            if row == len(items_levels) - 1:
+                ax.set_xlabel('time (s)')
+            else:
+                ax.set_xlabel('')
+
+            # Remove per-axis legends
+            leg = ax.get_legend()
+            if leg is not None:
+                leg.remove()
+
+            # Show only actual data span
+            ax.set_xlim(x_min, x_max)
+            ax.autoscale(enable=True, axis='y', tight=True)
+
+    # Shared ticks
+    x_ticks = np.arange(
+        delay_data['time'].min(),
+        delay_data['time'].max() + 0.5,
+        0.5
+    )
+    y_ticks = np.arange(-1, 1.5, 0.5)
+
+    for ax in axes.flat:
+        ax.set_xticks(x_ticks)
+        ax.set_yticks(y_ticks)
+
+    # Create one shared legend for the whole figure
+    legend_handles = [
+        Line2D([0], [0], color='black', lw=2, linestyle='-'),
+        Line2D([0], [0], color='black', lw=2, linestyle='--')
+    ]
+    legend_labels = ['towards', 'away']
+
+    # Get subplot grid bounds
+    # left = axes[0,0].get_position().x0
+    # right = axes[0,-1].get_position().x1
+
+    # center = (left + right) / 2
+
+    center = (axes[0,-1].get_position().x0) - 0.02
+
+    fig.legend(
+        legend_handles,
+        legend_labels,
+        title='button press direction',
+        loc='upper center',
+        bbox_to_anchor=(center, 0.99),
+        bbox_transform=fig.transFigure,
+        ncol=2,
+        frameon=False,
+        shadow=True,
+        fontsize=12,
+        title_fontsize=13
+    )
+
+    plt.tight_layout(rect=[0, 0, 1, 0.94])
+    plt.show()
+    # Save the figure
+    name=f"pupil_high_vs_low_bias_grid_load.png"
+    figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures'
+    figure_filepath = os.path.join(figures_folder, name)
+    plt.savefig(figure_filepath, bbox_inches = 'tight')
+
+# %%

@@ -39,7 +39,7 @@ def independent_t(X1, X2):
     t_vals, _ = stats.ttest_ind(X1, X2, axis=0, equal_var=True)  # equal_var=False = Welch’s t-test vs equal_var=True -> pooled-variance t-test (Student’s t), use Welch only when groups are very unequal
     return t_vals
 
-n_perm = 5000
+n_perm = 10000
 seed = 42
 
 # %%

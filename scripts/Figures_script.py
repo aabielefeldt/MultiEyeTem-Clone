@@ -366,7 +366,7 @@ ax.tick_params(axis='x', colors='black', labelsize=13)
 
 ax.set_thetamin(45)
 ax.set_thetamax(90)
-
+plt.savefig('../figures/red_blue_dots_cardinal_slice.png', transparent=True)
 plt.show()
 
 # %%
@@ -513,17 +513,17 @@ for i,j in enumerate(oris):
     ang = np.degrees(theta)
     ang180 = np.degrees(theta)+180
 
-    ax.scatter(theta-diff, r+0.13,
-        marker=(4, 0, ang_s),   # triangle rotated by angle
-        s=1800,
-        c=[color],
-        alpha=0.8)
+    # ax.scatter(theta-diff, r+0.13,
+    #     marker=(4, 0, ang_s),   # triangle rotated by angle
+    #     s=1800,
+    #     c=[color],
+    #     alpha=0.8)
     
-    ax.scatter(theta+diff, r+0.13,
-        marker=(4, 0, ang_s2),   # triangle rotated by angle
-        s=1800,
-        c=[color],
-        alpha=0.8)
+    # ax.scatter(theta+diff, r+0.13,
+    #     marker=(4, 0, ang_s2),   # triangle rotated by angle
+    #     s=1800,
+    #     c=[color],
+    #     alpha=0.8)
 
     # ax.scatter(theta-diff-diff2, r+0.18,
     #     marker=(3, 0, ang_left_left),   # triangle rotated by angle
@@ -559,8 +559,8 @@ for i,j in enumerate(oris):
     
     # Labels
     ax.text(theta, r, str(j), fontsize=15, ha='center', va='center')
-    ax.text((theta - diff), r+0.13, (str(j-8)), fontsize=10, ha='center', va='center', color='black', alpha=1)
-    ax.text((theta + diff), r+0.13, (str(j+8)), fontsize=10, ha='center', va='center', color='black', alpha=1)
+    # ax.text((theta - diff), r+0.13, (str(j-8)), fontsize=10, ha='center', va='center', color='black', alpha=1)
+    # ax.text((theta + diff), r+0.13, (str(j+8)), fontsize=10, ha='center', va='center', color='black', alpha=1)
 
 
 # ax.set_xticks([np.pi/2, np.pi/4])
@@ -578,7 +578,7 @@ ax.set_rmax(0.5)
 # handles, labels = ax.get_legend_handles_labels()
 # by_label = dict(zip(labels, handles))
 # ax.legend(by_label.values(), by_label.keys(), loc='center')
-
+plt.savefig('../figures/red_blue_dots_cardinal.png')
 plt.show()
 
 

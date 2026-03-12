@@ -30,7 +30,7 @@ evoked_df_button_press = pd.read_csv('../data/csv_files/evoked_df_button_press.c
 # parameters
 
 seed=42
-n_perm=5000
+n_perm=10000
 
 def independent_t(X1, X2):
     t_vals, _ = stats.ttest_ind(X1, X2, axis=0, equal_var=True)  # equal_var=False = Welch’s t-test vs equal_var=True -> pooled-variance t-test (Student’s t), use Welch only when groups are very unequal
@@ -429,7 +429,7 @@ for group in [diff_card_med_high, diff_card_med_low]:
     plt.show()
 
 #%% 
-# 2.2 comparing groups within load conditions
+# 2.2 comparing within groups within load conditions
 # difference also significant only for low group, but only in load 2, but similar effect approaching significance in other load conditions so looks stable
 
 cluster_summaries = []
