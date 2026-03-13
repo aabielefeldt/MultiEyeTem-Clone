@@ -13,7 +13,7 @@ from IPython.display import display
 # %% 
 # read evokeds and metadata
 df = pd.read_csv('../data/csv_files/df.csv')
-evoked_df_accuracy_shifted = pd.read_csv('../data/csv_files/evoked_df_only_correct_shifted.csv')
+evoked_df_accuracy_shifted = pd.read_csv('../data/csv_files/evoked_df_accuracy_shifted.csv')
 evoked_df_accuracy = pd.read_csv('../data/csv_files/evoked_df_accuracy.csv')
 
 # %%

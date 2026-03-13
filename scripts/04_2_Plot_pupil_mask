@@ -119,17 +119,19 @@ def add_load_markers(ax, data, x="time", y="pupils_z_delay", hue="Load"):
 
 
 # %% 
-colors_load = sns.color_palette("flare", 3)
+# two plots by mask and load as hues 
 
-with sns.plotting_context(context='paper', font_scale=1.5): 
+colors_load = sns.color_palette("flare", 3)
+colors_mask = sns.color_palette("husl", 2)
+with sns.plotting_context(context='paper', font_scale=1.1): 
     
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8), sharey=True)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8.27, 4), sharey=True)
 
     # Plot for participants WITH mask (Left Plot)
     mask_data = evoked_df_shifted[evoked_df_shifted["subID"].isin(mask_partis)]
     sns.lineplot(
         data=mask_data, 
-        hue='Load', x='time', y='pupils',  
+        hue='Load', x='time', y='pupils_z_delay',  
         errorbar='se', ax=ax1, palette=colors_load
     )
     
@@ -137,7 +139,7 @@ with sns.plotting_context(context='paper', font_scale=1.5):
     nomask_data = evoked_df_shifted[evoked_df_shifted["subID"].isin(nomask_partis)]
     sns.lineplot(
         data=nomask_data, 
-        hue='Load', x='time', y='pupils', 
+        hue='Load', x='time', y='pupils_z_delay', 
         errorbar='se', ax=ax2, legend='full', palette=colors_load
     )
 
@@ -147,9 +149,14 @@ with sns.plotting_context(context='paper', font_scale=1.5):
     sns.despine(ax=ax1)
     sns.despine(ax=ax2)
 
+    x_min = evoked_df_shifted['time'].min()
+    x_max = evoked_df_shifted['time'].max()
+    ax1.set_xlim(x_min, x_max)
+    ax2.set_xlim(x_min, x_max)
+
     # Add mask time
-    ax1.axvspan(3, 3.1, color='blue', alpha=0.15)
-    ax1.text(3, 1.1, "mask \ndisplay", color='blue', alpha=0.5, fontsize=10)
+    ax1.axvspan(3, 3.1, color=colors_mask[1], alpha=0.3)
+    ax1.text(3, 4.1, "mask \ndisplay", color=colors_mask[1], alpha=0.9, fontsize=10)
 
     # Add probe
     ylim = ax1.get_ylim()[1] 
@@ -160,14 +167,14 @@ with sns.plotting_context(context='paper', font_scale=1.5):
     
 
     # Set x-axis to show all whole numbers within range
-    x_ticks = np.arange(int(evoked_df_shifted['time'].min()), int(evoked_df_shifted['time'].max()) + 1, 1)
+    x_ticks = np.arange(int(evoked_df_shifted['time'].min()), int(evoked_df_shifted['time'].max()), 1)
     ax2.set_xticks(x_ticks)
     ax2.set_xticklabels(x_ticks)
     ax1.set_xticks(x_ticks)
     ax1.set_xticklabels(x_ticks)
 
-    ax1.set_title('Mask', y=1.1, fontsize=16)
-    ax2.set_title('No mask', y=1.1, fontsize=16)
+    ax1.set_title('Mask', y=1.05, fontsize=12)
+    ax2.set_title('No mask', y=1.05, fontsize=12)
 
     ax1.set_ylabel('pupil size (z-scored)')
     ax1.set_xlabel('time (s)')
@@ -180,23 +187,24 @@ with sns.plotting_context(context='paper', font_scale=1.5):
     ax1.autoscale(enable=True, axis='y', tight=True)
     ax2.autoscale(enable=True, axis='y', tight=True)
 
-    ax1.text(1.3, 2.3, "encoding", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
-    ax1.text(6.5+1.3, 2.3, "probe", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
-    ax1.text(3+1.75, 2.3, "delay", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
-    ax1.axhspan(2.25, 2.4, transform=ax1.transAxes, color='gray', alpha=0.15, clip_on=False)
+    ax1.text(1.3, 6.1, "encoding", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax1.text(6.5+1.3, 6.1, "probe", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax1.text(3+1.75, 6.1, "delay", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax1.axhspan(6, 6.38, transform=ax1.transAxes, color='gray', alpha=0.15, clip_on=False)
 
-    ax2.text(1.3, 2.3, "encoding", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
-    ax2.text(6.5+1.3, 2.3, "probe", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
-    ax2.text(3+1.75, 2.3, "delay", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
-    ax2.axhspan(2.25, 2.4, transform=ax1.transAxes,  color='gray', alpha=0.15, clip_on=False)
+    ax2.text(1.3,  6.1, "encoding", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax2.text(6.5+1.3, 6.1, "probe", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax2.text(3+1.75,  6.1, "delay", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax2.axhspan(6, 6.38, transform=ax1.transAxes,  color='gray', alpha=0.15, clip_on=False)
     # Adding a title
     # plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize = 20)
     # plt.title(f'Applied baseline {baseline}', y=1.25, color='blue', alpha=0.4)
     
     #Adding a legend
     plt.legend()
-    ax1.legend(loc='lower right', fontsize=12)
-    ax2.legend(loc='lower right', fontsize=12)
+    ax1.legend(title='set size', loc='lower right', fontsize=8, title_fontsize=9)
+    ax2.legend(title='set size', loc='lower right', fontsize=8, title_fontsize=9)
+
 
 
     # Save the figure
@@ -205,6 +213,127 @@ with sns.plotting_context(context='paper', font_scale=1.5):
     figure_filepath = os.path.join(figures_folder, name)
 
     plt.savefig(figure_filepath, bbox_inches = 'tight')
+
+
+#%%
+start_time = 3.0
+end_time = 6.5
+delay_time_window = evoked_df_shifted[(evoked_df_shifted['time'] >= start_time) & (evoked_df_shifted['time'] <= end_time)]
+
+sig_clusters_mask = pd.read_csv('../data/csv_files/cluster_results_mask_vs_nomask.csv')
+sig_clusters_mask = sig_clusters_mask[sig_clusters_mask['p_value']<0.05]
+
+colors_load = sns.color_palette("husl", 2)
+
+with sns.plotting_context(context='paper', font_scale=1.5): #, font_scale=1.5
+    fig, ax = plt.subplots(figsize=(8.27,4))
+
+    sns.lineplot(
+        data=delay_time_window, 
+        hue='mask', 
+        x='time', 
+        y='pupils_z_delay',
+        errorbar='se', 
+        ax=ax, 
+        palette=colors_load
+    )
+    
+    # add_load_markers(ax, evoked_df_shifted)
+    sns.despine(ax=ax)
+    
+    # # Add mask time
+    # ax1.axvspan(3, 3.1, color='blue', alpha=0.15)
+    # ax1.text(3, 1.1, "mask \ndisplay", color='blue', alpha=0.5, fontsize=10)
+
+    # Add probe
+    ylim = ax.get_ylim()[1] 
+    # ax.axvline(3, color='black', alpha=0.5)
+    # ax.axvline(6.5, color='black', alpha=0.5)
+
+    # Set x-axis to show all whole numbers within range
+    # x range based on actual data
+    x_min = delay_time_window['time'].min()
+    x_max = delay_time_window['time'].max()
+    ax.set_xlim(x_min, x_max)
+
+    # clean tick positions at 0.5 steps
+    x_ticks = np.arange(
+        np.ceil(x_min * 2) / 2,
+        np.floor(x_max * 2) / 2 + 0.5,
+        0.5
+    )
+    ax.set_xticks(x_ticks)
+    ax.tick_params(axis='x', labelbottom=True)
+
+    ax.set_ylabel('pupil size (z-scored)')
+    ax.set_xlabel('time (s)')
+
+    # tighten first, then expand a bit for cluster bars
+    ax.autoscale(enable=True, axis='y', tight=True)
+    ymin, ymax = ax.get_ylim()
+
+    # extra space below for stacked cluster bars
+    y_range = ymax - ymin
+    extra_bottom = 0.11 * y_range
+    extra_top = 0.08 * y_range
+    ax.set_ylim(ymin - extra_bottom, ymax + extra_top)
+
+    ymin, ymax = ax.get_ylim()
+    y_range = ymax - ymin
+
+    bar_base = ymin + 0.04 * y_range
+    bar_step = 0.04 * y_range
+
+    # draw one row per contrast
+    for i, (_, row) in enumerate(sig_clusters.iterrows()):
+        start = row['start_time']
+        end = row['end_time']
+        pval = row['p_value']
+
+        ymin, ymax = ax.get_ylim()
+        y_bar = ymin + 0.02 * (ymax - ymin)
+
+        # horizontal significance bar
+        ax.hlines(
+            y=y_bar,
+            xmin=start,
+            xmax=end,
+            color='red',
+            alpha=0.7,
+            linewidth=2.5
+        )
+
+        ax.text(
+            (start + end) / 2,
+            y_bar + 0.02 * (ymax - ymin),
+            f"p <.001",
+            ha='center',
+            va='bottom',
+            fontsize=9
+        )
+
+
+    # ax.text(1.3, 5.1, "encoding", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    # ax.text(6.5+1.3, 5.1, "probe", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax.text(3+1.75, 1.5, "delay", color='black', alpha=0.8, fontsize=10, ha='center', clip_on=False)
+    ax.axhspan(1.35, 1.649, transform=ax.transAxes, color='gray', alpha=0.15, clip_on=False)
+
+    # Adding a title
+    # plt.suptitle('Pupil dilation across conditions', y=1.15, fontsize = 20)
+    # plt.title(f'Applied baseline {baseline}', y=1.25, color='blue', alpha=0.4)
+    
+    #Adding a legend
+    plt.legend()
+    ax.legend(title='mask', loc='lower right', fontsize=8, title_fontsize=9)
+
+    # Save the figure
+    name=f"pupil_mask_vs_nomask.png"
+    figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures'
+    figure_filepath = os.path.join(figures_folder, name)
+
+    plt.savefig(figure_filepath, bbox_inches = 'tight')
+
+    plt.show()
 
 
 # %%
@@ -314,4 +443,1424 @@ with sns.plotting_context(context='paper', font_scale=1.5):
 #     # figure_filepath = os.path.join(figures_folder, name)
 
 #     # plt.savefig(figure_filepath, bbox_inches = 'tight')
+# %%
+# Final combined plot
+# %%
+import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# ---------- helper ----------
+def add_load_markers(ax, data, x="time", y="pupils_z_delay", hue="Load"):
+    handles, labels = ax.get_legend_handles_labels()
+    color_map = {}
+    for h, lab in zip(handles, labels):
+        try:
+            key = int(lab)
+        except ValueError:
+            key = lab
+        color_map[key] = h.get_color()
+
+    m = data.groupby([hue, x], as_index=False)[y].mean()
+
+    for load, times in marker_times.items():
+        mm = m[m[hue].eq(load) & m[x].isin(times)]
+
+        for i, (_, row) in enumerate(mm.iterrows(), start=1):
+            ax.scatter(
+                row[x], row[y],
+                s=160,
+                marker="o",
+                color=colors_load[i-1],
+                edgecolor="white",
+                linewidth=1,
+                zorder=10
+            )
+
+            ax.text(
+                row[x], row[y],
+                str(i),
+                color="white",
+                ha="center",
+                va="center",
+                fontsize=8,
+                weight="bold",
+                zorder=11
+            )
+
+# ---------- data ----------
+start_time = 3.0
+end_time = 6.5
+delay_time_window = evoked_df_shifted[
+    (evoked_df_shifted['time'] >= start_time) &
+    (evoked_df_shifted['time'] <= end_time)
+]
+
+sig_clusters = pd.read_csv('../data/csv_files/cluster_results_mask_vs_nomask.csv')
+sig_clusters = sig_clusters[sig_clusters['p_value'] < 0.05]
+
+colors_load = sns.color_palette("flare", 3)
+colors_mask = sns.color_palette("husl", 2)
+
+mask_data = evoked_df_shifted[evoked_df_shifted["subID"].isin(mask_partis)]
+nomask_data = evoked_df_shifted[evoked_df_shifted["subID"].isin(nomask_partis)]
+
+# ---------- figure ----------
+with sns.plotting_context(context='paper', font_scale=1.1):
+    fig, axes = plt.subplots(
+        1, 3,
+        figsize=(8.27, 2.9)
+    )
+
+    fig.subplots_adjust(
+        left=0.12,
+        right=0.98,
+        bottom=0.15,
+        top=0.88,
+        wspace=0.30,
+        hspace=0.30
+    )
+
+    ax1, ax2, ax3 = axes
+    # share y-axis between first two plots
+    ax2.sharey(ax1)
+    # =========================
+    # Panel 1: Mask
+    # =========================
+    sns.lineplot(
+        data=mask_data,
+        hue='Load',
+        x='time',
+        y='pupils_z_delay',
+        errorbar='se',
+        ax=ax1,
+        palette=colors_load
+    )
+    add_load_markers(ax1, mask_data)
+    sns.despine(ax=ax1)
+
+    x_min = evoked_df_shifted['time'].min()
+    x_max = evoked_df_shifted['time'].max()
+    ax1.set_xlim(x_min, x_max)
+
+    x_ticks = np.arange(
+        np.ceil(x_min),
+        np.floor(x_max) + 1,
+        1
+    )
+    ax1.set_xticks(x_ticks)
+
+    ax1.axvspan(3, 3.1, color=colors_mask[1], alpha=0.3)
+    ax1.text(3.02, ax1.get_ylim()[1] * 0.75, "mask\ndisplay",
+             color=colors_mask[1], alpha=0.9, fontsize=8)
+
+    ax1.axvline(3, color='black', alpha=0.5, lw=1)
+    ax1.axvline(6.5, color='black', alpha=0.5, lw=1)
+
+    ax1.set_title('Mask', pad=10, fontsize=13)
+    ax1.set_ylabel('pupil size (z-scored)')
+    ax1.set_xlabel('time (s)')
+
+    ax1.autoscale(enable=True, axis='y', tight=True)
+    ymin, ymax = ax1.get_ylim()
+    ax1.set_ylim(ymin, ymax + 0.12 * (ymax - ymin))
+
+    trans1 = ax1.get_xaxis_transform()
+    ax1.fill_between([x_min, x_max], 0.93, 0.99, transform=trans1,
+                     color='gray', alpha=0.15, zorder=0)
+    ax1.text(1.3, 0.96, "encoding", transform=trans1,
+             ha='center', va='center', fontsize=8)
+    ax1.text(4.75, 0.96, "delay", transform=trans1,
+             ha='center', va='center', fontsize=8)
+    ax1.text(7.8, 0.96, "probe", transform=trans1,
+             ha='center', va='center', fontsize=8)
+
+    ax1.legend(title='set size', loc='lower right', fontsize=8, title_fontsize=9)
+
+    # =========================
+    # Panel 2: No mask
+    # =========================
+    sns.lineplot(
+        data=nomask_data,
+        hue='Load',
+        x='time',
+        y='pupils_z_delay',
+        errorbar='se',
+        ax=ax2,
+        palette=colors_load
+    )
+    add_load_markers(ax2, nomask_data)
+    sns.despine(ax=ax2)
+
+    ax2.set_xlim(x_min, x_max)
+    ax2.set_xticks(x_ticks)
+
+    ax2.axvline(3, color='black', alpha=0.5, lw=1)
+    ax2.axvline(6.5, color='black', alpha=0.5, lw=1)
+
+    ax2.set_title('No mask', pad=10, fontsize=13)
+    ax2.set_xlabel('time (s)')
+    ax2.set_ylabel('')
+
+    ax2.autoscale(enable=True, axis='y', tight=True)
+    ymin, ymax = ax2.get_ylim()
+    ax2.set_ylim(ymin, ymax + 0.12 * (ymax - ymin))
+
+    trans2 = ax2.get_xaxis_transform()
+    ax2.fill_between([x_min, x_max], 0.93, 0.99, transform=trans2,
+                     color='gray', alpha=0.15, zorder=0)
+    ax2.text(1.3, 0.96, "encoding", transform=trans2,
+             ha='center', va='center', fontsize=8)
+    ax2.text(4.75, 0.96, "delay", transform=trans2,
+             ha='center', va='center', fontsize=8)
+    ax2.text(7.8, 0.96, "probe", transform=trans2,
+             ha='center', va='center', fontsize=8)
+
+    ax2.legend(title='set size', loc='lower right', fontsize=8, title_fontsize=9)
+
+    # =========================
+    # Panel 3: Mask vs no mask during delay
+    # =========================
+    sns.lineplot(
+        data=delay_time_window,
+        hue='mask',
+        x='time',
+        y='pupils_z_delay',
+        errorbar='se',
+        ax=ax3,
+        palette=colors_mask
+    )
+    sns.despine(ax=ax3)
+
+    dx_min = delay_time_window['time'].min()
+    dx_max = delay_time_window['time'].max()
+    ax3.set_xlim(dx_min, dx_max)
+
+    delay_ticks = np.arange(
+        np.ceil(dx_min * 2) / 2,
+        np.floor(dx_max * 2) / 2 + 0.5,
+        0.5
+    )
+    ax3.set_xticks(delay_ticks)
+
+    ax3.axvline(3, color='black', alpha=0.5, lw=1)
+    ax3.axvline(6.5, color='black', alpha=0.5, lw=1)
+
+    ax3.set_title('Mask vs no mask', pad=10, fontsize=13)
+    ax3.set_xlabel('time (s)')
+    ax3.set_ylabel('')
+
+    ax3.autoscale(enable=True, axis='y', tight=True)
+    ymin, ymax = ax3.get_ylim()
+    y_range = ymax - ymin
+    ax3.set_ylim(ymin - 0.12 * y_range, ymax + 0.10 * y_range)
+
+    ymin, ymax = ax3.get_ylim()
+    y_range = ymax - ymin
+    y_bar = ymin + 0.03 * y_range
+
+    for _, row in sig_clusters.iterrows():
+        start = row['start_time']
+        end = row['end_time']
+
+        ax3.hlines(
+            y=y_bar,
+            xmin=start,
+            xmax=end,
+            color='red',
+            alpha=0.7,
+            linewidth=2.2
+        )
+
+        ax3.text(
+            (start + end) / 2,
+            y_bar + 0.03 * y_range,
+            'p < .001',
+            ha='center',
+            va='bottom',
+            fontsize=8
+        )
+
+    trans3 = ax3.get_xaxis_transform()
+    ax3.fill_between([dx_min, dx_max], 0.93, 0.99, transform=trans3,
+                     color='gray', alpha=0.15, zorder=0)
+    ax3.text((dx_min + dx_max) / 2, 0.96, "delay", transform=trans3,
+             ha='center', va='center', fontsize=8)
+
+    ax3.legend(title='mask', loc='center right', fontsize=8, title_fontsize=9)
+
+    ax1.annotate(
+        '.',
+        xy=(-0.4, 0.5),
+        xycoords='axes fraction',
+        ha='center',
+        va='center',
+        rotation=90,
+        fontsize=12,
+        color = 'white'
+    )
+
+    # ---------- final layout ----------
+    for ax in axes:
+        ax.tick_params(axis='both', labelsize=8)
+
+    # plt.tight_layout(rect=[0, 0, 1, 0.92])
+
+    # save
+    name = "pupil_combined_mask_row_a4.png"
+    figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures'
+    figure_filepath = os.path.join(figures_folder, name)
+    plt.savefig(figure_filepath, dpi=300) # , bbox_inches='tight'
+
+    plt.show()
+# %%
+# trying to get them to fucking align
+
+
+import os
+import math
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from matplotlib.lines import Line2D
+
+# =========================================================
+# GLOBAL STYLE / LAYOUT SETTINGS
+# =========================================================
+
+A4_SHORT_IN = 8.27   # short side of A4 in inches
+A4_LONG_IN = 11.69   # long side of A4 in inches
+
+PLOT_STYLE = {
+    # figure / axes geometry
+    "fig_width": A4_SHORT_IN,      # always span short side of A4
+    "panel_height": 2.6,           # fixed height in inches for one row of plots
+
+    # fixed axes rectangle in figure coordinates
+    # these control where the plotting region starts/ends
+    "left": 0.14,
+    "right": 0.98,
+    "bottom": 0.07,
+    "top": 0.90,
+    "wspace": 0.06,
+    "hspace": 0.12,
+
+    # fonts
+    "font_scale": 1.0,
+    "title_size": 10,
+    "label_size": 9,
+    "tick_size": 8,
+    "legend_size": 8,
+    "legend_title_size": 9,
+    "annotation_size": 8,
+
+    # top band
+    "top_band_frac": 0.07,         # upper 7% of axes
+    "top_band_color": "gray",
+    "top_band_alpha": 0.15,
+
+    # export
+    "dpi": 300,
+}
+
+
+# =========================================================
+# GLOBAL RC PARAMS
+# =========================================================
+
+def set_global_plot_style(style=PLOT_STYLE):
+    """Set consistent fonts and base matplotlib/seaborn style."""
+    sns.set_theme(style="ticks", context="paper")
+    plt.rcParams.update({
+        "font.size": style["tick_size"],
+        "axes.titlesize": style["title_size"],
+        "axes.labelsize": style["label_size"],
+        "xtick.labelsize": style["tick_size"],
+        "ytick.labelsize": style["tick_size"],
+        "legend.fontsize": style["legend_size"],
+        "legend.title_fontsize": style["legend_title_size"],
+        "figure.dpi": style["dpi"],
+        "savefig.dpi": style["dpi"],
+    })
+
+
+# =========================================================
+# FIGURE HEIGHT CALCULATION
+# =========================================================
+
+def compute_figure_height(
+    nrows=1,
+    panel_height=None,
+    top=None,
+    bottom=None,
+    hspace=None,
+    style=PLOT_STYLE
+):
+    """
+    Compute figure height so each panel has identical fixed height.
+
+    panel_height is in inches.
+    """
+    if panel_height is None:
+        panel_height = style["panel_height"]
+    if top is None:
+        top = style["top"]
+    if bottom is None:
+        bottom = style["bottom"]
+    if hspace is None:
+        hspace = style["hspace"]
+
+    usable_frac = top - bottom
+    total_panel_height = nrows * panel_height
+    total_hspace_in = (nrows - 1) * (hspace * panel_height)
+
+    fig_height = (total_panel_height + total_hspace_in) / usable_frac
+    return fig_height
+
+
+# =========================================================
+# FIXED AXES CREATION
+# =========================================================
+
+def create_fixed_grid(
+    nrows=1,
+    ncols=1,
+    sharex=False,
+    sharey=False,
+    style=PLOT_STYLE
+):
+    """
+    Create a figure with axes placed at fixed positions.
+
+    This guarantees that added labels/annotations do not shift the
+    plotting areas around between figures.
+    """
+    fig_width = style["fig_width"]
+    fig_height = compute_figure_height(
+        nrows=nrows,
+        panel_height=style["panel_height"],
+        top=style["top"],
+        bottom=style["bottom"],
+        hspace=style["hspace"],
+        style=style
+    )
+
+    fig = plt.figure(figsize=(fig_width, fig_height))
+
+    left = style["left"]
+    right = style["right"]
+    bottom = style["bottom"]
+    top = style["top"]
+    wspace = style["wspace"]
+    hspace = style["hspace"]
+
+    usable_w = right - left
+    usable_h = top - bottom
+
+    ax_w = (usable_w - (ncols - 1) * wspace) / ncols
+    ax_h = (usable_h - (nrows - 1) * hspace) / nrows
+
+    axes = np.empty((nrows, ncols), dtype=object)
+
+    for r in range(nrows):
+        for c in range(ncols):
+            x0 = left + c * (ax_w + wspace)
+            y0 = top - (r + 1) * ax_h - r * hspace
+
+            if r == 0 and c == 0:
+                ax = fig.add_axes([x0, y0, ax_w, ax_h])
+            else:
+                sharex_ax = axes[0, c] if sharex else None
+                sharey_ax = axes[r, 0] if sharey else None
+
+                # if both requested, prefer sharing with row/column anchor
+                ax = fig.add_axes(
+                    [x0, y0, ax_w, ax_h],
+                    sharex=sharex_ax,
+                    sharey=sharey_ax
+                )
+
+            axes[r, c] = ax
+
+    return fig, axes
+
+
+# =========================================================
+# AXES STANDARDIZATION
+# =========================================================
+
+def standardize_axis(
+    ax,
+    xlim=None,
+    ylim=None,
+    xticks=None,
+    yticks=None,
+    xlabel=None,
+    ylabel=None,
+    title=None,
+    hide_left_labels=False,
+    hide_bottom_labels=False,
+    style=PLOT_STYLE
+):
+    """Apply standardized axis formatting."""
+    if xlim is not None:
+        ax.set_xlim(*xlim)
+    if ylim is not None:
+        ax.set_ylim(*ylim)
+    if xticks is not None:
+        ax.set_xticks(xticks)
+    if yticks is not None:
+        ax.set_yticks(yticks)
+    if xlabel is not None:
+        ax.set_xlabel(xlabel)
+    if ylabel is not None:
+        ax.set_ylabel(ylabel)
+    if title is not None:
+        ax.set_title(title, pad=8)
+
+    if hide_left_labels:
+        ax.tick_params(axis="y", labelleft=False)
+        ax.set_ylabel("")
+
+    if hide_bottom_labels:
+        ax.tick_params(axis="x", labelbottom=False)
+        ax.set_xlabel("")
+
+    ax.tick_params(axis="both", labelsize=style["tick_size"])
+    sns.despine(ax=ax)
+
+
+# =========================================================
+# TOP GREY BAND (UPPER 7% OF AXES)
+# =========================================================
+
+def add_top_band(ax, text=None, x=None, style=PLOT_STYLE):
+    """
+    Add a grey band occupying the upper fixed fraction of the axes.
+    Uses x in data coordinates and y in axes coordinates.
+    """
+    y1 = 1.0
+    y0 = 1.0 - style["top_band_frac"]
+    trans = ax.get_xaxis_transform()
+
+    xmin, xmax = ax.get_xlim()
+
+    ax.fill_between(
+        [xmin, xmax],
+        y0, y1,
+        transform=trans,
+        color=style["top_band_color"],
+        alpha=style["top_band_alpha"],
+        zorder=0
+    )
+
+    if text is not None:
+        if x is None:
+            x = (xmin + xmax) / 2
+        ax.text(
+            x, (y0 + y1) / 2,
+            text,
+            transform=trans,
+            ha="center",
+            va="center",
+            fontsize=style["annotation_size"],
+            color="black"
+        )
+
+
+def add_top_band_segments(ax, segments, style=PLOT_STYLE):
+    """
+    Add labelled segments inside the top band.
+
+    segments: list of tuples [(x0, x1, label), ...]
+    """
+    y1 = 1.0
+    y0 = 1.0 - style["top_band_frac"]
+    trans = ax.get_xaxis_transform()
+
+    for x0, x1, label in segments:
+        ax.fill_between(
+            [x0, x1],
+            y0, y1,
+            transform=trans,
+            color=style["top_band_color"],
+            alpha=style["top_band_alpha"],
+            zorder=0
+        )
+        ax.text(
+            (x0 + x1) / 2, (y0 + y1) / 2,
+            label,
+            transform=trans,
+            ha="center",
+            va="center",
+            fontsize=style["annotation_size"],
+            color="black"
+        )
+
+
+# =========================================================
+# COMMON HELPERS
+# =========================================================
+
+def half_step_ticks(xmin, xmax, step=0.5):
+    """Return clean ticks aligned to the requested step."""
+    factor = 1 / step
+    start = math.ceil(xmin * factor) / factor
+    stop = math.floor(xmax * factor) / factor
+    return np.arange(start, stop + step, step)
+
+
+def integer_ticks(xmin, xmax):
+    """Return integer ticks spanning the visible range."""
+    return np.arange(math.ceil(xmin), math.floor(xmax) + 1, 1)
+
+
+def add_cluster_bar(ax, start, end, label=None, y_frac=0.03, color="red", lw=2.2,
+                    text_offset_frac=0.03, style=PLOT_STYLE):
+    """Add a significance cluster bar near the bottom of the current y-limits."""
+    ymin, ymax = ax.get_ylim()
+    yr = ymax - ymin
+    y = ymin + y_frac * yr
+
+    ax.hlines(y=y, xmin=start, xmax=end, color=color, linewidth=lw, alpha=0.8)
+
+    if label is not None:
+        ax.text(
+            (start + end) / 2,
+            y + text_offset_frac * yr,
+            label,
+            ha="center",
+            va="bottom",
+            fontsize=style["annotation_size"],
+            color="black"
+        )
+
+
+def save_figure(fig, filepath, style=PLOT_STYLE):
+    """
+    Save without bbox_inches='tight' so panel geometry stays fixed.
+    """
+    fig.savefig(filepath, dpi=style["dpi"])
+
+def add_panel_labels(fig, axes, labels=None, x_offset=0.04, y_offset=0.032, style=PLOT_STYLE):
+    """
+    Add bold panel labels (A, B, C, ...) to axes.
+    Works with:
+      - dict of axes
+      - 1D/2D numpy array of axes
+      - list/tuple of axes
+    """
+    import numpy as np
+
+    if isinstance(axes, dict):
+        axes_list = list(axes.values())
+    else:
+        axes_list = list(np.array(axes, dtype=object).ravel())
+
+    if labels is None:
+        labels = [chr(ord("A") + i) for i in range(len(axes_list))]
+
+    for label, ax in zip(labels, axes_list):
+        bbox = ax.get_position()
+        fig.text(
+            bbox.x0 - x_offset,
+            bbox.y1 + y_offset,
+            label,
+            fontsize=style["title_size"] + 4,
+            fontweight="bold",
+            ha="left",
+            va="bottom"
+        )
+
+
+#%% Plot
+set_global_plot_style()
+
+sig_clusters_load = pd.read_csv("../data/csv_files/clusters_linear_load.csv")
+colors_load = sns.color_palette("flare", 3)
+colors_mask = sns.color_palette("husl", 2)
+
+delay_y_lim = (-1.3, 1.5)
+delay_y_ticks = np.arange(-1.0, 1.51, 0.5)
+
+def add_load_markers(ax, data, x="time", y="pupils_z_delay", hue="Load"):
+    m = data.groupby([hue, x], as_index=False)[y].mean()
+
+    for load, times in marker_times.items():
+        mm = m[m[hue].eq(load) & m[x].isin(times)]
+
+        for i, (_, row) in enumerate(mm.iterrows(), start=1):
+            ax.scatter(
+                row[x], row[y],
+                s=110,
+                marker="o",
+                color=colors_load[i - 1],
+                edgecolor="white",
+                linewidth=1,
+                zorder=10
+            )
+            ax.text(
+                row[x], row[y],
+                str(i),
+                color="white",
+                ha="center",
+                va="center",
+                fontsize=5,
+                weight="bold",
+                zorder=11
+            )
+
+mask_data = evoked_df_shifted[evoked_df_shifted["subID"].isin(mask_partis)]
+nomask_data = evoked_df_shifted[evoked_df_shifted["subID"].isin(nomask_partis)]
+
+fig, axes = create_fixed_grid(nrows=2, ncols=2, sharex=False, sharey=True)
+ax1, ax2 = axes[0]
+ax3, ax4 = axes[1]
+# -------------------------
+# Panel 1
+# -------------------------
+sns.lineplot(
+    data=mask_data,
+    hue="Load",
+    x="time",
+    y="pupils_z_delay",
+    errorbar="se",
+    ax=ax1,
+    palette=colors_load
+)
+add_load_markers(ax1, mask_data)
+
+x_min = evoked_df_shifted["time"].min()
+x_max = evoked_df_shifted["time"].max()
+
+standardize_axis(
+    ax1,
+    xlim=(x_min, x_max),
+    xticks=integer_ticks(x_min, x_max),
+    xlabel="time (s)",
+    ylabel="pupil size (z-scored)",
+    title="Mask"
+)
+
+ax1.axvspan(3, 3.1, color=colors_mask[1], alpha=0.3)
+ax1.axvline(3, color="black", alpha=0.5, lw=1)
+ax1.axvline(6.5, color="black", alpha=0.5, lw=1)
+add_top_band_segments(ax1, [
+    (x_min, 3, "encoding"),
+    (3, 6.5, "delay"),
+    (6.5, x_max, "probe"),
+])
+ax1.legend(title="set size", loc="lower right")
+
+# -------------------------
+# Panel 2
+# -------------------------
+sns.lineplot(
+    data=nomask_data,
+    hue="Load",
+    x="time",
+    y="pupils_z_delay",
+    errorbar="se",
+    ax=ax2,
+    palette=colors_load
+)
+add_load_markers(ax2, nomask_data)
+
+standardize_axis(
+    ax2,
+    xlim=(x_min, x_max),
+    xticks=integer_ticks(x_min, x_max),
+    xlabel="time (s)",
+    ylabel="",
+    title="No mask",
+    hide_left_labels=True
+)
+
+ax2.axvline(3, color="black", alpha=0.5, lw=1)
+ax2.axvline(6.5, color="black", alpha=0.5, lw=1)
+add_top_band_segments(ax2, [
+    (x_min, 3, "encoding"),
+    (3, 6.5, "delay"),
+    (6.5, x_max, "probe"),
+])
+ax2.legend(title="set size", loc="lower right")
+
+# -------------------------
+# Panel 3
+# -------------------------
+sns.lineplot(
+    data=delay_time_window,
+    hue="mask",
+    x="time",
+    y="pupils_z_delay",
+    errorbar="se",
+    ax=ax3,
+    palette=colors_mask
+)
+
+dx_min = delay_time_window["time"].min()
+dx_max = delay_time_window["time"].max()
+
+standardize_axis(
+    ax3,
+    xlim=(dx_min, dx_max),
+    ylim=delay_y_lim,
+    xticks=half_step_ticks(dx_min, dx_max, 0.5),
+    xlabel="time (s)",
+    ylabel="pupil size (z-scored)",
+    title="Mask vs no mask"
+)
+
+ax3.axvline(3, color="black", alpha=0.5, lw=1)
+ax3.axvline(6.5, color="black", alpha=0.5, lw=1)
+add_top_band(ax3, text="delay")
+
+for _, row in sig_clusters_mask.iterrows():
+    add_cluster_bar(
+        ax3,
+        start=row["start_time"],
+        end=row["end_time"],
+        label="p < .001"
+    )
+
+ax3.legend(title="mask", loc="center right")
+
+# -------------------------
+# Panel 4
+# -------------------------
+sns.lineplot(
+    data=delay_time_window,
+    hue="Load",
+    x="time",
+    y="pupils_z_delay",
+    errorbar="se",
+    ax=ax4,
+    palette=colors_load
+)
+
+dx_min = delay_time_window["time"].min()
+dx_max = delay_time_window["time"].max()
+
+standardize_axis(
+    ax4,
+    xlim=(dx_min, dx_max),
+    xticks=half_step_ticks(dx_min, dx_max, 0.5),
+    xlabel="time (s)",
+    ylim=delay_y_lim,
+    ylabel="",
+    title="Set size",
+    hide_left_labels=True
+)
+
+ax4.axvline(3, color="black", alpha=0.5, lw=1)
+ax4.axvline(6.5, color="black", alpha=0.5, lw=1)
+add_top_band(ax4, text="delay")
+
+for _, row in sig_clusters_load.iterrows():
+    add_cluster_bar(
+        ax4,
+        start=row["start_time"],
+        end=row["end_time"],
+        label="p < .001"
+    )
+
+ax4.legend(title="set size", loc="lower right")
+
+
+# Save the figure
+name=f"pupil_mask_and_load_new_fixed_settings.png"
+figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures'
+figure_filepath = os.path.join(figures_folder, name)
+add_panel_labels(fig, axes)
+save_figure(fig, figure_filepath)
+plt.show()
+
+
+# =========================================================
+# EXAMPLE USAGE
+# =========================================================
+# set_global_plot_style()
+#
+# example_three_panel_plot(
+#     evoked_df_shifted=evoked_df_shifted,
+#     delay_time_window=delay_time_window,
+#     mask_partis=mask_partis,
+#     nomask_partis=nomask_partis,
+#     sig_clusters=sig_clusters,
+#     marker_times=marker_times,
+#     output_path="pupil_combined_mask_row_a4.png"
+# )
+
+# %%
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from matplotlib.lines import Line2D
+
+# --------------------------------------------------
+# data prep
+# --------------------------------------------------
+evoked_df_button_press = pd.read_csv('../data/csv_files/evoked_df_button_press.csv')
+evoked_df_button_press["time"] = evoked_df_button_press["time"].round(3)
+
+delay_start, delay_end = 3.0, 6.5
+is_delay = evoked_df_button_press["time"].between(delay_start, delay_end, inclusive="both")
+
+def delay_zscore_apply_all(g):
+    delay_vals = g.loc[is_delay.loc[g.index], "pupils"].to_numpy()
+    mu = np.nanmean(delay_vals)
+    sd = np.nanstd(delay_vals, ddof=0)
+
+    if not np.isfinite(sd) or sd == 0:
+        return pd.Series(np.nan, index=g.index)
+
+    return (g["pupils"] - mu) / sd
+
+evoked_df_button_press["pupils_z_delay"] = (
+    evoked_df_button_press
+    .groupby("subID", group_keys=False)
+    .apply(delay_zscore_apply_all)
+)
+
+df_cardinal_bias_acc = (
+    df.groupby(['subID', 'dist_probe_to_cardinal'])['acc_trial_concrete_cued']
+      .mean()
+      .reset_index()
+      .sort_values('dist_probe_to_cardinal')
+)
+
+df_cardinal_bias_acc_piv = (
+    df_cardinal_bias_acc
+    .pivot(index='subID', columns='dist_probe_to_cardinal', values='acc_trial_concrete_cued')
+    .reset_index()
+)
+
+df_cardinal_bias_acc_piv['diff_card'] = df_cardinal_bias_acc_piv[3.25] - df_cardinal_bias_acc_piv[19.25]
+diff_card_med = df_cardinal_bias_acc_piv['diff_card'].median()
+
+diff_card_med_high = df_cardinal_bias_acc_piv[df_cardinal_bias_acc_piv['diff_card'] >= diff_card_med]['subID']
+diff_card_med_low = df_cardinal_bias_acc_piv[df_cardinal_bias_acc_piv['diff_card'] < diff_card_med]['subID']
+
+evoked_df_button_press['group'] = np.where(
+    evoked_df_button_press['subID'].isin(diff_card_med_high), 'high', 'low'
+)
+
+evoked_df_button_press['bp_away'] = evoked_df_button_press['pressed_away_from_cardinal']
+evoked_df_button_press['Load'] = evoked_df_button_press['items_presented']
+
+sig_clusters_bias = pd.read_csv('../data/csv_files/cluster_results_bp_groups_load.csv')
+sig_clusters_bias = sig_clusters_bias[sig_clusters_bias['p_value'] < 0.05]
+sig_clusters_bias['group']='low'
+delay_time_window = evoked_df_button_press[
+    evoked_df_button_press['time'].between(delay_start, delay_end, inclusive='both')
+].copy()
+
+delay_time_window['bp_label'] = delay_time_window['bp_away'].map({
+    0: 'towards',
+    1: 'away'
+})
+
+# --------------------------------------------------
+# plotting
+# --------------------------------------------------
+set_global_plot_style()
+
+colors_load = sns.color_palette("flare", 3)
+groups = ['high', 'low']                       # rows
+items_levels = sorted(delay_time_window['items_presented'].unique())   # cols
+
+# 2 rows x 3 columns
+fig, axes = create_fixed_grid(nrows=2, ncols=3, sharex=True, sharey=True)
+
+x_min = delay_time_window['time'].min()
+x_max = delay_time_window['time'].max()
+
+# choose common y ticks if you want fixed ones
+y_ticks = np.arange(-1.0, 1.51, 0.5)
+x_ticks = half_step_ticks(x_min, x_max, 0.5)
+
+for row, group in enumerate(groups):
+    for col, item in enumerate(items_levels):
+        ax = axes[row, col]
+
+        data_sub = delay_time_window[
+            (delay_time_window['group'] == group) &
+            (delay_time_window['items_presented'] == item)
+        ]
+
+        sns.lineplot(
+            data=data_sub,
+            x='time',
+            y='pupils_z_delay',
+            style='bp_label',
+            style_order=['towards', 'away'],
+            errorbar='se',
+            color=colors_load[col],
+            ax=ax
+        )
+
+
+        # titles on top row only
+        title = f"Set size {item}" if row == 0 else None
+
+        # y-label only on first col
+        ylabel = 'pupil size (z-scored)' if col == 0 else ''
+
+        # x-label only on bottom row
+        xlabel = 'time (s)' if row == len(groups) - 1 else ''
+        y_lim = (-1.0, 1.5)
+        standardize_axis(
+            ax,
+            xlim=(x_min, x_max),
+            ylim=y_lim,
+            xticks=x_ticks,
+            yticks=y_ticks,
+            xlabel=xlabel,
+            ylabel=ylabel,
+            title=title,
+            hide_left_labels=(col != 0),
+            hide_bottom_labels=(row != len(groups) - 1),
+            style=PLOT_STYLE
+        )
+        # optional significance bar if your cluster file has matching columns
+        # adapt column names here if needed
+
+
+        add_top_band(ax, text='delay', style=PLOT_STYLE)
+
+        # remove seaborn auto-legend from each panel
+        leg = ax.get_legend()
+        if leg is not None:
+            leg.remove()
+
+        # row labels on the far left
+        if col == 0:
+            ax.annotate(
+                f'{group} bias group',
+                xy=(-0.4, 0.5),
+                xycoords='axes fraction',
+                ha='center',
+                va='center',
+                rotation=90,
+                fontsize=PLOT_STYLE["title_size"]
+            )
+        cluster_sub = sig_clusters_bias[
+            (sig_clusters_bias['group'] == group) &
+            (sig_clusters_bias['load'] == item)
+        ]
+
+        for _, row_cluster in cluster_sub.iterrows():
+            add_cluster_bar(
+                ax,
+                start=row_cluster['start_time'],
+                end=row_cluster['end_time'],
+                label=f"p = {row_cluster['p_value']:.3f}",
+                style=PLOT_STYLE
+            )
+# shared legend
+legend_handles = [
+    Line2D([0], [0], color='black', lw=2, linestyle='-'),
+    Line2D([0], [0], color='black', lw=2, linestyle='--')
+]
+legend_labels = ['towards', 'away']
+left = axes[0, 0].get_position().x0
+right = axes[0, -1].get_position().x1
+center = (left + right) / 2
+top = max(axes[0, i].get_position().y1 for i in range(len(items_levels)))
+bottom = min(axes[1, i].get_position().y0 for i in range(len(items_levels)))
+vcenter = (top + bottom) / 2
+fig.legend(
+    legend_handles,
+    legend_labels,
+    title='button press direction',
+    loc='center',
+    bbox_to_anchor=(center, vcenter),
+    ncol=2,
+    frameon=True
+)
+add_panel_labels(fig, axes)
+plt.show()
+
+# Save the figure
+name=f"pupil_bias_new_fixed_settings.png"
+figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures'
+figure_filepath = os.path.join(figures_folder, name)
+
+save_figure(fig, figure_filepath)
+
+#######
+#######
+
+# %%
+
+
+# assumes these helpers already exist from your helper module:
+# - set_global_plot_style
+# - PLOT_STYLE
+# - compute_figure_height
+# - save_figure
+
+# --------------------------------------------------
+# fixed mixed layout: 2 rows x 3 cols, top row polar
+# --------------------------------------------------
+def create_mixed_grid_2x3_top_polar(style=PLOT_STYLE):
+    fig_width = style["fig_width"]
+    fig_height = compute_figure_height(nrows=2, style=style)
+
+    fig = plt.figure(figsize=(fig_width, fig_height))
+
+    left = style["left"]
+    right = style["right"]
+    bottom = style["bottom"]
+    top = style["top"]
+    wspace = style["wspace"]
+    hspace = style["hspace"]
+
+    usable_w = right - left
+    usable_h = top - bottom
+
+    ax_w = (usable_w - 2 * wspace) / 3
+    ax_h = (usable_h - hspace) / 2
+
+    y_toprow = top - ax_h
+    y_bottomrow = bottom
+
+    axes = np.empty((2, 3), dtype=object)
+
+    # top row: polar
+    for c in range(3):
+        x0 = left + c * (ax_w + wspace)
+        axes[0, c] = fig.add_axes([x0, y_toprow, ax_w, ax_h], projection='polar')
+
+    # bottom row: normal cartesian
+    for c in range(3):
+        x0 = left + c * (ax_w + wspace)
+        axes[1, c] = fig.add_axes([x0, y_bottomrow, ax_w, ax_h])
+
+    return fig, axes
+
+
+# --------------------------------------------------
+# helper: consistent polar formatting
+# --------------------------------------------------
+def standardize_polar_axis(
+    ax,
+    title=None,
+    rlim=None,
+    rticks=None,
+    legend_title=None,
+    style=PLOT_STYLE
+):
+    if title is not None:
+        ax.set_title(title, pad=10, fontsize=style["title_size"])
+
+    if rlim is not None:
+        ax.set_rlim(*rlim)
+
+    if rticks is not None:
+        ax.set_yticks(rticks)
+
+    ax.set_theta_zero_location("E")
+    ax.set_theta_direction(1)
+    ax.grid(True)
+    ax.tick_params(axis='both', labelsize=style["tick_size"])
+
+
+# --------------------------------------------------
+# helper: polar line plot by set size
+# --------------------------------------------------
+def plot_polar_by_load(
+    ax,
+    data,
+    angle_col,
+    value_col,
+    load_col="items_presented",
+    loads=(1,2,3),
+    colors=None,
+    overall_value=None,
+    overall_label=None,
+    title=None,
+    rlim=None,
+    rticks=None,
+    rorigin=None,
+    legend_title=None,
+    style=PLOT_STYLE
+):
+
+    if colors is None:
+        colors = sns.color_palette("flare", len(loads))
+
+    # sorted orientations and close circle
+    oris = np.sort(data[angle_col].dropna().unique())
+    oris_closed = np.append(oris, oris[0])
+
+    thetas = []
+    values_by_load = {load: [] for load in loads}
+
+    overall_vals = [] if overall_value is None else np.full(len(oris_closed), overall_value)
+
+    for ori in oris_closed:
+
+        theta = np.radians(ori)
+        thetas.append(theta)
+        for load in loads:
+
+            val = data.loc[
+                (data[angle_col] == ori) &
+                (data[load_col] == load),
+                value_col
+            ].mean()
+
+            values_by_load[load].append(val)
+
+        if overall_value is None:
+            overall_vals.append(data.loc[data[angle_col] == ori, value_col].mean())
+
+    # scatter points
+    for load_i, load in enumerate(loads):
+        for theta, val in zip(thetas, values_by_load[load]):
+            ax.plot(theta, val, 'o', color=colors[load_i], ms=3)
+
+    # connecting lines
+    if overall_label is not None:
+        ax.plot(thetas, overall_vals, linestyle='dashed', color='pink', label=overall_label)
+
+    for load_i, load in enumerate(loads):
+        ax.plot(thetas, values_by_load[load], '-', color=colors[load_i], label=f'{load}')
+
+    # formatting
+    if title is not None:
+        ax.set_title(title, pad=10, fontsize=style["title_size"])
+
+    if rlim is not None:
+        ax.set_rlim(*rlim)
+
+    if rticks is not None:
+        ax.set_yticks(rticks)
+
+    if rorigin is not None:
+        ax.set_rorigin(rorigin)
+
+    ax.set_theta_zero_location("N")
+    ax.set_theta_direction(-1)
+
+    ax.grid(True)
+    ax.tick_params(axis='both', labelsize=7, pad=-3)
+
+    handles, labels = ax.get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+
+    ax.legend(
+        by_label.values(),
+        by_label.keys(),
+        loc="center",
+        frameon=False,
+        fontsize=style["legend_size"],
+        title=legend_title,
+        title_fontsize=style["legend_title_size"]
+    )
+
+
+# %%
+import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# --------------------------------------------------
+# custom layout:
+# top row = 3 polar plots
+# bottom row = 2 normal plots spanning full width
+# --------------------------------------------------
+def create_mixed_grid_3top_2bottom(style=PLOT_STYLE):
+    fig_width = style["fig_width"]
+    fig_height = compute_figure_height(nrows=2, style=style)
+
+    fig = plt.figure(figsize=(fig_width, fig_height))
+
+    left = style["left"]
+    right = style["right"]
+    bottom = style["bottom"]
+    top = style["top"]
+    wspace = style["wspace"]
+    hspace = style["hspace"]
+
+    usable_w = right - left
+    usable_h = top - bottom
+
+    row_h = (usable_h - hspace) / 2
+
+    # top row: 3 columns
+    top_w = (usable_w - 2 * wspace) / 3
+
+    # bottom row: 2 columns spanning the same full width
+    bottom_w = (usable_w - wspace) / 2
+
+    y_top = top - row_h
+    y_bottom = bottom
+
+    axes = {}
+
+    # top row
+    for c in range(3):
+        x0 = left + c * (top_w + wspace)
+        axes[f"top_{c}"] = fig.add_axes([x0, y_top, top_w, row_h], projection="polar")
+
+    # bottom row
+    axes["bottom_0"] = fig.add_axes([left, y_bottom, bottom_w, row_h])
+    axes["bottom_1"] = fig.add_axes([left + bottom_w + wspace, y_bottom, bottom_w, row_h])
+
+    return fig, axes
+
+
+# --------------------------------------------------
+# main combined figure
+# --------------------------------------------------
+df = pd.read_csv('../data/csv_files/df.csv')
+emms = pd.read_csv('../data/csv_files/emms.csv')
+
+set_global_plot_style()
+
+colors_load = sns.color_palette("flare", 3)
+colors_cats = sns.diverging_palette(225, 15, s=70, n=2, l=50, center='light')
+
+fig, axes = create_mixed_grid_3top_2bottom()
+
+# ==================================================
+# TOP ROW, COL 1
+# sample orientation accuracy
+# ==================================================
+plot_polar_by_load(
+    ax=axes["top_0"],
+    data=df,
+    angle_col='object_cued_rot',
+    value_col='acc_trial_concrete_cued',
+    load_col='items_presented',
+    title="Sample orientation accuracy",
+    rlim=(0.4, 1.0),
+    rticks=np.arange(0.4, 1.0, 0.2),
+    rorigin=0
+)
+
+# ==================================================
+# TOP ROW, COL 2
+# button press away from cardinal
+# ==================================================
+mbp_bp = (
+    df.groupby(['items_presented', 'object_cued_rot'])['pressed_away_from_cardinal']
+      .mean()
+      .reset_index()
+)
+
+plot_polar_by_load(
+    ax=axes["top_1"],
+    data=mbp_bp,
+    angle_col='object_cued_rot',
+    value_col='pressed_away_from_cardinal',
+    load_col='items_presented',
+    title="Button press proportion",
+    rlim=(0.4, 0.7),
+    rticks=np.arange(0.4, 0.7, 0.1),
+    rorigin=0.2
+)
+
+# ==================================================
+# TOP ROW, COL 3
+# probe orientation accuracy
+# ==================================================
+acc_overall = df['acc_trial_concrete_cued'].mean()
+
+mbp_df = (
+    df.groupby(['items_presented', 'object_test_rot_cued'])['acc_trial_concrete_cued']
+      .mean()
+      .reset_index()
+)
+
+plot_polar_by_load(
+    ax=axes["top_2"],
+    data=mbp_df,
+    angle_col='object_test_rot_cued',
+    value_col='acc_trial_concrete_cued',
+    load_col='items_presented',
+    title="Probe direction accuracy",
+    rlim=(0.4, 1.0),
+    rticks=np.arange(0.4, 1.0, 0.2),
+    rorigin=0
+)
+
+# ==================================================
+# BOTTOM ROW prep
+# ==================================================
+dist_levels = sorted(emms["dist_to_cardinal_mem"].dropna().unique())
+
+# ==================================================
+# BOTTOM LEFT
+# x = distance, hue = probe direction
+# ==================================================
+ax = axes["bottom_1"]
+
+sns.barplot(
+    data=emms,
+    x="dist_to_cardinal_mem",
+    y="prob",
+    hue="probe_away_from_cardinal",
+    palette=colors_cats,
+    ax=ax
+)
+
+ax.set_ylim(0.5, 0.95)
+#ax.set_title("Accuracy by distance and probe direction", pad=10)
+ax.set_xlabel("Distance")
+ax.set_ylabel("")
+ax.tick_params(labelleft=False)
+sns.despine(ax=ax)
+ax.tick_params(axis='both', labelsize=PLOT_STYLE["tick_size"])
+
+# rename legend / hue labels
+handles, labels = ax.get_legend_handles_labels()
+ax.legend(
+    handles,
+    ["Toward", "Away"],
+    title="Probe direction",
+    frameon=False,
+    loc="upper right"
+)
+
+# ==================================================
+# BOTTOM RIGHT
+# x = distance, hue = set size
+# ==================================================
+ax = axes["bottom_0"]
+
+sns.barplot(
+    data=emms,
+    x='dist_to_cardinal_mem',
+    y='prob',
+    hue='items_presented',
+    palette=colors_load,
+    ax=ax
+)
+
+ax.set_ylim(0.5, 0.95)
+#ax.set_title("Accuracy by distance and set size", pad=10)
+ax.set_xlabel("Distance")
+ax.set_ylabel("Estimated probability")
+
+sns.despine(ax=ax)
+ax.tick_params(axis='both', labelsize=PLOT_STYLE["tick_size"])
+ax.legend(title="Set size", frameon=False, loc="upper right")
+
+# --------------------------------------------------
+# save
+# --------------------------------------------------
+name = "combined_polar_bar_summary_3top_2bottom.png"
+figures_folder = '/mnt/home/bielefeldt/MPIB-SRT/879-multieyetem/multieyetem/figures'
+figure_filepath = os.path.join(figures_folder, name)
+add_panel_labels(fig, axes)
+save_figure(fig, figure_filepath)
+plt.show()
 # %%

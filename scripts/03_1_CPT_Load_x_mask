@@ -297,7 +297,7 @@ for i_c, c in enumerate(clusters):
 
 summary = pd.DataFrame(rows).reset_index(drop=True)
 display(summary)
-summary.to_csv("clusters_linear_load.csv", index=False)
+summary.to_csv("../data/csv_files/clusters_linear_load.csv", index=False)
 
         
 # Plot t-curve with correctly shaded clusters
@@ -734,7 +734,7 @@ plt.show()
 
 # Save combined summary across
 posthoc_df = pd.DataFrame(all_rows).sort_values(["contrast","start_time"]).reset_index(drop=True)
-posthoc_df.to_csv("posthoc_load_pairwise_clusters.csv", index=False)
+posthoc_df.to_csv("../data/csv_files/posthoc_load_pairwise_clusters.csv", index=False)
 
 display(posthoc_df if not posthoc_df.empty else "No significant post-hoc clusters.")
 
@@ -889,7 +889,7 @@ for mask in [0, 1]:
 
 # Save combined summary across masks
 posthoc_df = pd.DataFrame(all_rows).sort_values(["mask","contrast","start_time"]).reset_index(drop=True)
-posthoc_df.to_csv("posthoc_load_pairwise_clusters_by_mask.csv", index=False)
+posthoc_df.to_csv("../data/csv_files/posthoc_load_pairwise_clusters_by_mask.csv", index=False)
 
 display(posthoc_df if not posthoc_df.empty else "No significant post-hoc clusters.")
 
