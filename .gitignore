@@ -3,5 +3,7 @@ data/
 .Rhistory
 *.egg-info
 *.fif
-*.png
 *.csv
+*.png
+Miniforge*.sh
+Epochs_data_*/
